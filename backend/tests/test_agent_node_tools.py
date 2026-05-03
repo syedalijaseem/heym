@@ -99,3 +99,113 @@ class TestBuildNodeToolSchemas(unittest.TestCase):
 
         schemas = ex._build_node_tool_schemas(agent_id)
         self.assertEqual(schemas, [])
+
+
+class TestExecuteNodeTool(unittest.TestCase):
+    def _make_executor_with_execute(
+        self, nodes: dict, edges: list, node_results: dict | None = None
+    ) -> WorkflowExecutor:
+        from unittest.mock import MagicMock
+
+        ex = _make_executor(nodes, edges)
+        ex.node_results = node_results or {}
+        ex.check_cancelled = MagicMock()
+        return ex
+
+    def test_merges_agent_args_into_node_data(self) -> None:
+        from app.services.workflow_executor import NodeResult
+
+        http_id = "http-1"
+        nodes = {
+            http_id: {
+                "type": "http",
+                "data": {
+                    "label": "Fetch",
+                    "curl": "curl https://fixed.com",
+                    "agentProvidedFields": ["curl"],
+                    "active": True,
+                },
+            }
+        }
+        ex = self._make_executor_with_execute(nodes, [])
+
+        captured_data: list[dict] = []
+
+        def fake_execute_node(node_id: str, inputs: dict, **kwargs) -> NodeResult:
+            captured_data.append(dict(ex.nodes[node_id]["data"]))
+            return NodeResult(
+                node_id=node_id,
+                node_label="Fetch",
+                node_type="http",
+                status="success",
+                output={"body": "ok"},
+                execution_time_ms=10.0,
+            )
+
+        ex.execute_node = fake_execute_node  # type: ignore[assignment]
+
+        tool_def = {"_source": "node_tool", "_node_id": http_id}
+        result = ex._execute_node_tool(tool_def, {"curl": "curl https://dynamic.com"})
+
+        self.assertEqual(captured_data[0]["curl"], "curl https://dynamic.com")
+        self.assertEqual(result, {"body": "ok"})
+        # Original data restored after execution
+        self.assertEqual(ex.nodes[http_id]["data"]["curl"], "curl https://fixed.com")
+
+    def test_returns_error_dict_on_node_failure(self) -> None:
+        from app.services.workflow_executor import NodeResult
+
+        http_id = "http-1"
+        nodes = {http_id: {"type": "http", "data": {"label": "Fetch", "agentProvidedFields": []}}}
+        ex = self._make_executor_with_execute(nodes, [])
+
+        def fake_execute_node(node_id: str, inputs: dict, **kwargs) -> NodeResult:
+            return NodeResult(
+                node_id=node_id,
+                node_label="Fetch",
+                node_type="http",
+                status="error",
+                output=None,
+                execution_time_ms=5.0,
+                error="Connection refused",
+            )
+
+        ex.execute_node = fake_execute_node  # type: ignore[assignment]
+
+        tool_def = {"_source": "node_tool", "_node_id": http_id}
+        result = ex._execute_node_tool(tool_def, {})
+
+        self.assertIn("error", result)
+        self.assertEqual(result["error"], "Connection refused")
+
+    def test_returns_error_when_node_not_found(self) -> None:
+        ex = _make_executor({}, [])
+        tool_def = {"_source": "node_tool", "_node_id": "ghost"}
+        result = ex._execute_node_tool(tool_def, {})
+        self.assertIn("error", result)
+
+    def test_restores_original_data_on_exception(self) -> None:
+        http_id = "http-1"
+        original_curl = "curl https://original.com"
+        nodes = {
+            http_id: {
+                "type": "http",
+                "data": {
+                    "label": "Fetch",
+                    "curl": original_curl,
+                    "agentProvidedFields": ["curl"],
+                },
+            }
+        }
+        ex = _make_executor(nodes, [])
+
+        def boom(node_id: str, inputs: dict, **kwargs):  # type: ignore[misc]
+            raise RuntimeError("simulated crash")
+
+        ex.execute_node = boom  # type: ignore[assignment]
+
+        tool_def = {"_source": "node_tool", "_node_id": http_id}
+        with self.assertRaises(RuntimeError):
+            ex._execute_node_tool(tool_def, {"curl": "curl https://other.com"})
+
+        self.assertEqual(ex.nodes[http_id]["data"]["curl"], original_curl)

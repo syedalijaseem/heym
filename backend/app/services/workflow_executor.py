@@ -3454,6 +3454,8 @@ class WorkflowExecutor:
                 return self._execute_sub_agent_tool(tool_def, name, args, timeout_seconds)
             if tool_source == "sub_workflow":
                 return self._execute_sub_workflow_tool(tool_def, name, args, timeout_seconds)
+            if tool_source == "node_tool":
+                return self._execute_node_tool(tool_def, args)
 
             return _unified_tool_executor(tool_def, name, args, timeout_seconds)
 
@@ -3506,6 +3508,33 @@ class WorkflowExecutor:
             )
 
         return schemas
+
+    def _execute_node_tool(self, tool_def: dict, args: dict) -> dict:
+        """Execute a canvas node as an agent tool with LLM-supplied args merged into node data."""
+        node_id = tool_def.get("_node_id", "")
+        node = self.nodes.get(node_id)
+        if node is None:
+            return {"error": f"Tool node '{node_id}' not found"}
+
+        original_data = dict(node["data"])
+        if original_data.get("active") is False:
+            return {"error": f"Tool node '{original_data.get('label', node_id)}' is disabled"}
+
+        agent_provided: list[str] = original_data.get("agentProvidedFields") or []
+        merged_data = {**original_data}
+        for fname in agent_provided:
+            if fname in args:
+                merged_data[fname] = args[fname]
+
+        node["data"] = merged_data
+        try:
+            result = self.execute_node(node_id, {}, allow_branch_skip=False)
+        finally:
+            node["data"] = original_data
+
+        if result.status == "error":
+            return {"error": result.error or "Node execution failed"}
+        return result.output or {}
 
     def _execute_agent_node(
         self,
