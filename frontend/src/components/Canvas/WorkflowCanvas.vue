@@ -1131,6 +1131,7 @@ function tidyUp(): void {
     subIds.forEach((subId, index) => {
       const x = nextX;
       nextX += (subWidths[index] ?? NODE_WIDTH) + HORIZONTAL_GAP;
+      nodePositions.set(subId, { x, y: subY });
       workflowStore.updateNodePosition(subId, { x, y: subY });
     });
   });
@@ -1158,7 +1159,7 @@ function tidyUp(): void {
     if (isSubAgent) {
       // Sub-agent: place tools to the upper-right (past right edge of agent)
       let nextX = agentPos.x + agentWidth + HORIZONTAL_GAP;
-      const toolY = agentPos.y - STRIDE / 2;
+      const toolY = agentPos.y - STRIDE;
       toolIds.forEach((toolId, i) => {
         nodePositions.set(toolId, { x: nextX, y: toolY });
         workflowStore.updateNodePosition(toolId, { x: nextX, y: toolY });

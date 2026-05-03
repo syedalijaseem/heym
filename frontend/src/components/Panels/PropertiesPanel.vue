@@ -7722,7 +7722,7 @@ onUnmounted(() => {
                 :key="index"
                 class="space-y-1"
               >
-                <div class="flex gap-1 items-center">
+                <div class="flex items-center gap-2">
                   <Input
                     :model-value="mapping.key"
                     placeholder="key"
@@ -7754,7 +7754,7 @@ onUnmounted(() => {
                   />
                   <button
                     type="button"
-                    class="h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-destructive shrink-0 transition-colors"
+                    class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-input bg-background text-muted-foreground shadow-sm transition-colors hover:bg-destructive/10 hover:text-destructive"
                     title="Remove"
                     @click="removeMappingField(index)"
                   >

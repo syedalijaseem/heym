@@ -31,9 +31,9 @@ function toggle(): void {
 
 <template>
   <Button
-    variant="ghost"
+    variant="outline"
     size="icon"
-    class="h-6 w-6 shrink-0"
+    class="h-8 min-h-0 w-8 min-w-0 shrink-0 rounded-md p-0"
     :class="
       isAgentProvided
         ? 'text-violet-500 hover:text-violet-400'
