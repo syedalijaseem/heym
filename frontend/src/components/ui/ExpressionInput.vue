@@ -119,6 +119,7 @@ const props = withDefaults(defineProps<Props>(), {
   navigationTotal: 0,
   dialogKeyLabel: "",
   dialogNodeLabel: "",
+  fieldKey: undefined,
 });
 
 const emit = defineEmits<{
