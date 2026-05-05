@@ -6,10 +6,11 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.api.mcp_servers import (
+    _get_named_server_context,
     create_mcp_server,
     delete_mcp_server,
     list_mcp_servers,
-    regenerate_server_key,
+    list_named_server_tools,
     toggle_server_workflow,
 )
 from app.models.schemas import MCPServerCreate, MCPServerWorkflowToggleRequest
@@ -74,9 +75,7 @@ class MCPServerListTests(unittest.IsolatedAsyncioTestCase):
         db.execute = AsyncMock(
             side_effect=[
                 MagicMock(
-                    scalars=MagicMock(
-                        return_value=MagicMock(all=MagicMock(return_value=[server]))
-                    )
+                    scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[server])))
                 ),
                 MagicMock(all=MagicMock(return_value=[])),
             ]
@@ -172,10 +171,6 @@ class MCPServerToggleWorkflowTests(unittest.IsolatedAsyncioTestCase):
         )
 
 
-from app.api.mcp_servers import list_named_server_tools, _get_named_server_context
-from app.services.workflow_executor import ExecutionResult
-
-
 class MCPServerToolsListTests(unittest.IsolatedAsyncioTestCase):
     async def test_tools_list_returns_only_server_workflows(self) -> None:
         user = SimpleNamespace(id=uuid.uuid4())
@@ -191,9 +186,7 @@ class MCPServerToolsListTests(unittest.IsolatedAsyncioTestCase):
 
         db = AsyncMock()
 
-        with patch(
-            "app.api.mcp_servers._get_server_workflows", AsyncMock(return_value=[workflow])
-        ):
+        with patch("app.api.mcp_servers._get_server_workflows", AsyncMock(return_value=[workflow])):
             result = await list_named_server_tools(server=(user, server), db=db)
 
         self.assertEqual(len(result.tools), 1)
@@ -202,8 +195,7 @@ class MCPServerToolsListTests(unittest.IsolatedAsyncioTestCase):
 
 class MCPServerAuthTests(unittest.IsolatedAsyncioTestCase):
     async def test_wrong_api_key_raises_401(self) -> None:
-        from fastapi import HTTPException
-        from fastapi import Request
+        from fastapi import HTTPException, Request
 
         request = Request(
             {
@@ -231,8 +223,8 @@ class MCPServerAuthTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ctx.exception.status_code, 401)
 
     async def test_session_token_wrong_server_raises_403(self) -> None:
-        from fastapi import HTTPException
-        from fastapi import Request
+        from fastapi import HTTPException, Request
+
         from app.services.mcp_session import mcp_session_store
 
         user_id = str(uuid.uuid4())

@@ -63,9 +63,7 @@ async def _fetch_server_for_user(
 
 async def _get_server_workflow_ids(db: AsyncSession, server_id: uuid.UUID) -> list[uuid.UUID]:
     result = await db.execute(
-        select(MCPServerWorkflow.workflow_id).where(
-            MCPServerWorkflow.mcp_server_id == server_id
-        )
+        select(MCPServerWorkflow.workflow_id).where(MCPServerWorkflow.mcp_server_id == server_id)
     )
     return [row[0] for row in result.all()]
 
@@ -189,9 +187,7 @@ async def list_mcp_servers(
     db: AsyncSession = Depends(get_db),
 ) -> MCPServerListResponse:
     result = await db.execute(
-        select(MCPServer)
-        .where(MCPServer.user_id == current_user.id)
-        .order_by(MCPServer.created_at)
+        select(MCPServer).where(MCPServer.user_id == current_user.id).order_by(MCPServer.created_at)
     )
     servers = list(result.scalars().all())
     items = []
@@ -274,9 +270,7 @@ async def toggle_server_workflow(
     await _fetch_server_for_user(db, server_id, current_user.id)
 
     wf_res = await db.execute(
-        select(Workflow).where(
-            Workflow.id == workflow_id, Workflow.owner_id == current_user.id
-        )
+        select(Workflow).where(Workflow.id == workflow_id, Workflow.owner_id == current_user.id)
     )
     if wf_res.scalar_one_or_none() is None:
         raise HTTPException(status_code=404, detail="Workflow not found")
@@ -411,9 +405,7 @@ async def handle_named_server_message(
         global_variables_context = await get_global_variables_context(db, user.id)
 
         execution_id = uuid.uuid4()
-        cancel_event = register_execution(
-            workflow_id=target_workflow.id, execution_id=execution_id
-        )
+        cancel_event = register_execution(workflow_id=target_workflow.id, execution_id=execution_id)
         try:
             execution_result = await asyncio.to_thread(
                 execute_workflow,
