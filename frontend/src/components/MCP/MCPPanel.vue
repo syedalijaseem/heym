@@ -146,6 +146,39 @@ async function regenerateServerKey(server: MCPServerItem): Promise<void> {
   }
 }
 
+function toggleServerKeyVisibility(serverId: string): void {
+  showServerApiKey.value[serverId] = !showServerApiKey.value[serverId];
+}
+
+function serverMcpConfigJson(server: MCPServerItem): string {
+  return JSON.stringify(
+    {
+      mcpServers: {
+        [server.name.toLowerCase().replace(/\s+/g, "_")]: {
+          url: serverSseUrl(server.id),
+          headers: {
+            "X-MCP-Key": server.api_key,
+          },
+        },
+      },
+    },
+    null,
+    2,
+  );
+}
+
+function addServerToCursor(server: MCPServerItem): void {
+  const mcpConfig = {
+    url: serverSseUrl(server.id),
+    headers: { "X-MCP-Key": server.api_key },
+  };
+  const configBase64 = btoa(JSON.stringify(mcpConfig));
+  window.open(
+    `cursor://anysphere.cursor-deeplink/mcp/install?name=${encodeURIComponent(server.name)}&config=${configBase64}`,
+    "_self",
+  );
+}
+
 async function toggleServerWorkflow(server: MCPServerItem, workflowId: string): Promise<void> {
   if (togglingServerWorkflow.value) return;
   togglingServerWorkflow.value = workflowId;
@@ -555,6 +588,55 @@ function addToCursor(): void {
         </div>
       </div>
 
+      <Card
+        v-if="connectionTab === 'api-key'"
+        class="p-6 bg-muted/50 border-dashed"
+      >
+        <div class="flex items-center justify-between mb-2">
+          <h4 class="font-medium">
+            How to connect
+          </h4>
+          <div class="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              class="gap-2"
+              @click="copyToClipboard(mcpConfigJson, 'MCP Configuration')"
+            >
+              <Copy class="w-4 h-4" />
+              Copy JSON
+            </Button>
+            <Button
+              variant="default"
+              size="sm"
+              class="gap-2 bg-black hover:bg-neutral-800 text-white border-0"
+              @click="addToCursor"
+            >
+              <svg
+                class="w-4 h-4"
+                viewBox="0 0 100 100"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M10 90L90 50L10 10V40L50 50L10 60V90Z"
+                  fill="currentColor"
+                />
+              </svg>
+              Add to Cursor
+            </Button>
+          </div>
+        </div>
+        <p class="text-sm text-muted-foreground mb-4">
+          Add the following to your MCP client configuration (e.g., <code
+            class="px-1 py-0.5 bg-muted rounded"
+          >~/.cursor/mcp.json</code>):
+        </p>
+        <div class="relative group">
+          <pre class="p-4 bg-background rounded-lg text-sm overflow-x-auto"><code>{{ mcpConfigJson }}</code></pre>
+        </div>
+      </Card>
+
       <div>
         <div class="flex items-center justify-between mb-4">
           <div>
@@ -668,11 +750,9 @@ function addToCursor(): void {
                     <code class="text-xs font-mono truncate flex-1 min-w-0">
                       {{ showServerApiKey[server.id] ? server.api_key : server.api_key.slice(0, 8) + '...' + server.api_key.slice(-4) }}
                     </code>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      class="h-6 w-6 p-0 shrink-0"
-                      @click="showServerApiKey[server.id] = !showServerApiKey[server.id]"
+                    <button
+                      class="p-1 rounded hover:bg-background text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                      @click.stop="toggleServerKeyVisibility(server.id)"
                     >
                       <Eye
                         v-if="!showServerApiKey[server.id]"
@@ -682,7 +762,7 @@ function addToCursor(): void {
                         v-else
                         class="w-4 h-4"
                       />
-                    </Button>
+                    </button>
                   </div>
                   <Button
                     variant="outline"
@@ -703,6 +783,40 @@ function addToCursor(): void {
                       class="w-4 h-4"
                       :class="{ 'animate-spin': regeneratingServerKey === server.id }"
                     />
+                  </Button>
+                </div>
+              </div>
+
+              <div class="pt-1 border-t">
+                <label class="text-xs font-medium text-muted-foreground block mb-2">How to connect</label>
+                <div class="flex items-center gap-2 flex-wrap">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    class="gap-2"
+                    @click="copyToClipboard(serverMcpConfigJson(server), 'MCP Configuration')"
+                  >
+                    <Copy class="w-4 h-4" />
+                    Copy JSON
+                  </Button>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    class="gap-2 bg-black hover:bg-neutral-800 text-white border-0"
+                    @click="addServerToCursor(server)"
+                  >
+                    <svg
+                      class="w-4 h-4"
+                      viewBox="0 0 100 100"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M10 90L90 50L10 10V40L50 50L10 60V90Z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                    Add to Cursor
                   </Button>
                 </div>
               </div>
@@ -748,55 +862,6 @@ function addToCursor(): void {
           </Card>
         </div>
       </div>
-
-      <Card
-        v-if="connectionTab === 'api-key'"
-        class="p-6 bg-muted/50 border-dashed"
-      >
-        <div class="flex items-center justify-between mb-2">
-          <h4 class="font-medium">
-            How to connect
-          </h4>
-          <div class="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              class="gap-2"
-              @click="copyToClipboard(mcpConfigJson, 'MCP Configuration')"
-            >
-              <Copy class="w-4 h-4" />
-              Copy JSON
-            </Button>
-            <Button
-              variant="default"
-              size="sm"
-              class="gap-2 bg-black hover:bg-neutral-800 text-white border-0"
-              @click="addToCursor"
-            >
-              <svg
-                class="w-4 h-4"
-                viewBox="0 0 100 100"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M10 90L90 50L10 10V40L50 50L10 60V90Z"
-                  fill="currentColor"
-                />
-              </svg>
-              Add to Cursor
-            </Button>
-          </div>
-        </div>
-        <p class="text-sm text-muted-foreground mb-4">
-          Add the following to your MCP client configuration (e.g., <code
-            class="px-1 py-0.5 bg-muted rounded"
-          >~/.cursor/mcp.json</code>):
-        </p>
-        <div class="relative group">
-          <pre class="p-4 bg-background rounded-lg text-sm overflow-x-auto"><code>{{ mcpConfigJson }}</code></pre>
-        </div>
-      </Card>
     </div>
 
     <Transition
