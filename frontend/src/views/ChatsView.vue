@@ -15,6 +15,7 @@ import { getDocPath } from "@/docs/manifest";
 import type { ShowcaseContext } from "@/features/showcase/showcase.types";
 import { hasShowcaseChatDraftPending } from "@/features/showcase/showcaseChatDraft";
 import { joinOriginAndPath } from "@/lib/appUrl";
+import { isPaletteOpenInNewTab } from "@/lib/paletteNavigate";
 import { useRecentWorkflows } from "@/composables/useRecentWorkflows";
 import { workflowApi } from "@/services/api";
 import { useChatStore } from "@/stores/chat";
@@ -72,23 +73,23 @@ async function loadWorkflows(): Promise<void> {
   }
 }
 
-function openWorkflowFromPalette(workflowId: string, event?: MouseEvent): void {
+function openWorkflowFromPalette(workflowId: string, event?: MouseEvent | KeyboardEvent): void {
   showCommandPalette.value = false;
   const workflow = workflows.value.find((w) => w.id === workflowId);
   if (workflow) {
     addRecent(workflowId, workflow.name);
   }
   const resolved = router.resolve({ name: "editor", params: { id: workflowId } });
-  if (event && (event.ctrlKey || event.metaKey)) {
+  if (isPaletteOpenInNewTab(event)) {
     window.open(resolved.href, "_blank", "noopener,noreferrer");
   } else {
     router.push({ name: "editor", params: { id: workflowId } });
   }
 }
 
-function handleTabSelectFromPalette(tabId: string, event?: MouseEvent): void {
+function handleTabSelectFromPalette(tabId: string, event?: MouseEvent | KeyboardEvent): void {
   showCommandPalette.value = false;
-  const openInNewTab = event && (event.ctrlKey || event.metaKey);
+  const openInNewTab = isPaletteOpenInNewTab(event);
   const path = tabId === "evals"
     ? "/evals"
     : tabId === "chat"
@@ -105,10 +106,10 @@ function handleTabSelectFromPalette(tabId: string, event?: MouseEvent): void {
   }
 }
 
-function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseEvent): void {
+function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseEvent | KeyboardEvent): void {
   showCommandPalette.value = false;
   const path = getDocPath(categoryId, slug);
-  if (event && (event.ctrlKey || event.metaKey)) {
+  if (isPaletteOpenInNewTab(event)) {
     window.open(joinOriginAndPath(window.location.origin, path), "_blank", "noopener,noreferrer");
   } else {
     router.push(path);
