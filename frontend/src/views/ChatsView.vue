@@ -29,28 +29,21 @@ const chatStore = useChatStore();
 const { addRecent } = useRecentWorkflows();
 
 const conversationId = computed(() => route.params.id as string | undefined);
-const isCreateNewCoolingDown = ref(false);
+const isCreatingConversation = ref(false);
 const isMobileViewport = ref(false);
 const showCommandPalette = ref(false);
 const workflows = ref<WorkflowListItem[]>([]);
 const previousDocumentTitle = ref(DEFAULT_APP_TITLE);
-let createNewCooldownTimeout: ReturnType<typeof setTimeout> | null = null;
 let mobileSidebarMediaQuery: MediaQueryList | null = null;
 
 async function createNew(): Promise<void> {
-  if (isCreateNewCoolingDown.value) return;
-  isCreateNewCoolingDown.value = true;
-  createNewCooldownTimeout = setTimeout(() => {
-    isCreateNewCoolingDown.value = false;
-    createNewCooldownTimeout = null;
-  }, 2000);
+  if (isCreatingConversation.value) return;
+  isCreatingConversation.value = true;
   try {
     const conv = await chatStore.createConversation();
     await router.push(`/chats/${conv.id}`);
-  } catch {
-    if (createNewCooldownTimeout) clearTimeout(createNewCooldownTimeout);
-    createNewCooldownTimeout = null;
-    isCreateNewCoolingDown.value = false;
+  } finally {
+    isCreatingConversation.value = false;
   }
 }
 
@@ -153,7 +146,6 @@ onUnmounted(() => {
   if (typeof window !== "undefined") {
     window.removeEventListener("keydown", handleKeyDown);
   }
-  if (createNewCooldownTimeout) clearTimeout(createNewCooldownTimeout);
 });
 </script>
 
@@ -228,7 +220,7 @@ onUnmounted(() => {
                 </p>
                 <button
                   class="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50 transition-colors"
-                  :disabled="isCreateNewCoolingDown"
+                  :disabled="isCreatingConversation"
                   @click="createNew"
                 >
                   <SquarePen class="w-4 h-4" />
