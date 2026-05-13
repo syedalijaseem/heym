@@ -34,6 +34,18 @@ interface Props {
   workflowId: string;
 }
 
+interface VersionSnapshot {
+  nodes: WorkflowVersion["nodes"];
+  edges: WorkflowVersion["edges"];
+  auth_type: WorkflowVersion["auth_type"];
+  auth_header_key: WorkflowVersion["auth_header_key"];
+  auth_header_value: WorkflowVersion["auth_header_value"];
+  webhook_body_mode: WorkflowVersion["webhook_body_mode"];
+  cache_ttl_seconds: WorkflowVersion["cache_ttl_seconds"];
+  rate_limit_requests: WorkflowVersion["rate_limit_requests"];
+  rate_limit_window_seconds: WorkflowVersion["rate_limit_window_seconds"];
+}
+
 const props = defineProps<Props>();
 const emit = defineEmits<{
   (e: "close"): void;
@@ -101,7 +113,7 @@ const allVersions = computed(() => {
   const currentVersion: WorkflowVersion = {
     id: "current",
     workflow_id: current.id,
-    version_number: (versionsWithChanges.value[0]?.version_number || 0) + 1,
+    version_number: (versions.value[0]?.version_number || 0) + 1,
     name: current.name,
     description: current.description,
     nodes: current.nodes,
@@ -120,7 +132,7 @@ const allVersions = computed(() => {
   return [currentVersion, ...versionsWithChanges.value];
 });
 
-function _areVersionsIdentical(v1: WorkflowVersion, v2: WorkflowVersion): boolean {
+function _areVersionsIdentical(v1: VersionSnapshot, v2: VersionSnapshot): boolean {
   return (
     JSON.stringify(v1.nodes) === JSON.stringify(v2.nodes) &&
     JSON.stringify(v1.edges) === JSON.stringify(v2.edges) &&
@@ -132,6 +144,23 @@ function _areVersionsIdentical(v1: WorkflowVersion, v2: WorkflowVersion): boolea
     v1.rate_limit_requests === v2.rate_limit_requests &&
     v1.rate_limit_window_seconds === v2.rate_limit_window_seconds
   );
+}
+
+function getCurrentVersionSnapshot(): VersionSnapshot | null {
+  const current = workflowStore.currentWorkflow;
+  if (!current) return null;
+
+  return {
+    nodes: current.nodes,
+    edges: current.edges,
+    auth_type: current.auth_type,
+    auth_header_key: current.auth_header_key,
+    auth_header_value: current.auth_header_value,
+    webhook_body_mode: current.webhook_body_mode,
+    cache_ttl_seconds: current.cache_ttl_seconds,
+    rate_limit_requests: current.rate_limit_requests,
+    rate_limit_window_seconds: current.rate_limit_window_seconds,
+  };
 }
 
 const selectedVersion = computed<WorkflowVersion | null>(() => {
@@ -173,10 +202,15 @@ async function loadVersions(): Promise<void> {
     versions.value = await workflowApi.getVersions(props.workflowId);
 
     checkingChanges.value = true;
+    const currentVersion = getCurrentVersionSnapshot();
     const filteredVersions: WorkflowVersion[] = [];
 
     for (let i = 0; i < versions.value.length; i++) {
       const version = versions.value[i];
+
+      if (currentVersion && _areVersionsIdentical(version, currentVersion)) {
+        continue;
+      }
 
       if (i > 0) {
         const prevVersion = versions.value[i - 1];
@@ -185,21 +219,7 @@ async function loadVersions(): Promise<void> {
         }
       }
 
-      try {
-        const versionDiff = await workflowApi.getVersionDiff(props.workflowId, version.id);
-        const hasChanges =
-          versionDiff.node_changes.length > 0 ||
-          versionDiff.edge_changes.length > 0 ||
-          versionDiff.config_changes.length > 0;
-
-        if (!hasChanges) {
-          continue;
-        }
-
-        filteredVersions.push(version);
-      } catch {
-        continue;
-      }
+      filteredVersions.push(version);
     }
 
     versionsWithChanges.value = filteredVersions;
@@ -237,6 +257,10 @@ async function loadDiff(versionId: string): Promise<void> {
 
 function formatTime(value: string): string {
   return new Date(value).toLocaleString();
+}
+
+function formatVersionIndex(index: number): string {
+  return String(index + 1).padStart(2, "0");
 }
 
 function selectVersion(versionId: string): void {
@@ -487,16 +511,19 @@ async function clearVersionHistory(): Promise<void> {
 
           <div class="space-y-2 max-h-[600px] overflow-y-auto pr-2">
             <button
-              v-for="version in allVersions"
+              v-for="(version, versionIndex) in allVersions"
               :key="version.id"
-              class="w-full text-left p-4 rounded-lg border transition-all duration-200 hover:border-primary/40 hover:bg-primary/5"
+              class="w-full text-left p-3 rounded-lg border transition-all duration-200 hover:border-primary/40 hover:bg-primary/5"
               :class="cn(
                 selectedVersion?.id === version.id && 'border-primary/60 bg-primary/10 shadow-sm',
                 version.id === 'current' && 'border-emerald-500/30 bg-emerald-500/5'
               )"
               @click="selectVersion(version.id)"
             >
-              <div class="flex items-start justify-between gap-3">
+              <div class="flex items-start gap-3">
+                <div class="w-8 shrink-0 rounded-md border bg-muted/30 px-1.5 py-1 text-center text-[11px] font-semibold leading-none text-muted-foreground">
+                  {{ formatVersionIndex(versionIndex) }}
+                </div>
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center gap-2 mb-1">
                     <GitBranch class="w-4 h-4 text-muted-foreground shrink-0" />
@@ -599,7 +626,7 @@ async function clearVersionHistory(): Promise<void> {
                 class="border rounded-lg overflow-hidden"
               >
                 <button
-                  class="w-full flex items-center gap-3 p-3 text-left transition-colors"
+                  class="w-full flex items-start gap-3 p-3 text-left transition-colors"
                   :class="hasNodeChanges(nodeChange) ? 'hover:bg-muted/30 cursor-pointer' : 'cursor-default'"
                   :disabled="!hasNodeChanges(nodeChange)"
                   @click="hasNodeChanges(nodeChange) && toggleChange(`node-${nodeChange.node_id}`)"
@@ -615,14 +642,14 @@ async function clearVersionHistory(): Promise<void> {
                   />
                   <component
                     :is="getChangeIcon(nodeChange.change_type)"
-                    class="w-4 h-4 shrink-0"
+                    class="w-4 h-4 shrink-0 mt-0.5"
                     :class="getChangeColor(nodeChange.change_type).split(' ')[0]"
                   />
-                  <span class="text-sm font-medium flex-1">
+                  <span class="min-w-0 flex-1 text-sm font-medium leading-snug break-words">
                     {{ nodeChange.new_node?.data?.label || nodeChange.old_node?.data?.label || nodeChange.node_id }}
                   </span>
                   <span
-                    class="text-xs px-2 py-0.5 rounded-full font-medium"
+                    class="text-xs px-2 py-0.5 rounded-full font-medium shrink-0"
                     :class="getChangeColor(nodeChange.change_type)"
                   >
                     {{ nodeChange.change_type }}
