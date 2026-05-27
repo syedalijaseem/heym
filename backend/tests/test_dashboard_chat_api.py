@@ -79,8 +79,11 @@ class DashboardChatApiTests(unittest.IsolatedAsyncioTestCase):
                 ]
             )
 
+        # Filter out the new `context` SSE events for this assertion; they carry
+        # token-usage metadata orthogonal to what this test verifies.
+        non_context_chunks = [c for c in chunks if '"type": "context"' not in c]
         self.assertEqual(
-            chunks,
+            non_context_chunks,
             [
                 'data: {"type": "content", "text": "Done"}\n\n',
                 'data: {"type": "done"}\n\n',
@@ -838,3 +841,271 @@ class DashboardChatAttachmentIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(last_msg["content"], str)
         self.assertIn("[ATTACHED FILE: data.csv]", last_msg["content"])
         self.assertIn("a,b\n1,2", last_msg["content"])
+
+
+class DashboardChatBreakdownTests(unittest.IsolatedAsyncioTestCase):
+    def test_context_breakdown_keys_and_values(self) -> None:
+        from app.api.ai_assistant import _context_breakdown
+        from app.services.context_compressor import _estimate_tokens
+
+        history = [{"role": "user", "content": "hello"}]
+        breakdown = _context_breakdown(
+            base_system_prompt="sys",
+            agents_md="agents",
+            workflows_block="wf",
+            user_rules="rules",
+            history=history,
+            attachment_content=None,
+        )
+
+        self.assertIn("system", breakdown)
+        self.assertIn("agents_md", breakdown)
+        self.assertIn("workflows", breakdown)
+        self.assertIn("user_rules", breakdown)
+        self.assertIn("history", breakdown)
+        self.assertIn("attachment", breakdown)
+        self.assertEqual(breakdown["attachment"], 0)
+        self.assertEqual(breakdown["history"], _estimate_tokens(history))
+
+    def test_context_breakdown_empty_inputs_return_zero(self) -> None:
+        from app.api.ai_assistant import _context_breakdown
+
+        breakdown = _context_breakdown(
+            base_system_prompt="",
+            agents_md="",
+            workflows_block="",
+            user_rules="",
+            history=[],
+            attachment_content=None,
+        )
+        self.assertEqual(breakdown["system"], 0)
+        self.assertEqual(breakdown["agents_md"], 0)
+        self.assertEqual(breakdown["workflows"], 0)
+        self.assertEqual(breakdown["user_rules"], 0)
+        self.assertEqual(breakdown["history"], 0)
+        self.assertEqual(breakdown["attachment"], 0)
+
+
+class DashboardChatToolEventsTests(unittest.IsolatedAsyncioTestCase):
+    async def test_stream_emits_tool_start_and_tool_end(self) -> None:
+        user = MagicMock()
+        user.id = uuid.uuid4()
+
+        tool_call_msg = MagicMock()
+        tool_call_msg.content = None
+        tc = MagicMock()
+        tc.id = "tc_abc"
+        tc.function.name = "list_workflows"
+        tc.function.arguments = "{}"
+        tool_call_msg.tool_calls = [tc]
+
+        final_msg = MagicMock()
+        final_msg.content = "Here are your workflows."
+        final_msg.tool_calls = None
+
+        response_with_tools = MagicMock()
+        response_with_tools.choices = [MagicMock(message=tool_call_msg)]
+        response_with_tools.usage = MagicMock(
+            prompt_tokens=10, completion_tokens=5, total_tokens=15
+        )
+
+        response_final = MagicMock()
+        response_final.choices = [MagicMock(message=final_msg)]
+        response_final.usage = MagicMock(prompt_tokens=20, completion_tokens=8, total_tokens=28)
+
+        fake_client = MagicMock()
+        fake_client.chat.completions.create.side_effect = [response_with_tools, response_final]
+
+        db_mock = AsyncMock()
+        with (
+            patch("app.api.ai_assistant.record_run_history"),
+            patch(
+                "app.api.ai_assistant.get_workflows_for_user_with_inputs",
+                new=AsyncMock(return_value=[]),
+            ),
+        ):
+            chunks = _normalize_chunks(
+                [
+                    chunk
+                    async for chunk in stream_dashboard_chat(
+                        fake_client,
+                        "gpt-4o-mini",
+                        "system",
+                        [{"role": "user", "content": "list workflows"}],
+                        db_mock,
+                        user,
+                        "OpenAI",
+                        "http://localhost",
+                    )
+                ]
+            )
+
+        joined = "".join(chunks)
+        self.assertIn('"type": "tool_start"', joined)
+        self.assertIn('"id": "tc_abc"', joined)
+        self.assertIn('"type": "tool_end"', joined)
+        self.assertNotIn('"type": "step"', joined)
+
+
+class DashboardChatContextEventTests(unittest.IsolatedAsyncioTestCase):
+    async def test_stream_emits_context_event_with_prompt_tokens(self) -> None:
+        user = MagicMock()
+        user.id = uuid.uuid4()
+        final_msg = MagicMock()
+        final_msg.content = "ok"
+        final_msg.tool_calls = None
+        response = MagicMock()
+        response.choices = [MagicMock(message=final_msg)]
+        response.usage = MagicMock(prompt_tokens=42, completion_tokens=3, total_tokens=45)
+        fake_client = MagicMock()
+        fake_client.chat.completions.create.return_value = response
+
+        with patch("app.api.ai_assistant.record_run_history"):
+            chunks = _normalize_chunks(
+                [
+                    chunk
+                    async for chunk in stream_dashboard_chat(
+                        fake_client,
+                        "gpt-4o-mini",
+                        "system",
+                        [{"role": "user", "content": "hi"}],
+                        AsyncMock(),
+                        user,
+                        "OpenAI",
+                        "http://localhost",
+                    )
+                ]
+            )
+
+        joined = "".join(chunks)
+        self.assertIn('"type": "context"', joined)
+        self.assertIn('"used": 42', joined)
+        self.assertIn('"limit": 128000', joined)
+
+
+class DashboardChatCompressionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_stream_emits_compressed_when_compression_runs(self) -> None:
+        user = MagicMock()
+        user.id = uuid.uuid4()
+        final_msg = MagicMock()
+        final_msg.content = "ok"
+        final_msg.tool_calls = None
+        response = MagicMock()
+        response.choices = [MagicMock(message=final_msg)]
+        response.usage = MagicMock(prompt_tokens=10, completion_tokens=3, total_tokens=13)
+        fake_client = MagicMock()
+        fake_client.chat.completions.create.return_value = response
+
+        fake_compressed = [
+            {"role": "user", "content": "u"},
+            {"role": "assistant", "content": "summary"},
+        ]
+        fake_info = {
+            "messages_compressed": 18,
+            "messages_before_count": 22,
+            "messages_after_count": 4,
+            "tokens_before": 98_000,
+            "tokens_after": 12_000,
+            "elapsed_ms": 412.0,
+        }
+        with (
+            patch("app.api.ai_assistant.record_run_history"),
+            patch(
+                "app.services.context_compressor.maybe_compress_messages",
+                new=AsyncMock(return_value=(fake_compressed, fake_info)),
+            ),
+        ):
+            chunks = _normalize_chunks(
+                [
+                    chunk
+                    async for chunk in stream_dashboard_chat(
+                        fake_client,
+                        "gpt-4o-mini",
+                        "system",
+                        [{"role": "user", "content": "hi"}],
+                        AsyncMock(),
+                        user,
+                        "OpenAI",
+                        "http://localhost",
+                    )
+                ]
+            )
+
+        joined = "".join(chunks)
+        self.assertIn('"type": "compressed"', joined)
+        self.assertIn('"messages_compressed": 18', joined)
+        self.assertIn('"tokens_before": 98000', joined)
+
+
+class ContextSummaryEndpointTests(unittest.IsolatedAsyncioTestCase):
+    async def test_get_context_summary_returns_breakdown(self) -> None:
+        from app.api.chats import SystemPromptParts, get_context_summary
+        from app.models.chat_schemas import ContextSummaryResponse
+
+        conv_id = uuid.uuid4()
+        user = MagicMock()
+        user.id = uuid.uuid4()
+        user.user_rules = ""
+
+        conversation = MagicMock()
+        conversation.id = conv_id
+        conversation.user_id = user.id
+
+        mock_db = AsyncMock()
+        scalar_result = MagicMock()
+        scalar_result.scalar_one_or_none = MagicMock(return_value=conversation)
+        scalars_result = MagicMock()
+        scalars_result.scalars.return_value.all.return_value = []
+        mock_db.execute = AsyncMock(side_effect=[scalar_result, scalars_result])
+
+        fake_credential = MagicMock()
+        fake_credential.encrypted_config = "{}"
+        fake_credential.type = "openai"
+
+        fake_parts = SystemPromptParts(
+            full_system_prompt="sys",
+            base_system_prompt="sys",
+            agents_md="",
+            workflows_block="",
+            user_rules="",
+        )
+
+        with (
+            patch(
+                "app.api.chats.get_accessible_credential",
+                new=AsyncMock(return_value=fake_credential),
+            ),
+            patch("app.api.chats.decrypt_config", return_value={"api_key": "x"}),
+            patch("app.api.chats.get_openai_client", return_value=(MagicMock(), "OpenAI")),
+            patch(
+                "app.api.chats._assemble_system_prompt_parts",
+                new=AsyncMock(return_value=fake_parts),
+            ),
+            patch(
+                "app.api.ai_assistant._context_breakdown",
+                return_value={
+                    "system": 1,
+                    "agents_md": 0,
+                    "workflows": 0,
+                    "user_rules": 0,
+                    "history": 0,
+                    "attachment": 0,
+                },
+            ),
+            patch(
+                "app.services.context_compressor.get_context_limit",
+                return_value=128_000,
+            ),
+        ):
+            result = await get_context_summary(
+                conversation_id=conv_id,
+                credential_id=uuid.uuid4(),
+                model="gpt-4o-mini",
+                current_user=user,
+                db=mock_db,
+            )
+
+        self.assertIsInstance(result, ContextSummaryResponse)
+        self.assertEqual(result.limit, 128_000)
+        self.assertEqual(result.used, 1)
+        self.assertEqual(result.breakdown.system, 1)

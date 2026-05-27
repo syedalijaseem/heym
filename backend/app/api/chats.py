@@ -5,6 +5,7 @@ import json
 import logging
 import uuid
 from collections.abc import AsyncGenerator
+from dataclasses import dataclass
 from threading import Event
 
 import sqlalchemy as sa
@@ -36,6 +37,7 @@ from app.db.models import (
 )
 from app.db.session import async_session_maker
 from app.models.chat_schemas import (
+    ContextSummaryResponse,
     ConversationCreate,
     ConversationDetailResponse,
     ConversationListResponse,
@@ -74,6 +76,98 @@ MAX_PROMPT_LENGTH = 200
 def _build_hidden_workflow_context_marker(workflow_id: str, workflow_name: str) -> str:
     safe_name = workflow_name.replace("--", "").strip()
     return f"\n<!-- heym-workflow-id:{workflow_id} heym-workflow-name:{safe_name} -->"
+
+
+def _ingest_tool_event(tool_calls_for_message: list[dict], payload: dict) -> None:
+    """Update tool_calls_for_message in place from a parsed SSE payload."""
+    ptype = payload.get("type")
+    if ptype == "tool_start":
+        tool_calls_for_message.append(
+            {
+                "id": str(payload.get("id") or ""),
+                "name": str(payload.get("name") or ""),
+                "label": str(payload.get("label") or ""),
+                "args": payload.get("args") or {},
+                "status": "running",
+            }
+        )
+    elif ptype == "tool_end":
+        tc_id = str(payload.get("id") or "")
+        for entry in tool_calls_for_message:
+            if entry.get("id") == tc_id:
+                entry["response_summary"] = str(payload.get("response_summary") or "")
+                entry["elapsed_ms"] = payload.get("elapsed_ms")
+                entry["status"] = str(payload.get("status") or "success")
+                break
+    elif ptype == "compressed":
+        tokens_before = int(payload.get("tokens_before") or 0)
+        tokens_after = int(payload.get("tokens_after") or 0)
+        tool_calls_for_message.append(
+            {
+                "id": f"cmp_{len(tool_calls_for_message)}",
+                "name": "_context_compression",
+                "label": "Context compressed",
+                "args": {"messages_compressed": int(payload.get("messages_compressed") or 0)},
+                "response_summary": (
+                    f"~{tokens_before // 1000}k → ~{tokens_after // 1000}k tokens"
+                ),
+                "elapsed_ms": payload.get("elapsed_ms"),
+                "status": "compressed",
+            }
+        )
+
+
+@dataclass(frozen=True)
+class SystemPromptParts:
+    full_system_prompt: str
+    base_system_prompt: str
+    agents_md: str
+    workflows_block: str
+    user_rules: str
+
+
+async def _assemble_system_prompt_parts(
+    user: User,
+    db: AsyncSession,
+    *,
+    include_attachment_instructions: bool,
+) -> SystemPromptParts:
+    workflows = await get_workflows_for_user_with_inputs(db, user.id)
+    workflows_block = _format_workflows_for_prompt(workflows)
+    agents_md = _load_agents_md_content() or ""
+    user_rules = (user.user_rules or "").strip()
+
+    system_prompt = DASHBOARD_CHAT_SYSTEM_PROMPT
+    if agents_md:
+        system_prompt = (
+            "## Heym Platform Context\n\n"
+            "Use the following Heym platform documentation to answer questions about the platform, structure, commands, code style, and conventions:\n\n"
+            + agents_md
+            + "\n\n---\n\n"
+            + system_prompt
+        )
+    if workflows_block:
+        system_prompt = (
+            system_prompt
+            + "\n\nAvailable workflows (always check these first when user asks for information):\n"
+            + workflows_block
+        )
+    if user_rules:
+        system_prompt = (
+            system_prompt
+            + "\n\nUser preferences / custom instructions (follow these when relevant):\n"
+            + user_rules
+        )
+    if include_attachment_instructions:
+        system_prompt = system_prompt + "\n\n" + _ATTACHMENT_ROUTING_INSTRUCTIONS
+
+    return SystemPromptParts(
+        full_system_prompt=system_prompt,
+        base_system_prompt=DASHBOARD_CHAT_SYSTEM_PROMPT,
+        agents_md=agents_md,
+        workflows_block=workflows_block,
+        user_rules=user_rules,
+    )
 
 
 async def _get_conversation_or_404(
@@ -152,37 +246,16 @@ async def _process_chat(
                 node_label="Dashboard Chat",
                 source="dashboard_chat",
             )
-            workflows = await get_workflows_for_user_with_inputs(db, user_id)
-            workflows_block = _format_workflows_for_prompt(workflows)
-            agents_md = _load_agents_md_content()
-            system_prompt = DASHBOARD_CHAT_SYSTEM_PROMPT
-            if agents_md:
-                system_prompt = (
-                    "## Heym Platform Context\n\n"
-                    "Use the following Heym platform documentation to answer questions about the platform, structure, commands, code style, and conventions:\n\n"
-                    + agents_md
-                    + "\n\n---\n\n"
-                    + system_prompt
-                )
-            if workflows_block:
-                system_prompt = (
-                    system_prompt
-                    + "\n\nAvailable workflows (always check these first when user asks for information):\n"
-                    + workflows_block
-                )
-            if user.user_rules and user.user_rules.strip():
-                system_prompt = (
-                    system_prompt
-                    + "\n\nUser preferences / custom instructions (follow these when relevant):\n"
-                    + user.user_rules.strip()
-                )
-            if attachment_data:
-                system_prompt = system_prompt + "\n\n" + _ATTACHMENT_ROUTING_INSTRUCTIONS
+            parts = await _assemble_system_prompt_parts(
+                user, db, include_attachment_instructions=attachment_data is not None
+            )
+            system_prompt = parts.full_system_prompt
 
             cancel_event = Event()
             assistant_chunks: list[str] = []
             workflow_context_markers: list[str] = []
             workflow_note_ids: set[str] = set()
+            tool_calls_for_message: list[dict] = []
 
             async for chunk in stream_dashboard_chat(
                 client,
@@ -197,15 +270,17 @@ async def _process_chat(
                 cancel_event,
                 attachment,
                 credential,
+                system_prompt_parts=parts,
             ):
                 if chunk.startswith("data: "):
                     try:
                         payload = json.loads(chunk[6:].strip())
                     except json.JSONDecodeError:
                         payload = {}
-                    if payload.get("type") == "content":
+                    ptype = payload.get("type")
+                    if ptype == "content":
                         assistant_chunks.append(str(payload.get("text") or ""))
-                    elif payload.get("type") == "workflow_created":
+                    elif ptype == "workflow_created":
                         w_id = str(payload.get("workflow_id") or "").strip()
                         w_name = str(payload.get("workflow_name") or "").strip()
                         if w_id and w_id not in workflow_note_ids:
@@ -213,18 +288,21 @@ async def _process_chat(
                             workflow_context_markers.append(
                                 _build_hidden_workflow_context_marker(w_id, w_name or "Workflow")
                             )
+                    elif ptype in ("tool_start", "tool_end", "compressed"):
+                        _ingest_tool_event(tool_calls_for_message, payload)
                 await registry.publish(conv_id, chunk)
 
             assistant_content = "".join(assistant_chunks)
             for marker in workflow_context_markers:
                 if marker and marker not in assistant_content:
                     assistant_content += marker
-            if assistant_content:
+            if assistant_content or tool_calls_for_message:
                 db.add(
                     DashboardMessage(
                         conversation_id=uuid.UUID(conv_id),
                         role="assistant",
                         content=assistant_content,
+                        tool_calls=tool_calls_for_message or None,
                     )
                 )
 
@@ -592,3 +670,48 @@ async def mark_conversation_read(
     conversation = await _get_conversation_or_404(conversation_id, current_user.id, db)
     conversation.has_unread = False
     await db.commit()
+
+
+@router.get("/{conversation_id}/context-summary", response_model=ContextSummaryResponse)
+async def get_context_summary(
+    conversation_id: uuid.UUID,
+    credential_id: uuid.UUID,
+    model: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ContextSummaryResponse:
+    """Compute the static (idle-state) context usage for a conversation."""
+    from app.api.ai_assistant import _context_breakdown
+    from app.services.context_compressor import get_context_limit
+
+    conversation = await _get_conversation_or_404(conversation_id, current_user.id, db)
+    msg_result = await db.execute(
+        select(DashboardMessage)
+        .where(DashboardMessage.conversation_id == conversation.id)
+        .order_by(DashboardMessage.created_at)
+    )
+    all_messages = msg_result.scalars().all()
+    history = [{"role": m.role, "content": m.content} for m in all_messages]
+    if len(history) > MAX_DASHBOARD_CHAT_HISTORY:
+        history = history[-MAX_DASHBOARD_CHAT_HISTORY:]
+
+    credential = await get_accessible_credential(db, credential_id, current_user.id)
+    if credential is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Credential not found")
+    config = decrypt_config(credential.encrypted_config)
+    client, _provider = get_openai_client(credential.type, config)
+
+    parts = await _assemble_system_prompt_parts(
+        current_user, db, include_attachment_instructions=False
+    )
+    breakdown = _context_breakdown(
+        base_system_prompt=parts.base_system_prompt,
+        agents_md=parts.agents_md,
+        workflows_block=parts.workflows_block,
+        user_rules=parts.user_rules,
+        history=history,
+        attachment_content=None,
+    )
+    used = sum(breakdown.values())
+    limit = get_context_limit(model, client)
+    return ContextSummaryResponse(used=used, limit=limit, breakdown=breakdown)
