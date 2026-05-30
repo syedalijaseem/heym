@@ -1115,5 +1115,146 @@ class DriveNodeDownloadUrlTests(unittest.TestCase):
         self.assertIn("404", nr["error"])
 
 
+# ---------------------------------------------------------------------------
+# Task — Drive convertFile helper functions
+# ---------------------------------------------------------------------------
+
+
+class DriveConvertHelpersTests(unittest.TestCase):
+    """Unit tests for the three module-level helpers used by convertFile."""
+
+    # --- _detect_pandoc_format ---
+
+    def test_detect_markdown_by_mime(self) -> None:
+        from app.services.workflow_executor import _detect_pandoc_format
+
+        self.assertEqual(_detect_pandoc_format("text/markdown", "doc.md"), "markdown")
+
+    def test_detect_html_by_mime(self) -> None:
+        from app.services.workflow_executor import _detect_pandoc_format
+
+        self.assertEqual(_detect_pandoc_format("text/html", "page.html"), "html")
+
+    def test_detect_docx_by_mime(self) -> None:
+        from app.services.workflow_executor import _detect_pandoc_format
+
+        self.assertEqual(
+            _detect_pandoc_format(
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "doc.docx",
+            ),
+            "docx",
+        )
+
+    def test_detect_plain_by_mime(self) -> None:
+        from app.services.workflow_executor import _detect_pandoc_format
+
+        self.assertEqual(_detect_pandoc_format("text/plain", "notes.txt"), "plain")
+
+    def test_detect_csv_by_mime(self) -> None:
+        from app.services.workflow_executor import _detect_pandoc_format
+
+        self.assertEqual(_detect_pandoc_format("text/csv", "data.csv"), "csv")
+
+    def test_detect_md_by_extension_fallback(self) -> None:
+        from app.services.workflow_executor import _detect_pandoc_format
+
+        self.assertEqual(_detect_pandoc_format("application/octet-stream", "readme.md"), "markdown")
+
+    def test_detect_unsupported_returns_none(self) -> None:
+        from app.services.workflow_executor import _detect_pandoc_format
+
+        self.assertIsNone(_detect_pandoc_format("application/zip", "archive.zip"))
+
+    # --- _extract_pdf_text ---
+
+    def test_extract_pdf_text_returns_string(self) -> None:
+        from unittest.mock import MagicMock, patch
+
+        from app.services.workflow_executor import _extract_pdf_text
+
+        mock_page = MagicMock()
+        mock_page.extract_text.return_value = "Hello from PDF"
+        mock_reader = MagicMock()
+        mock_reader.pages = [mock_page]
+
+        with patch("pypdf.PdfReader", return_value=mock_reader):
+            result = _extract_pdf_text(b"fake-pdf-bytes")
+
+        self.assertEqual(result, "Hello from PDF")
+
+    def test_extract_pdf_text_joins_pages(self) -> None:
+        from unittest.mock import MagicMock, patch
+
+        from app.services.workflow_executor import _extract_pdf_text
+
+        pages = [MagicMock(), MagicMock()]
+        pages[0].extract_text.return_value = "Page 1"
+        pages[1].extract_text.return_value = "Page 2"
+        mock_reader = MagicMock()
+        mock_reader.pages = pages
+
+        with patch("pypdf.PdfReader", return_value=mock_reader):
+            result = _extract_pdf_text(b"fake-pdf-bytes")
+
+        self.assertEqual(result, "Page 1\n\nPage 2")
+
+    # --- _convert_image ---
+
+    def test_convert_image_png_to_jpg(self) -> None:
+        from unittest.mock import MagicMock, patch
+
+        from app.services.workflow_executor import _convert_image
+
+        fake_output = b"fake-jpeg-bytes"
+
+        mock_img = MagicMock()
+        mock_img.mode = "RGB"
+
+        def fake_save(buf, format):
+            buf.write(fake_output)
+
+        mock_img.save.side_effect = fake_save
+        mock_img.convert.return_value = mock_img
+
+        with patch("PIL.Image.open", return_value=mock_img):
+            out_bytes, out_mime = _convert_image(b"png-bytes", "jpg")
+
+        self.assertEqual(out_bytes, fake_output)
+        self.assertEqual(out_mime, "image/jpeg")
+        mock_img.save.assert_called_once()
+        call_kwargs = mock_img.save.call_args
+        self.assertEqual(call_kwargs[1]["format"], "JPEG")
+
+    def test_convert_image_unsupported_format_raises(self) -> None:
+        from app.services.workflow_executor import _convert_image
+
+        with self.assertRaises(ValueError) as ctx:
+            _convert_image(b"bytes", "docx")
+        self.assertIn("unsupported image output format", str(ctx.exception))
+
+    def test_convert_image_rgba_to_jpg_converts_to_rgb(self) -> None:
+        from unittest.mock import MagicMock, patch
+
+        from app.services.workflow_executor import _convert_image
+
+        mock_img = MagicMock()
+        mock_img.mode = "RGBA"
+        rgb_img = MagicMock()
+        rgb_img.mode = "RGB"
+        mock_img.convert.return_value = rgb_img
+
+        def fake_save(buf, format):
+            buf.write(b"data")
+
+        rgb_img.save.side_effect = fake_save
+
+        with patch("PIL.Image.open", return_value=mock_img):
+            _convert_image(b"png-rgba-bytes", "jpg")
+
+        mock_img.convert.assert_called_once_with("RGB")
+        rgb_img.save.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()
