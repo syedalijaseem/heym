@@ -977,7 +977,7 @@ onMounted(async () => {
             <span
               v-for="(s, i) in getSkillsFromRequest(selectedTrace.request)"
               :key="i"
-              class="text-[10px] px-1.5 py-0.5 rounded bg-primary/20 text-primary"
+              class="text-[10px] px-1.5 py-0.5 rounded bg-primary/20 text-primary dark:bg-primary/25 dark:text-accent-foreground"
             >
               {{ s }}
             </span>
@@ -1003,13 +1003,13 @@ onMounted(async () => {
                 </span>
                 <span
                   v-if="tc.source === 'mcp'"
-                  class="text-[10px] px-1.5 py-0.5 rounded bg-primary/20 text-primary"
+                  class="text-[10px] px-1.5 py-0.5 rounded bg-primary/20 text-primary dark:bg-primary/25 dark:text-accent-foreground"
                 >
                   MCP{{ tc.mcp_server ? `: ${tc.mcp_server}` : '' }}
                 </span>
                 <span
                   v-else-if="tc.source === 'skill'"
-                  class="text-[10px] px-1.5 py-0.5 rounded bg-primary/20 text-primary"
+                  class="text-[10px] px-1.5 py-0.5 rounded bg-primary/20 text-primary dark:bg-primary/25 dark:text-accent-foreground"
                 >
                   Skill
                 </span>
