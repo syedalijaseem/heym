@@ -9054,6 +9054,194 @@ class WorkflowExecutor:
                                 file_bytes = disk_path.read_bytes()
                                 output["file_base64"] = _base64.b64encode(file_bytes).decode()
 
+                        elif operation == "convertFile":
+                            import tempfile as _tempfile
+
+                            import pypandoc as _pypandoc
+
+                            from app.config import settings as _settings
+
+                            target_format = node_data.get("driveConvertTargetFormat", "")
+                            if not target_format:
+                                raise ValueError(
+                                    "Drive Node: targetFormat is required for convertFile"
+                                )
+
+                            _image_formats = {"jpg", "jpeg", "png", "bmp", "webp"}
+                            _doc_formats = {"pdf", "docx", "html", "md", "txt"}
+
+                            src_mime = file_row.mime_type or ""
+                            src_filename = file_row.filename or ""
+                            _image_mimes = {
+                                "image/jpeg",
+                                "image/jpg",
+                                "image/png",
+                                "image/bmp",
+                                "image/webp",
+                            }
+                            is_image_input = src_mime in _image_mimes
+
+                            if is_image_input and target_format in _doc_formats:
+                                raise ValueError(
+                                    f"Drive Node: cannot convert image to '{target_format}' — "
+                                    f"choose an image output format (jpg, png, bmp, webp)"
+                                )
+                            if not is_image_input and target_format in _image_formats:
+                                raise ValueError(
+                                    f"Drive Node: cannot convert document to '{target_format}' — "
+                                    f"choose a document output format (pdf, docx, html, md, txt)"
+                                )
+
+                            disk_path = _storage_root() / file_row.storage_path
+                            if not disk_path.exists():
+                                raise ValueError(
+                                    f"Drive Node: source file not found on disk: {src_filename}"
+                                )
+                            src_bytes = disk_path.read_bytes()
+
+                            if is_image_input:
+                                try:
+                                    out_bytes, out_mime = _convert_image(src_bytes, target_format)
+                                except Exception as exc:
+                                    raise ValueError(
+                                        f"Drive Node: conversion failed: {exc}"
+                                    ) from exc
+                                norm_ext = (
+                                    "jpg" if target_format in ("jpg", "jpeg") else target_format
+                                )
+                                base_name = (
+                                    src_filename.rsplit(".", 1)[0]
+                                    if "." in src_filename
+                                    else src_filename
+                                )
+                                out_filename = f"{base_name}.{norm_ext}"
+                            else:
+                                pandoc_fmt = _detect_pandoc_format(src_mime, src_filename)
+                                if pandoc_fmt is None and src_mime != "application/pdf":
+                                    raise ValueError(
+                                        f"Drive Node: convertFile does not support input format '{src_mime}'"
+                                    )
+                                _format_to_ext = {
+                                    "pdf": "pdf",
+                                    "docx": "docx",
+                                    "html": "html",
+                                    "md": "md",
+                                    "txt": "txt",
+                                }
+                                _format_to_mime = {
+                                    "pdf": "application/pdf",
+                                    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                    "html": "text/html",
+                                    "md": "text/markdown",
+                                    "txt": "text/plain",
+                                }
+                                _pandoc_target = {
+                                    "pdf": "pdf",
+                                    "docx": "docx",
+                                    "html": "html",
+                                    "md": "markdown",
+                                    "txt": "plain",
+                                }
+                                if target_format not in _pandoc_target:
+                                    raise ValueError(
+                                        f"Drive Node: convertFile does not support output format '{target_format}'"
+                                    )
+                                base_name = (
+                                    src_filename.rsplit(".", 1)[0]
+                                    if "." in src_filename
+                                    else src_filename
+                                )
+                                out_ext = _format_to_ext[target_format]
+                                out_filename = f"{base_name}.{out_ext}"
+                                out_mime = _format_to_mime[target_format]
+                                try:
+                                    with _tempfile.TemporaryDirectory() as tmpdir:
+                                        if src_mime == "application/pdf":
+                                            extracted = _extract_pdf_text(src_bytes)
+                                            src_tmp = f"{tmpdir}/input.txt"
+                                            with open(src_tmp, "w", encoding="utf-8") as fh:
+                                                fh.write(extracted)
+                                            pandoc_fmt = "plain"
+                                        else:
+                                            src_ext = (
+                                                src_filename.rsplit(".", 1)[-1]
+                                                if "." in src_filename
+                                                else "txt"
+                                            )
+                                            src_tmp = f"{tmpdir}/input.{src_ext}"
+                                            with open(src_tmp, "wb") as fh:
+                                                fh.write(src_bytes)
+                                        out_tmp = f"{tmpdir}/output.{out_ext}"
+                                        extra_args = (
+                                            ["--pdf-engine=weasyprint"]
+                                            if target_format == "pdf"
+                                            else []
+                                        )
+                                        _pypandoc.convert_file(
+                                            src_tmp,
+                                            _pandoc_target[target_format],
+                                            outputfile=out_tmp,
+                                            format=pandoc_fmt,
+                                            extra_args=extra_args,
+                                        )
+                                        with open(out_tmp, "rb") as fh:
+                                            out_bytes = fh.read()
+                                except Exception as exc:
+                                    raise ValueError(
+                                        f"Drive Node: conversion failed: {exc}"
+                                    ) from exc
+
+                            _max_bytes = _settings.file_max_size_mb * 1024 * 1024
+                            if len(out_bytes) > _max_bytes:
+                                raise ValueError(
+                                    f"Drive Node: converted file exceeds size limit ({_settings.file_max_size_mb} MB)"
+                                )
+
+                            import secrets as _secrets
+
+                            new_uuid = uuid.uuid4()
+                            rel_path = f"{owner_id}/{new_uuid}/{out_filename}"
+                            abs_path = _storage_root() / rel_path
+                            abs_path.parent.mkdir(parents=True, exist_ok=True)
+                            abs_path.write_bytes(out_bytes)
+
+                            new_row = GeneratedFile(
+                                id=new_uuid,
+                                owner_id=owner_id,
+                                workflow_id=self.workflow_id,
+                                filename=out_filename,
+                                storage_path=rel_path,
+                                mime_type=out_mime,
+                                size_bytes=len(out_bytes),
+                                source_node_id=node_id,
+                                source_node_label=node_data.get("label"),
+                                metadata_json={},
+                            )
+                            db.add(new_row)
+                            db.flush()
+
+                            token_str = _secrets.token_urlsafe(32)
+                            db.add(
+                                FileAccessToken(
+                                    file_id=new_uuid,
+                                    token=token_str,
+                                    created_by_id=owner_id,
+                                )
+                            )
+                            db.commit()
+
+                            base_url = self._base_url
+                            dl_url = build_download_url(base_url, token_str)
+                            output = {
+                                "status": "success",
+                                "operation": "convertFile",
+                                "id": str(new_uuid),
+                                "filename": out_filename,
+                                "mime_type": out_mime,
+                                "size_bytes": len(out_bytes),
+                                "download_url": dl_url,
+                            }
+
                         elif operation != "getAll":
                             raise ValueError(f"Drive Node: unknown operation '{operation}'")
 
