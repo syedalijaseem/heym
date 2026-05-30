@@ -7,7 +7,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tzdata \
     nodejs \
     npm \
-    pandoc \
     weasyprint \
     && rm -rf /var/lib/apt/lists/*
 
