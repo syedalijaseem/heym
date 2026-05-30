@@ -3169,6 +3169,21 @@ const _IMAGE_MIMES = new Set([
   "image/webp",
 ]);
 
+const _MIME_TO_FORMAT: Record<string, string> = {
+  "application/pdf": "pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+  "text/html": "html",
+  "text/markdown": "md",
+  "text/plain": "txt",
+  "text/csv": "csv",
+  "application/epub+zip": "epub",
+  "image/jpeg": "jpg",
+  "image/jpg": "jpg",
+  "image/png": "png",
+  "image/bmp": "bmp",
+  "image/webp": "webp",
+};
+
 const driveConvertFormatOptionsFiltered = computed(() => {
   const n = selectedNode.value;
   if (!n || n.type !== "drive" || n.data.driveOperation !== "convertFile") {
@@ -3178,13 +3193,16 @@ const driveConvertFormatOptionsFiltered = computed(() => {
   if (!fileId) return driveConvertFormatOptions;
   const file = driveFiles.value.find((f) => f.id === fileId);
   if (!file) return driveConvertFormatOptions;
-  if (_IMAGE_MIMES.has(file.mime_type)) {
-    return driveConvertFormatOptions.filter((o) =>
-      ["jpg", "png", "bmp", "webp"].includes(o.value),
-    );
-  }
-  return driveConvertFormatOptions.filter((o) =>
-    ["pdf", "docx", "html", "md", "txt", "csv", "epub"].includes(o.value),
+
+  const inputFormat = _MIME_TO_FORMAT[file.mime_type];
+  const isImage = _IMAGE_MIMES.has(file.mime_type);
+
+  const allowed = isImage
+    ? ["jpg", "png", "bmp", "webp"]
+    : ["pdf", "docx", "html", "md", "txt", "csv", "epub"];
+
+  return driveConvertFormatOptions.filter(
+    (o) => allowed.includes(o.value) && o.value !== inputFormat,
   );
 });
 
