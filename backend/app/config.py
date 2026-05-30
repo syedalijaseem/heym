@@ -21,7 +21,17 @@ class Settings(BaseSettings):
     postgres_user: str = "postgres"
     postgres_password: str = "postgres"
     postgres_db: str = "heym"
-    secret_key: str = "your-super-secret-key-change-in-production-min-32-chars"
+    secret_key: str = ""
+
+    @field_validator("secret_key")
+    @classmethod
+    def _validate_secret_key(cls, v: str) -> str:
+        if not v or v == "your-super-secret-key-change-in-production-min-32-chars":
+            raise ValueError(
+                "SECRET_KEY must be set to a cryptographically random value. "
+                "Generate one with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
+            )
+        return v
     encryption_key: str = ""
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 1440
