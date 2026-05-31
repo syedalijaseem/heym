@@ -2,8 +2,6 @@
 import { ref } from "vue";
 import { Check, Copy } from "lucide-vue-next";
 
-import Button from "@/components/ui/Button.vue";
-
 const props = defineProps<{
   text: string;
 }>();
@@ -24,10 +22,9 @@ async function copy(): Promise<void> {
 </script>
 
 <template>
-  <Button
-    variant="ghost"
-    size="sm"
-    class="h-6 w-6 shrink-0 p-0"
+  <button
+    type="button"
+    class="inline-flex h-6 w-6 items-center justify-center rounded-md border border-border/60 bg-background/80 text-muted-foreground shadow-sm backdrop-blur transition-colors hover:bg-accent hover:text-accent-foreground"
     :title="copied ? 'Copied' : 'Copy'"
     @click.stop="copy"
   >
@@ -39,5 +36,5 @@ async function copy(): Promise<void> {
       v-else
       class="h-3 w-3"
     />
-  </Button>
+  </button>
 </template>

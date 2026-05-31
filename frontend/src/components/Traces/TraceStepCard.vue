@@ -116,25 +116,31 @@ const jsonText = computed(() => formatJson(props.step.json));
           v-if="step.argumentsText"
           class="space-y-1"
         >
-          <div class="flex items-center justify-between">
-            <div class="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Arguments
-            </div>
-            <CopyButton :text="step.argumentsText" />
+          <div class="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Arguments
           </div>
-          <pre class="text-xs bg-muted/40 rounded-md p-2 overflow-auto whitespace-pre-wrap">{{ step.argumentsText }}</pre>
+          <div class="relative">
+            <CopyButton
+              :text="step.argumentsText"
+              class="absolute right-1.5 top-1.5 z-[1]"
+            />
+            <pre class="text-xs bg-muted/40 rounded-md p-2 pr-10 overflow-auto whitespace-pre-wrap">{{ step.argumentsText }}</pre>
+          </div>
         </div>
         <div
           v-if="step.resultText"
           class="space-y-1"
         >
-          <div class="flex items-center justify-between">
-            <div class="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Result
-            </div>
-            <CopyButton :text="step.resultText" />
+          <div class="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Result
           </div>
-          <pre class="text-xs bg-muted/40 rounded-md p-2 overflow-auto whitespace-pre-wrap max-h-60">{{ step.resultText }}</pre>
+          <div class="relative">
+            <CopyButton
+              :text="step.resultText"
+              class="absolute right-1.5 top-1.5 z-[1]"
+            />
+            <pre class="text-xs bg-muted/40 rounded-md p-2 pr-10 overflow-auto whitespace-pre-wrap max-h-60">{{ step.resultText }}</pre>
+          </div>
         </div>
       </template>
 
@@ -144,11 +150,11 @@ const jsonText = computed(() => formatJson(props.step.json));
       >
         <CopyButton
           :text="step.detail"
-          class="absolute right-0 top-0 z-[1]"
+          class="absolute right-1.5 top-1.5 z-[1]"
         />
         <!-- eslint-disable vue/no-v-html -->
         <div
-          class="text-sm leading-relaxed break-words pr-8 [&_table]:w-full [&_table]:text-xs [&_td]:border [&_td]:border-border/40 [&_td]:px-1.5 [&_td]:py-0.5 [&_th]:px-1.5 [&_th]:py-0.5 [&_a]:text-primary [&_a]:underline [&_pre]:bg-muted/40 [&_pre]:p-2 [&_pre]:rounded [&_pre]:overflow-auto"
+          class="text-sm leading-relaxed break-words pr-10 [&_table]:w-full [&_table]:text-xs [&_td]:border [&_td]:border-border/40 [&_td]:px-1.5 [&_td]:py-0.5 [&_th]:px-1.5 [&_th]:py-0.5 [&_a]:text-primary [&_a]:underline [&_pre]:bg-muted/40 [&_pre]:p-2 [&_pre]:rounded [&_pre]:overflow-auto"
           v-html="renderMarkdown(step.detail)"
         />
         <!-- eslint-enable vue/no-v-html -->
@@ -160,21 +166,24 @@ const jsonText = computed(() => formatJson(props.step.json));
       >
         <CopyButton
           :text="step.detail"
-          class="absolute right-0 top-0 z-[1]"
+          class="absolute right-1.5 top-1.5 z-[1]"
         />
-        <div class="text-sm whitespace-pre-wrap break-words pr-8">
+        <div class="text-sm whitespace-pre-wrap break-words pr-10">
           {{ step.detail }}
         </div>
       </div>
 
       <div class="space-y-1">
-        <div class="flex items-center justify-between">
-          <div class="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Raw JSON
-          </div>
-          <CopyButton :text="jsonText" />
+        <div class="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Raw JSON
         </div>
-        <pre class="text-xs bg-muted/30 border rounded-md p-2 overflow-auto max-h-72 whitespace-pre-wrap">{{ jsonText }}</pre>
+        <div class="relative">
+          <CopyButton
+            :text="jsonText"
+            class="absolute right-1.5 top-1.5 z-[1]"
+          />
+          <pre class="text-xs bg-muted/30 border rounded-md p-2 pr-10 overflow-auto max-h-72 whitespace-pre-wrap">{{ jsonText }}</pre>
+        </div>
       </div>
     </div>
   </div>
