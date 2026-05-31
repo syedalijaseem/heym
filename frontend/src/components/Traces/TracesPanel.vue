@@ -76,6 +76,7 @@ interface ToolCallEntry {
   elapsed_ms?: number;
   source?: string;
   mcp_server?: string;
+  workflow_name?: string;
 }
 
 function getToolCallsFromResponse(response: Record<string, unknown> | null): ToolCallEntry[] | undefined {
@@ -238,6 +239,17 @@ const spans = computed(() =>
 const workflowNames = computed<Record<string, string>>(() =>
   Object.fromEntries(workflows.value.map((workflow) => [workflow.id, workflow.name])),
 );
+
+/** Resolve the executed workflow's display name for a tool call (workflow-execution tools). */
+function toolCallWorkflowLabel(tc: ToolCallEntry): string | null {
+  const explicit = typeof tc.workflow_name === "string" ? tc.workflow_name.trim() : "";
+  if (explicit) return explicit;
+  const workflowId = tc.arguments?.workflow_id;
+  if (typeof workflowId === "string" && workflowId.trim()) {
+    return workflowNames.value[workflowId.trim()] ?? `${workflowId.trim().slice(0, 8)}…`;
+  }
+  return null;
+}
 
 const steps = computed<TraceStep[]>(() =>
   selectedTrace.value
@@ -1024,6 +1036,12 @@ onMounted(async () => {
                   class="text-[10px] px-1.5 py-0.5 rounded bg-primary/20 text-primary dark:bg-primary/25 dark:text-accent-foreground"
                 >
                   Skill
+                </span>
+                <span
+                  v-if="toolCallWorkflowLabel(tc)"
+                  class="text-[10px] px-1.5 py-0.5 rounded bg-primary/20 text-primary dark:bg-primary/25 dark:text-accent-foreground"
+                >
+                  Workflow: {{ toolCallWorkflowLabel(tc) }}
                 </span>
               </div>
               <div class="mt-2 text-xs text-muted-foreground break-all">
