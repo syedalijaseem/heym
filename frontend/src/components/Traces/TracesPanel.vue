@@ -10,6 +10,7 @@ import type { WorkflowListItem } from "@/types/workflow";
 import TraceDurationChart, { type TraceSpan } from "@/components/Traces/TraceDurationChart.vue";
 import TracesStatsHeader from "@/components/Traces/TracesStatsHeader.vue";
 import TracesTimeRangeSelect from "@/components/Traces/TracesTimeRangeSelect.vue";
+import TraceStepsTimeline from "@/components/Traces/TraceStepsTimeline.vue";
 import Button from "@/components/ui/Button.vue";
 import Card from "@/components/ui/Card.vue";
 import Dialog from "@/components/ui/Dialog.vue";
@@ -18,6 +19,7 @@ import Select from "@/components/ui/Select.vue";
 import { onDismissOverlays, pushOverlayState } from "@/composables/useOverlayBackHandler";
 import { cn, formatDate } from "@/lib/utils";
 import { credentialsApi, traceApi, workflowApi } from "@/services/api";
+import { buildTraceSteps, type TraceStep } from "@/lib/traceSteps";
 
 interface SelectOption {
   value: string;
@@ -231,6 +233,10 @@ function buildTraceSpans(trace: LLMTraceDetail): TraceSpan[] {
 
 const spans = computed(() =>
   selectedTrace.value ? buildTraceSpans(selectedTrace.value) : []
+);
+
+const steps = computed<TraceStep[]>(() =>
+  selectedTrace.value ? buildTraceSteps(selectedTrace.value) : [],
 );
 
 async function copyToClipboard(text: string, type: "request" | "response"): Promise<void> {
@@ -1020,6 +1026,11 @@ onMounted(async () => {
             </div>
           </div>
         </div>
+
+        <TraceStepsTimeline
+          v-if="steps.length > 0"
+          :steps="steps"
+        />
 
         <div class="space-y-2">
           <div class="flex items-center justify-between">
