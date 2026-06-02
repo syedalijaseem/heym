@@ -40,30 +40,46 @@ backfill_secret_key() {
         sed -i.bak "s|^SECRET_KEY=$|SECRET_KEY=${generated}|" "$ENV_FILE"
         rm -f "$ENV_FILE.bak"
         echo -e "${GREEN}Generated random SECRET_KEY${NC}"
+        SECRET_KEY_WAS_GENERATED=true
+    fi
+}
+
+backfill_encryption_key() {
+    # Populate ENCRYPTION_KEY only when it is empty. Safe for both new and existing
+    # .env files: no data could have been encrypted with an empty key.
+    # If the legacy placeholder is present, fail loudly — overwriting would make
+    # previously-encrypted credentials unreadable (InvalidToken).
+    if grep -q "^ENCRYPTION_KEY=${ENCRYPTION_KEY_PLACEHOLDER}\$" "$ENV_FILE" 2>/dev/null; then
+        echo -e "${RED}Error: ENCRYPTION_KEY is set to the legacy placeholder value.${NC}"
+        echo -e "${YELLOW}Generate a new key and set it in .env:${NC}"
+        echo -e "  python3 -c 'import secrets; print(secrets.token_hex(32))'"
+        echo -e "${RED}Do NOT auto-generate over an existing placeholder — data encrypted with the old key would be lost.${NC}"
+        exit 1
+    fi
+    if grep -q '^ENCRYPTION_KEY=$' "$ENV_FILE" 2>/dev/null; then
+        local generated
+        generated=$(python3 -c 'import secrets; print(secrets.token_hex(32))')
+        sed -i.bak "s|^ENCRYPTION_KEY=$|ENCRYPTION_KEY=${generated}|" "$ENV_FILE"
+        rm -f "$ENV_FILE.bak"
+        echo -e "${GREEN}Generated random ENCRYPTION_KEY${NC}"
     fi
 }
 
 # Prepare .env and load it. Only invoked for subcommands that actually deploy;
 # read-only subcommands (--help, --logs, --status, --down) must never mutate .env.
 prepare_env() {
+    SECRET_KEY_WAS_GENERATED=false
+
     if [ ! -f "$ENV_FILE" ]; then
         echo -e "${YELLOW}Creating .env from .env.example...${NC}"
         cp "$PROJECT_ROOT/.env.example" "$ENV_FILE"
-
-        # Brand-new .env: no data has been encrypted yet, so generating both keys is safe.
-        backfill_secret_key
-        if grep -q "^ENCRYPTION_KEY=${ENCRYPTION_KEY_PLACEHOLDER}\$" "$ENV_FILE" 2>/dev/null; then
-            GENERATED_ENC=$(python3 -c 'import secrets; print(secrets.token_hex(32))')
-            sed -i.bak "s|^ENCRYPTION_KEY=${ENCRYPTION_KEY_PLACEHOLDER}|ENCRYPTION_KEY=${GENERATED_ENC}|" "$ENV_FILE"
-            rm -f "$ENV_FILE.bak"
-            echo -e "${GREEN}Generated random ENCRYPTION_KEY${NC}"
-        fi
-    else
-        # Existing .env: only backfill an empty SECRET_KEY. NEVER rotate a populated
-        # ENCRYPTION_KEY — replacing it would make previously-encrypted data unreadable
-        # (InvalidToken). Leave any non-empty ENCRYPTION_KEY untouched.
-        backfill_secret_key
     fi
+
+    # Backfill both keys in all cases: empty SECRET_KEY and empty ENCRYPTION_KEY are
+    # safe to generate regardless of whether .env is new or pre-existing. The legacy
+    # placeholder ENCRYPTION_KEY triggers an explicit error instead of silent rotation.
+    backfill_secret_key
+    backfill_encryption_key
 
     source "$ENV_FILE"
 }
@@ -98,7 +114,14 @@ case "${1:-}" in
     --restart)
         prepare_env
         echo -e "${YELLOW}Restarting services...${NC}"
-        dc restart
+        if [ "$SECRET_KEY_WAS_GENERATED" = "true" ]; then
+            # dc restart does not propagate new env vars to existing containers.
+            # A new SECRET_KEY was just written to .env — recreate containers to pick it up.
+            echo -e "${YELLOW}New SECRET_KEY generated — recreating containers to propagate environment...${NC}"
+            dc up -d
+        else
+            dc restart
+        fi
         ;;
     --status)
         dc ps
