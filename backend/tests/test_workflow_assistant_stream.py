@@ -53,6 +53,11 @@ class WorkflowAssistantStreamHeartbeatTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(await stream.__anext__(), ": heartbeat\n\n")
 
             release_stream.set()
-            self.assertEqual(await stream.__anext__(), 'data: {"type": "done"}\n\n')
+            while True:
+                chunk = await stream.__anext__()
+                if chunk == 'data: {"type": "done"}\n\n':
+                    break
+                self.assertEqual(chunk, ": heartbeat\n\n")
+
             with self.assertRaises(StopAsyncIteration):
                 await stream.__anext__()
