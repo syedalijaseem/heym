@@ -41,8 +41,13 @@ services:
       FRONTEND_URL: ${FRONTEND_URL:-}
       ALLOW_REGISTER: ${ALLOW_REGISTER:-false}
       OAUTH_ISSUER: ${OAUTH_ISSUER}
+      DOCKER_LOGS_ENABLED: ${DOCKER_LOGS_ENABLED:-false}
+      DOCKER_LOGS_ALLOWED_EMAILS: ${DOCKER_LOGS_ALLOWED_EMAILS:-}
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      # Docker socket access grants broad host control. If you accept that trust
+      # boundary and need the Logs tab to read container logs, set DOCKER_LOGS_ENABLED=true,
+      # set DOCKER_LOGS_ALLOWED_EMAILS to trusted user emails, and uncomment the next line.
+      # - /var/run/docker.sock:/var/run/docker.sock
       - ./data/files:/app/data/files
     depends_on:
       postgres:

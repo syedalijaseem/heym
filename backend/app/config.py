@@ -61,6 +61,8 @@ class Settings(BaseSettings):
     docs_dir: str = ""  # Path to docs content. Empty = use frontend/src/docs/content
     file_storage_dir: str = "./data/files"
     file_max_size_mb: int = 99
+    docker_logs_enabled: bool = False
+    docker_logs_allowed_emails: str = ""
     mcp_protocol_max_concurrency: int = 20
     mcp_sse_max_sessions: int = 100
     app_version: str = ""

@@ -271,7 +271,6 @@ ENCRYPTION_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
 sed -i.bak "s|^SECRET_KEY=.*|SECRET_KEY=${SECRET_KEY}|; s|^ENCRYPTION_KEY=.*|ENCRYPTION_KEY=${ENCRYPTION_KEY}|" .env && rm -f .env.bak
 docker run --env-file .env \
   -p 4017:4017 \
-  -v /var/run/docker.sock:/var/run/docker.sock \
   -v "$(pwd)/data/files:/app/data/files" \
   ghcr.io/heymrun/heym:latest
 
@@ -281,13 +280,13 @@ docker run \
   -e SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))") \
   -e DATABASE_URL=postgresql+asyncpg://postgres:postgres@host.docker.internal:6543/heym \
   -p 4017:4017 \
-  -v /var/run/docker.sock:/var/run/docker.sock \
   -v "$(pwd)/data/files:/app/data/files" \
   ghcr.io/heymrun/heym:latest
 ```
 
 Open the editor in your browser at port `4017` in either setup.
 For direct `docker run` setups, the `data/files` mount keeps Drive uploads and skill-generated files available across container restarts.
+Docker socket access is disabled by default because it grants broad host control. If you accept that trust boundary and need the Logs tab to read container logs, set `DOCKER_LOGS_ENABLED=true`, set `DOCKER_LOGS_ALLOWED_EMAILS=admin@example.com` for the trusted users, and add `-v /var/run/docker.sock:/var/run/docker.sock`.
 
 <details>
 <summary><b>🐳 Docker Production Deployment</b></summary>

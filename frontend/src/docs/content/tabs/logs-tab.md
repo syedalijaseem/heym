@@ -2,6 +2,8 @@
 
 The **Logs** tab shows Docker container logs for the Heym stack. Use it for debugging, monitoring, and troubleshooting. For workflow execution logs (node results, outputs), use the Debug panel in the workflow editor—see [Canvas Features](../reference/canvas-features.md#execution-logs).
 
+Docker-backed logs are disabled by default in self-hosted deployments. To enable them, set `DOCKER_LOGS_ENABLED=true` and mount `/var/run/docker.sock` into the backend container. Only do this when you accept the Docker socket trust boundary.
+
 <video src="/features/showcase/logs.mp4" controls playsinline muted preload="metadata" style="width:100%;border-radius:12px;margin:16px 0"></video>
 <p class="github-video-link"><a href="../../../../public/features/showcase/logs.mp4">▶ Watch Logs demo</a></p>
 

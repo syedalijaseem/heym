@@ -35,6 +35,7 @@ Key environment variables:
 | `FRONTEND_PORT` | Frontend port — defaults to `4017` |
 | `FRONTEND_URL` | **Required in production.** Public URL of the app (scheme + host, e.g. `https://heym.example.com`). Used for Google Sheets OAuth redirect URI and similar; must match the URL users use in the browser. |
 | `ALLOW_REGISTER` | Open user registration (`false` in prod, `true` in dev) |
+| `DOCKER_LOGS_ENABLED` | Enables Docker-backed Logs tab access when set to `true`; also requires mounting `/var/run/docker.sock` |
 
 Database connection defaults (`POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`) are documented in `.env.example`.
 
@@ -142,12 +143,11 @@ docker pull ghcr.io/heymrun/heym:latest
 docker run --rm \
   --env-file .env \
   -p 4017:4017 \
-  -v /var/run/docker.sock:/var/run/docker.sock \
   -v "$(pwd)/data/files:/app/data/files" \
   ghcr.io/heymrun/heym:latest
 ```
 
-> **Docker socket required for MCP stdio tools.** Any MCP connection that uses `transport: stdio` with `command: docker` (e.g. the GitHub MCP server) needs access to the host Docker daemon. Mount `/var/run/docker.sock` as shown above; without it those MCP calls will fail with `docker: command not found`.
+> **Docker socket access is opt-in.** Mounting `/var/run/docker.sock` gives the backend broad control over the host Docker daemon. If you accept that trust boundary and need the Logs tab to read container logs, set `DOCKER_LOGS_ENABLED=true` and add `-v /var/run/docker.sock:/var/run/docker.sock`. MCP stdio tools that run `docker` commands may also need this mount.
 
 **Minimum environment variables for direct image runs:**
 
@@ -164,6 +164,7 @@ docker run --rm \
 | `FRONTEND_URL` | Recommended | Public browser URL, especially for OAuth callbacks |
 | `CORS_ORIGINS` | Recommended | Allowed browser origins |
 | `ALLOW_REGISTER` | Recommended | Set `false` in production unless open signup is intended |
+| `DOCKER_LOGS_ENABLED` | Optional | Set `true` only when also mounting the Docker socket for Logs tab access |
 
 **Notes:**
 
