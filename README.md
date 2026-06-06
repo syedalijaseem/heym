@@ -558,6 +558,7 @@ heym/
 | `BACKEND_PORT` | Backend server port | `10105` |
 | `FRONTEND_PORT` | Frontend server port | `4017` |
 | `ALLOW_REGISTER` | Enable user registration | `true` |
+| `REQUEST_BODY_MAX_SIZE_MB` | Maximum backend HTTP request body size | `100` |
 
 ---
 

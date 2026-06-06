@@ -50,6 +50,7 @@ from app.api.deps import get_client_ip
 from app.config import settings
 from app.db.session import async_session_maker
 from app.http_identity import HEYM_SERVER_AGENT
+from app.middleware.request_body_limit import RequestBodySizeLimitMiddleware
 from app.models.schemas import AppVersionResponse
 from app.services.cron_scheduler import cron_scheduler
 from app.services.distributed_lock import lock_service
@@ -195,6 +196,10 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+app.add_middleware(
+    RequestBodySizeLimitMiddleware,
+    max_body_size=settings.request_body_max_size_mb * 1024 * 1024,
 )
 app.add_middleware(WinstonLoggingMiddleware)
 app.add_middleware(HeymIdentityMiddleware)
