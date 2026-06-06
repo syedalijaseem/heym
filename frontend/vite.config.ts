@@ -1,7 +1,7 @@
 import vue from "@vitejs/plugin-vue";
-import fs from "fs";
+import fs from "node:fs";
 import type { ClientRequest, IncomingMessage, ServerResponse } from "node:http";
-import path from "path";
+import path from "node:path";
 import { fileURLToPath, URL } from "node:url";
 import { defineConfig, type ProxyOptions } from "vite";
 
