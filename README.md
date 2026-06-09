@@ -469,6 +469,9 @@ Every trace records input and output token counts alongside a real-time USD cost
 ### Evals
 Define test cases with expected outputs. Run the entire suite with one click. Review pass/fail, actual vs expected, and historical run data. Ship AI workflows with confidence.
 
+### OpenTelemetry Tracing
+Export a root span per workflow run plus a child span per node over OTLP/HTTP to Jaeger, Grafana Tempo, Honeycomb, Datadog, or any OpenTelemetry backend. Spans carry workflow id, node type, status, duration, and LLM token usage, with W3C trace context propagated across inbound webhooks, outbound HTTP, and sub-workflows. Disabled by default; turn it on with the `HEYM_OTEL_*` environment variables and review status under **Settings → Observability**. See the in-app docs (Reference > OpenTelemetry Tracing) for details.
+
 ---
 
 ## 💬 Portal
@@ -561,6 +564,12 @@ heym/
 | `FRONTEND_PORT` | Frontend server port | `4017` |
 | `ALLOW_REGISTER` | Enable user registration | `true` |
 | `REQUEST_BODY_MAX_SIZE_MB` | Maximum backend HTTP request body size; defaults to `100`, one MB above `FILE_MAX_SIZE_MB` to allow multipart overhead | `100` |
+| `HEYM_OTEL_ENABLED` | Enable OpenTelemetry tracing for workflow and node executions | `false` |
+| `HEYM_OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP/HTTP base endpoint, e.g. `http://collector:4318` (spans posted to `/v1/traces`) | — |
+| `HEYM_OTEL_EXPORTER_OTLP_HEADERS` | Comma-separated `key=value` exporter headers for auth | — |
+| `HEYM_OTEL_SERVICE_NAME` | `service.name` resource attribute | `heym` |
+| `HEYM_OTEL_TRACES_SAMPLER_RATIO` | Parent-based head sampling ratio (`0.0`–`1.0`) | `1.0` |
+| `HEYM_OTEL_CAPTURE_NODE_IO` | Attach truncated node input/output to node spans | `false` |
 
 ---
 
