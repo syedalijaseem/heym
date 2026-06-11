@@ -203,6 +203,15 @@ kill_port ${BACKEND_PORT:-10105}
 kill_port ${FRONTEND_PORT:-4017}
 echo -e "${GREEN}Ports cleared.${NC}"
 
+# User-defined Python tools run as untrusted code. The Docker sandbox needs a
+# resolvable backend image, which native (non-container) dev runs don't have.
+# When the sandbox is left at the default "auto" with no explicit image, default
+# native dev to the subprocess fallback so tools keep working. Setting
+# HEYM_PYTHON_TOOL_SANDBOX or HEYM_PYTHON_TOOL_IMAGE explicitly overrides this.
+if [ "${HEYM_PYTHON_TOOL_SANDBOX:-auto}" = "auto" ] && [ -z "${HEYM_PYTHON_TOOL_IMAGE:-}" ]; then
+    export HEYM_PYTHON_TOOL_SANDBOX=subprocess
+fi
+
 echo -e "\n${YELLOW}Starting backend on port ${BACKEND_PORT:-10105}...${NC}"
 if [ "$DEBUG_MODE" = true ]; then
     echo -e "${BLUE}Debug mode enabled - showing DEBUG level logs${NC}"
