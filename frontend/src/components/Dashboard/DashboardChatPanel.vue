@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { Bot, Check, ChevronDown, Copy, Loader2, Mic, MicOff, Paperclip, Send, Square, Trash2, X } from "lucide-vue-next";
-import { marked } from "marked";
-import DOMPurify from "dompurify";
 import { useRoute } from "vue-router";
 
 import Button from "@/components/ui/Button.vue";
 import ImageLightbox from "@/components/ui/ImageLightbox.vue";
 import { onDismissOverlays } from "@/composables/useOverlayBackHandler";
+import { renderMarkdown } from "@/lib/markdown";
 import {
   consumeShowcaseChatDraft,
   SHOWCASE_CHAT_DRAFT_EVENT,
@@ -309,20 +308,6 @@ watch(
   },
   { flush: "post" },
 );
-
-function renderMarkdown(content: string): string {
-  if (!content) return "";
-  const html = marked(content, { breaks: true, gfm: true }) as string;
-  return DOMPurify.sanitize(html, {
-    ALLOWED_TAGS: [
-      "p", "br", "strong", "em", "u", "s", "code", "pre", "blockquote",
-      "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "a", "hr",
-      "table", "thead", "tbody", "tr", "th", "td", "img",
-      "video", "source",
-    ],
-    ALLOWED_ATTR: ["href", "target", "rel", "src", "alt", "controls", "playsinline", "muted", "loop", "preload", "type", "style"],
-  });
-}
 
 function clearChat(): void {
   messages.value = [];

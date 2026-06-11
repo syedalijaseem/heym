@@ -9,7 +9,7 @@ const ALLOWED_TAGS = [
 
 const ALLOWED_ATTR = [
   "href", "target", "rel", "src", "alt", "controls", "playsinline",
-  "muted", "loop", "preload", "type", "style",
+  "muted", "loop", "preload", "type",
 ];
 
 /** Render trusted-but-sanitized markdown to an HTML string for v-html. */
@@ -17,4 +17,11 @@ export function renderMarkdown(content: string): string {
   if (!content) return "";
   const html = marked(content, { breaks: true, gfm: true }) as string;
   return DOMPurify.sanitize(html, { ALLOWED_TAGS, ALLOWED_ATTR });
+}
+
+export function markdownToPlainText(content: string): string {
+  if (!content) return "";
+  const container = document.createElement("div");
+  container.innerHTML = renderMarkdown(content);
+  return (container.textContent || container.innerText || "").trim();
 }

@@ -20,8 +20,6 @@ import {
   AudioLines,
   X,
 } from "lucide-vue-next";
-import { marked } from "marked";
-import DOMPurify from "dompurify";
 
 import type { Message, WorkflowPreview } from "@/types/chat";
 import type { CredentialListItem, LLMModel } from "@/types/credential";
@@ -31,6 +29,7 @@ import ReadonlyCanvasPreview from "@/components/Canvas/ReadonlyCanvasPreview.vue
 import Button from "@/components/ui/Button.vue";
 import ImageLightbox from "@/components/ui/ImageLightbox.vue";
 import { estimateTokens } from "@/lib/contextEstimator";
+import { markdownToPlainText, renderMarkdown } from "@/lib/markdown";
 import { aiApi, credentialsApi } from "@/services/api";
 import { useFileAttachment } from "@/composables/useFileAttachment";
 import type { AttachedFile } from "@/composables/useFileAttachment";
@@ -430,22 +429,6 @@ onMounted(() => {
   nextTick(updateMessageScrollbar);
 });
 
-function renderMarkdown(content: string): string {
-  if (!content) return "";
-  const html = marked(content, { breaks: true, gfm: true }) as string;
-  return DOMPurify.sanitize(html, {
-    ALLOWED_TAGS: [
-      "p", "br", "strong", "em", "u", "s", "code", "pre", "blockquote",
-      "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "a", "hr",
-      "table", "thead", "tbody", "tr", "th", "td", "img", "video", "source",
-    ],
-    ALLOWED_ATTR: [
-      "href", "target", "rel", "src", "alt", "controls", "playsinline",
-      "muted", "loop", "preload", "type", "style",
-    ],
-  });
-}
-
 function handleMarkdownImageClick(event: MouseEvent): void {
   const target = event.target as HTMLElement;
   if (target.tagName === "IMG") {
@@ -505,19 +488,13 @@ async function copyMessage(msg: Message): Promise<void> {
 const tts = useTextToSpeech();
 const voiceStore = useVoiceStore();
 
-function plainTextFromMarkdown(markdown: string): string {
-  const div = document.createElement("div");
-  div.innerHTML = renderMarkdown(markdown);
-  return (div.textContent || div.innerText || "").trim();
-}
-
 async function readMessageAloud(msg: Message): Promise<void> {
   if (!tts.isConfigured.value) {
     voiceStore.requestVoiceSettings();
     return;
   }
   try {
-    await tts.speak(msg.id, plainTextFromMarkdown(msg.content));
+    await tts.speak(msg.id, markdownToPlainText(msg.content));
   } catch {
     // playback/synthesis failure is non-fatal; reset playback state
     tts.stop();
