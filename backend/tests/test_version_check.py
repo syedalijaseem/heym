@@ -38,9 +38,15 @@ class VersionStatusTests(unittest.IsolatedAsyncioTestCase):
             published_at="2026-05-14T00:00:00Z",
         )
 
-        with patch(
-            "app.services.version_check._fetch_latest_release",
-            new=AsyncMock(return_value=release),
+        with (
+            patch(
+                "app.services.version_check._fetch_latest_release_from_heym_run",
+                new=AsyncMock(side_effect=RuntimeError("heym.run unavailable")),
+            ),
+            patch(
+                "app.services.version_check._fetch_latest_release",
+                new=AsyncMock(return_value=release),
+            ),
         ):
             status = await get_version_status("0.0.22", force_refresh=True)
 
@@ -57,10 +63,16 @@ class VersionStatusTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(status.checked_at.tzinfo, UTC)
         self.assertIsNone(status.error)
 
-    async def test_get_version_status_returns_current_version_when_github_fails(self) -> None:
-        with patch(
-            "app.services.version_check._fetch_latest_release",
-            new=AsyncMock(side_effect=RuntimeError("GitHub unavailable")),
+    async def test_get_version_status_returns_current_version_when_sources_fail(self) -> None:
+        with (
+            patch(
+                "app.services.version_check._fetch_latest_release_from_heym_run",
+                new=AsyncMock(side_effect=RuntimeError("heym.run unavailable")),
+            ),
+            patch(
+                "app.services.version_check._fetch_latest_release",
+                new=AsyncMock(side_effect=RuntimeError("GitHub unavailable")),
+            ),
         ):
             status = await get_version_status("0.0.22", force_refresh=True)
 
