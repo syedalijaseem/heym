@@ -112,6 +112,10 @@ const typeOptions = [
   { value: "bigquery", label: CREDENTIAL_TYPE_LABELS.bigquery },
 ];
 
+function isTrustedOAuthMessage(evt: MessageEvent, popup: Window | null): boolean {
+  return evt.origin === window.location.origin && evt.source === popup;
+}
+
 watch(
   () => props.open,
   (open) => {
@@ -412,8 +416,14 @@ async function startGoogleSheetsOAuth(): Promise<void> {
     const { auth_url } = await credentialsApi.googleSheetsOAuthAuthorize(credId);
 
     const popup = window.open(auth_url, "google-oauth", "width=520,height=620");
+    if (!popup) {
+      throw new Error("OAuth popup was blocked. Allow popups for Heym and try again.");
+    }
 
     const onMessage = (evt: MessageEvent): void => {
+      if (!isTrustedOAuthMessage(evt, popup)) {
+        return;
+      }
       if (evt.data?.type === "google-oauth-success" && evt.data.credentialId === credId) {
         window.removeEventListener("message", onMessage);
         clearInterval(pollClosed);
@@ -482,8 +492,14 @@ async function startBigQueryOAuth(): Promise<void> {
 
     const { auth_url } = await credentialsApi.bigQueryOAuthAuthorize(credId);
     const popup = window.open(auth_url, "bq-oauth", "width=520,height=620");
+    if (!popup) {
+      throw new Error("OAuth popup was blocked. Allow popups for Heym and try again.");
+    }
 
     const onMessage = (evt: MessageEvent): void => {
+      if (!isTrustedOAuthMessage(evt, popup)) {
+        return;
+      }
       if (evt.data?.type === "google-oauth-success" && evt.data.credentialId === credId) {
         window.removeEventListener("message", onMessage);
         clearInterval(pollClosed);

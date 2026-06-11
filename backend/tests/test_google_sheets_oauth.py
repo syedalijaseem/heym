@@ -151,6 +151,8 @@ class TestPopupHtml(unittest.TestCase):
         self.assertIn("google-oauth-success", html)
         self.assertIn("credentialId", html)
         self.assertIn("cred-123", html)
+        self.assertIn("window.location.origin", html)
+        self.assertNotIn("postMessage(message, '*')", html)
 
     def test_error_html_contains_message(self) -> None:
         from app.api.google_sheets_oauth import _popup_html
@@ -159,12 +161,39 @@ class TestPopupHtml(unittest.TestCase):
         self.assertIn("google-oauth-error", html)
         self.assertIn("Something went wrong", html)
 
-    def test_error_html_escapes_single_quotes(self) -> None:
+    def test_error_html_serializes_message_as_json(self) -> None:
         from app.api.google_sheets_oauth import _popup_html
 
-        html = _popup_html(False, message="it's broken")
-        self.assertNotIn("it's broken", html)
-        self.assertIn("\\'", html)
+        html = _popup_html(False, message="it's\nbroken")
+        self.assertNotIn("it's\nbroken", html)
+        self.assertIn('"message": "it\'s broken"', html)
+
+    def test_error_html_escapes_script_breaking_payload(self) -> None:
+        from app.api.google_sheets_oauth import _popup_html
+
+        html = _popup_html(False, message="</script><script>window.__xss = true</script>")
+        self.assertNotIn("</script><script>", html)
+        self.assertNotIn("window.__xss = true</script>", html)
+        self.assertIn("\\u003c/script\\u003e", html)
+        self.assertIn("\\u003cscript\\u003e", html)
+
+    def test_bigquery_success_html_uses_current_origin_target(self) -> None:
+        from app.api.bigquery_oauth import _popup_html
+
+        html = _popup_html(True, credential_id="bq-cred-123")
+        self.assertIn("google-oauth-success", html)
+        self.assertIn("bq-cred-123", html)
+        self.assertIn("window.location.origin", html)
+        self.assertNotIn("postMessage(message, '*')", html)
+
+    def test_bigquery_error_html_escapes_script_breaking_payload(self) -> None:
+        from app.api.bigquery_oauth import _popup_html
+
+        html = _popup_html(False, message="</script><script>window.__xss = true</script>")
+        self.assertNotIn("</script><script>", html)
+        self.assertNotIn("window.__xss = true</script>", html)
+        self.assertIn("\\u003c/script\\u003e", html)
+        self.assertIn("\\u003cscript\\u003e", html)
 
 
 def _make_db_result(credential) -> Mock:
