@@ -48,7 +48,16 @@ const TABS = [
   { id: "logs", label: "Logs", icon: Terminal },
 ] as const;
 
-type PaletteItemType = "history" | "tab" | "workflow" | "doc" | "template" | "node-template" | "support" | "runbook";
+type PaletteItemType =
+  | "history"
+  | "tab"
+  | "workflow"
+  | "doc"
+  | "template"
+  | "node-template"
+  | "documentation"
+  | "support"
+  | "runbook";
 
 interface PaletteItem {
   type: PaletteItemType;
@@ -304,6 +313,8 @@ const categoryGroups = computed((): CategoryGroup[] => {
   if (
     !q ||
     "support".includes(q) ||
+    "docs".includes(q) ||
+    "documentation".includes(q) ||
     "contact".includes(q) ||
     "help".includes(q) ||
     "runbook".includes(q) ||
@@ -319,6 +330,14 @@ const categoryGroups = computed((): CategoryGroup[] => {
           id: "runbook",
           label: "Run the Runbook",
           icon: Play,
+        },
+        {
+          type: "documentation" as const,
+          id: "documentation",
+          label: "Documentation",
+          icon: BookOpen,
+          categoryId: "getting-started",
+          slug: "introduction",
         },
         {
           type: "support" as const,
@@ -442,6 +461,8 @@ function handleSelectItem(
     emit("templateSelect", item.id, event);
   } else if (item.type === "node-template" && item.nodeTemplate) {
     emit("nodeTemplateSelect", item.nodeTemplate, event);
+  } else if (item.type === "documentation" && item.categoryId && item.slug) {
+    emit("docSelect", item.categoryId, item.slug, event);
   } else if (item.type === "runbook") {
     emit("runbook");
     emit("close");
@@ -561,13 +582,15 @@ onUnmounted(() => {
                               ? 'bg-violet-500/10 text-violet-500 dark:text-violet-400'
                               : item.type === 'node-template'
                                 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                                : item.type === 'support'
-                                  ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
-                                  : item.type === 'runbook'
-                                    ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400'
-                                    : item.workflow?.scheduled_for_deletion
-                                      ? 'bg-destructive/10 text-destructive'
-                                      : 'bg-primary/10 text-primary'
+                                : item.type === 'documentation'
+                                  ? 'bg-sky-500/10 text-sky-600 dark:text-sky-400'
+                                  : item.type === 'support'
+                                    ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                                    : item.type === 'runbook'
+                                      ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400'
+                                      : item.workflow?.scheduled_for_deletion
+                                        ? 'bg-destructive/10 text-destructive'
+                                        : 'bg-primary/10 text-primary'
                     )"
                   >
                     <div
@@ -636,6 +659,12 @@ onUnmounted(() => {
                       class="text-xs text-muted-foreground mt-0.5"
                     >
                       Watch Heym build &amp; run a workflow
+                    </div>
+                    <div
+                      v-else-if="item.type === 'documentation'"
+                      class="text-xs text-muted-foreground mt-0.5"
+                    >
+                      Open the Heym docs
                     </div>
                     <div
                       v-else-if="item.type === 'support'"
