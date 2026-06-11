@@ -10,6 +10,9 @@ from app.http_identity import merge_outbound_headers
 
 GITHUB_API_BASE_URL = "https://api.github.com"
 GITHUB_WEB_BASE_URL = "https://github.com"
+# Primary source for the latest release: serves from cache, decoupling the update check
+# from GitHub rate limits. GitHub stays as the fallback below if this is unreachable.
+HEYM_RUN_VERSION_URL = "https://heym.run/api/version"
 HEYM_GITHUB_REPO = "heymrun/heym"
 RELEASE_CHECK_CACHE_SECONDS = 3600
 _REPO_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
@@ -82,20 +85,37 @@ async def get_version_status(current_version: str, force_refresh: bool = False) 
 async def _load_version_status(current_version: str, repo: str, now: datetime) -> VersionStatus:
     try:
         normalized_repo = _normalize_repo(repo)
-        release = await _fetch_latest_release(normalized_repo)
-        return _build_version_status(current_version, normalized_repo, release, now)
     except Exception as exc:
-        return VersionStatus(
-            current_version=current_version,
-            latest_version=None,
-            update_available=False,
-            release_url=None,
-            compare_url=None,
-            compare_label=None,
-            source="github",
-            checked_at=now,
-            error=str(exc),
-        )
+        return _empty_version_status(current_version, now, str(exc))
+
+    last_error: Exception | None = None
+    for source, fetch in (
+        ("heym.run", lambda: _fetch_latest_release_from_heym_run(current_version)),
+        ("github", lambda: _fetch_latest_release(normalized_repo)),
+    ):
+        try:
+            release = await fetch()
+            return _build_version_status(current_version, normalized_repo, release, now, source)
+        except Exception as exc:
+            last_error = exc
+
+    return _empty_version_status(
+        current_version, now, str(last_error) if last_error else "version check failed"
+    )
+
+
+def _empty_version_status(current_version: str, now: datetime, error: str) -> VersionStatus:
+    return VersionStatus(
+        current_version=current_version,
+        latest_version=None,
+        update_available=False,
+        release_url=None,
+        compare_url=None,
+        compare_label=None,
+        source="github",
+        checked_at=now,
+        error=error,
+    )
 
 
 def _build_version_status(
@@ -103,6 +123,7 @@ def _build_version_status(
     repo: str,
     release: GithubRelease,
     checked_at: datetime,
+    source: str,
 ) -> VersionStatus:
     latest_version = _version_label(release.tag_name)
     current_label = _version_label(current_version)
@@ -119,10 +140,33 @@ def _build_version_status(
         release_url=release.release_url,
         compare_url=compare_url,
         compare_label=compare_label,
-        source="github",
+        source=source,
         checked_at=checked_at,
         error=None,
     )
+
+
+async def _fetch_latest_release_from_heym_run(current_version: str) -> GithubRelease:
+    """Ask heym.run for the latest release, reporting this install's version."""
+    headers = merge_outbound_headers({"Accept": "application/json"})
+    headers["X-Heym-Version"] = _version_label(current_version)
+
+    timeout = httpx.Timeout(5.0)
+    async with httpx.AsyncClient(headers=headers, timeout=timeout, follow_redirects=True) as client:
+        response = await client.get(HEYM_RUN_VERSION_URL)
+        response.raise_for_status()
+        data = response.json()
+
+    tag_name = str(data.get("latest_version") or "").strip()
+    if not tag_name:
+        raise ValueError("heym.run version response has no latest_version")
+
+    release_url = str(data.get("release_url") or "").strip()
+    if not release_url:
+        release_url = (
+            f"{GITHUB_WEB_BASE_URL}/{HEYM_GITHUB_REPO}/releases/tag/{quote(tag_name, safe='')}"
+        )
+    return GithubRelease(tag_name=tag_name, release_url=release_url)
 
 
 async def _fetch_latest_release(repo: str) -> GithubRelease:
