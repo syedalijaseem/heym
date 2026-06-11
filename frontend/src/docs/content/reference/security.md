@@ -67,7 +67,7 @@ Use [Guardrails](./guardrails.md) on LLM and Agent nodes to block unsafe or poli
 - [Running & Deployment](../getting-started/running-and-deployment.md) – Configure `SECRET_KEY`, `ENCRYPTION_KEY`, and `ALLOW_REGISTER` at startup
 - [Execution Tokens](./execution-tokens.md) – Scoped JWTs for calling workflows from external systems
 - [Guardrails](./guardrails.md) – Block unsafe content in LLM and Agent nodes
-- [User Defaults](./user-defaults.md) – Change your password
+- [Settings](./user-settings.md) – Change your password
 - [Credentials Tab](../tabs/credentials-tab.md) – Manage API keys
 - [MCP Tab](../tabs/mcp-tab.md) – MCP API key and OAuth clients
 - [Portal](./portal.md) – Public chat portal access control

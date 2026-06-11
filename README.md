@@ -95,7 +95,7 @@ Describe the agents, orchestration pattern, and user-facing result you want; Hey
 
 > Create a workflow for me that includes a Roadmap Agent and a Best Food Agent. When the Orchestrator Agent receives a request, it will invoke these subagents in parallel and return the result to the user.
 
-### Runing Workflows
+### Running Workflows
 
 Execute the workflow directly from the canvas and inspect each step as results move through the graph.
 

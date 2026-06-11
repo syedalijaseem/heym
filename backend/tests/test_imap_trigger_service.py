@@ -152,6 +152,7 @@ class ImapTriggerExecutionHistoryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(parent.trigger_source, "imap")
         self.assertEqual(child.trigger_source, "SUB_WORKFLOW")
         self.assertEqual(parent.inputs["triggered_by"], "imap")
+        self.assertEqual(parent.inputs["trigger_node_id"], "imap-node")
         self.assertEqual(parent.inputs["email"]["subject"], "New ticket")
 
 

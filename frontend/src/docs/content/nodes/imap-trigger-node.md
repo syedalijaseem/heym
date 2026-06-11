@@ -8,7 +8,7 @@ The **IMAP Trigger** node polls an email inbox on a fixed interval and starts a 
 |----------|-------|
 | Inputs | 0 |
 | Outputs | 1 |
-| Output | `$nodeLabel.email`, `$nodeLabel.triggered_at` |
+| Output | `$nodeLabel.email`, `$nodeLabel.triggered_by`, `$nodeLabel.trigger_node_id`, `$nodeLabel.triggered_at` |
 
 ## Parameters
 
@@ -64,6 +64,8 @@ After the node triggers, downstream nodes can access:
 | `$nodeLabel.email.attachments` | Array of attachment metadata (`filename`, `content_type`, `size_bytes`) |
 | `$nodeLabel.email.headers` | Decoded header object |
 | `$nodeLabel.email.uid` | IMAP UID for deduping or logging |
+| `$nodeLabel.triggered_by` | Trigger source label (`"imap"`) |
+| `$nodeLabel.trigger_node_id` | Canvas node ID that detected the email |
 | `$nodeLabel.triggered_at` | ISO timestamp for the workflow execution |
 
 ## Example Workflow
