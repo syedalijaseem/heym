@@ -650,7 +650,7 @@ If you'd rather contribute through code, please **[start a Discussion](https://g
 
 ## 🏢 Enterprise
 
-Commercial use, enterprise licensing, and professional support are available.
+Commercial licensing, enterprise deployment help, and professional support are available.
 
 **What we offer:**
 - Workflow automation infrastructure & deployment
@@ -658,7 +658,7 @@ Commercial use, enterprise licensing, and professional support are available.
 - Debugging, troubleshooting & solution support
 - Priority support & SLA guarantees
 
-📧 **Contact:** [support@heym.run](mailto:support@heym.run)
+📧 **Contact:** [enterprise@heym.run](mailto:enterprise@heym.run)
 
 ---
 
