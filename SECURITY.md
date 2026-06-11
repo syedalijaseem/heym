@@ -66,3 +66,11 @@ release.
 | --------------------- | ------------------ |
 | Latest release / main | :white_check_mark: |
 | Older versions        | :x:                |
+
+## Acknowledgments
+
+We are grateful to the security researchers who responsibly disclose
+vulnerabilities in Heym:
+
+- [@jashidsany](https://github.com/jashidsany) for reporting an authenticated
+  sandbox escape in user-defined Python tools (GHSA-wcgw-9hfw-f6f2).
