@@ -202,7 +202,7 @@ Expressions work in every string field—prompts, HTTP headers, conditions, set 
 
 Like n8n, Heym is self-hostable. Unlike Zapier and Make.com, your automation data, credentials, and LLM calls never touch a third-party SaaS platform. For AI workloads that process sensitive documents, customer data, or proprietary knowledge bases, this is a hard requirement.
 
-Heym is licensed under the **MIT License with the Commons Clause condition**. The source code is source-available—you can use, modify, and self-host it freely. The Commons Clause restricts selling the software as a competing commercial product. For commercial use, enterprise deployments, or professional support, contact [enterprise@heym.run](mailto:enterprise@heym.run).
+Heym is licensed under the **MIT License with the Commons Clause condition**. The source code is source-available—you can use, modify, and self-host it freely. The Commons Clause restricts selling the software, including offering paid hosting or consulting/support services whose value derives substantially from Heym. For commercial licensing, enterprise deployments, or professional support, contact [enterprise@heym.run](mailto:enterprise@heym.run).
 
 ## Related
 
