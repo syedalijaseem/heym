@@ -4,10 +4,14 @@ import asyncio
 import json
 import unittest
 import uuid
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import HTTPException
 from starlette.datastructures import Headers
+
+from app.db.models import ExecutionHistory
+from app.services.workflow_executor import ExecutionResult
 
 
 def _make_request(body_bytes: bytes, headers: dict[str, str]) -> MagicMock:
@@ -78,6 +82,61 @@ class TestTelegramTriggerWebhook(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(response, {"ok": True})
         mock_execute_background.assert_awaited_once()
+
+    async def test_background_execution_persists_trigger_input_fields(self) -> None:
+        from app.api.telegram import _execute_workflow_background
+
+        owner_id = uuid.uuid4()
+        workflow_id = uuid.uuid4()
+        workflow = SimpleNamespace(
+            id=workflow_id,
+            owner_id=owner_id,
+            name="Telegram workflow",
+            nodes=[],
+            edges=[],
+        )
+        added_rows: list[object] = []
+        db = SimpleNamespace(
+            execute=AsyncMock(return_value=SimpleNamespace(scalar_one_or_none=lambda: workflow)),
+            add=added_rows.append,
+            commit=AsyncMock(),
+        )
+        execution_result = ExecutionResult(
+            workflow_id=workflow_id,
+            status="success",
+            outputs={"ok": True},
+            execution_time_ms=12.3,
+            node_results=[],
+            sub_workflow_executions=[],
+        )
+
+        with (
+            patch("app.api.telegram.async_session_maker") as mock_session_maker,
+            patch("app.api.telegram.collect_referenced_workflows", AsyncMock(return_value={})),
+            patch("app.api.telegram.get_credentials_context", AsyncMock(return_value={})),
+            patch("app.api.telegram.get_global_variables_context", AsyncMock(return_value={})),
+            patch("app.api.telegram.execute_workflow", return_value=execution_result),
+            patch("app.api.telegram.upsert_workflow_analytics_snapshot", AsyncMock()),
+            patch("app.api.telegram._persist_global_variables_from_execution", AsyncMock()),
+        ):
+            mock_session = AsyncMock()
+            mock_session.__aenter__.return_value = db
+            mock_session.__aexit__.return_value = None
+            mock_session_maker.return_value = mock_session
+
+            await _execute_workflow_background(
+                workflow,
+                "telegram-node",
+                {"message": {"message_id": 7, "chat": {"id": 12345}, "text": "hello"}},
+                {"x-telegram-bot-api-secret-token": "expected-secret"},
+            )
+
+        history = next(row for row in added_rows if isinstance(row, ExecutionHistory))
+        self.assertEqual(history.trigger_source, "telegram")
+        self.assertEqual(history.inputs["triggered_by"], "telegram")
+        self.assertEqual(history.inputs["trigger_node_id"], "telegram-node")
+        self.assertEqual(history.inputs["message"]["text"], "hello")
+        self.assertIn("triggered_at", history.inputs)
 
     async def test_invalid_secret_token_returns_403(self) -> None:
         from app.api.telegram import telegram_webhook

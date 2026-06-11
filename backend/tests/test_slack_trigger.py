@@ -6,10 +6,14 @@ import json
 import time
 import unittest
 import uuid
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import HTTPException
 from starlette.datastructures import Headers
+
+from app.db.models import ExecutionHistory
+from app.services.workflow_executor import ExecutionResult
 
 
 def _make_signature(signing_secret: str, timestamp: str, body: str) -> str:
@@ -105,6 +109,60 @@ class TestSlackValidSignature(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(response, {"ok": True})
         mock_bg.assert_called_once()
+
+    async def test_background_execution_persists_trigger_input_fields(self) -> None:
+        from app.api.slack import _execute_workflow_background
+
+        owner_id = uuid.uuid4()
+        workflow_id = uuid.uuid4()
+        workflow = SimpleNamespace(
+            id=workflow_id,
+            owner_id=owner_id,
+            name="Slack workflow",
+            nodes=[],
+            edges=[],
+        )
+        added_rows: list[object] = []
+        db = SimpleNamespace(
+            execute=AsyncMock(return_value=SimpleNamespace(scalar_one_or_none=lambda: workflow)),
+            add=added_rows.append,
+            commit=AsyncMock(),
+        )
+        execution_result = ExecutionResult(
+            workflow_id=workflow_id,
+            status="success",
+            outputs={"ok": True},
+            execution_time_ms=12.3,
+            node_results=[],
+            sub_workflow_executions=[],
+        )
+
+        with (
+            patch("app.api.slack.async_session_maker") as mock_session_maker,
+            patch("app.api.slack.collect_referenced_workflows", AsyncMock(return_value={})),
+            patch("app.api.slack.get_credentials_context", AsyncMock(return_value={})),
+            patch("app.api.slack.get_global_variables_context", AsyncMock(return_value={})),
+            patch("app.api.slack.execute_workflow", return_value=execution_result),
+            patch("app.api.slack.upsert_workflow_analytics_snapshot", AsyncMock()),
+            patch("app.api.slack._persist_global_variables_from_execution", AsyncMock()),
+        ):
+            mock_session = AsyncMock()
+            mock_session.__aenter__.return_value = db
+            mock_session.__aexit__.return_value = None
+            mock_session_maker.return_value = mock_session
+
+            await _execute_workflow_background(
+                workflow,
+                "slack-node",
+                {"event": {"type": "message", "text": "hello"}},
+                {"x-slack-request-timestamp": "123"},
+            )
+
+        history = next(row for row in added_rows if isinstance(row, ExecutionHistory))
+        self.assertEqual(history.trigger_source, "Slack")
+        self.assertEqual(history.inputs["triggered_by"], "Slack")
+        self.assertEqual(history.inputs["trigger_node_id"], "slack-node")
+        self.assertEqual(history.inputs["event"]["event"]["text"], "hello")
 
 
 class TestSlackInvalidSignature(unittest.IsolatedAsyncioTestCase):

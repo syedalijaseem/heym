@@ -4,11 +4,15 @@ import json
 import time
 import unittest
 import uuid
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from fastapi import HTTPException
 from starlette.datastructures import Headers
+
+from app.db.models import ExecutionHistory
+from app.services.workflow_executor import ExecutionResult
 
 
 def _generate_keypair() -> tuple[str, Ed25519PrivateKey]:
@@ -185,6 +189,62 @@ class TestDiscordValidSignature(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(response, {"type": 5})
         mock_bg.assert_called_once()
+
+    async def test_background_execution_persists_trigger_input_fields(self) -> None:
+        from app.api.discord import _execute_workflow_background
+
+        owner_id = uuid.uuid4()
+        workflow_id = uuid.uuid4()
+        workflow = SimpleNamespace(
+            id=workflow_id,
+            owner_id=owner_id,
+            name="Discord workflow",
+            nodes=[],
+            edges=[],
+        )
+        added_rows: list[object] = []
+        db = SimpleNamespace(
+            execute=AsyncMock(return_value=SimpleNamespace(scalar_one_or_none=lambda: workflow)),
+            add=added_rows.append,
+            commit=AsyncMock(),
+        )
+        execution_result = ExecutionResult(
+            workflow_id=workflow_id,
+            status="success",
+            outputs={"ok": True},
+            execution_time_ms=12.3,
+            node_results=[],
+            sub_workflow_executions=[],
+        )
+
+        with (
+            patch("app.api.discord.async_session_maker") as mock_session_maker,
+            patch("app.api.discord.collect_referenced_workflows", AsyncMock(return_value={})),
+            patch("app.api.discord.get_credentials_context", AsyncMock(return_value={})),
+            patch("app.api.discord.get_global_variables_context", AsyncMock(return_value={})),
+            patch("app.api.discord.execute_workflow", return_value=execution_result),
+            patch("app.api.discord.upsert_workflow_analytics_snapshot", AsyncMock()),
+            patch("app.api.discord._persist_global_variables_from_execution", AsyncMock()),
+            patch("app.api.discord._send_discord_followup_message", AsyncMock()),
+        ):
+            mock_session = AsyncMock()
+            mock_session.__aenter__.return_value = db
+            mock_session.__aexit__.return_value = None
+            mock_session_maker.return_value = mock_session
+
+            await _execute_workflow_background(
+                workflow,
+                "discord-node",
+                {"type": 2, "token": "interaction-token", "data": {"name": "hello"}},
+                {"x-signature-timestamp": "123"},
+            )
+
+        history = next(row for row in added_rows if isinstance(row, ExecutionHistory))
+        self.assertEqual(history.trigger_source, "Discord")
+        self.assertEqual(history.inputs["triggered_by"], "Discord")
+        self.assertEqual(history.inputs["trigger_node_id"], "discord-node")
+        self.assertEqual(history.inputs["data"]["name"], "hello")
+        self.assertIn("triggered_at", history.inputs)
 
 
 class TestDiscordInvalidSignature(unittest.IsolatedAsyncioTestCase):

@@ -64,11 +64,11 @@ The WebSocket trigger manager runs in the leader worker and keeps one outbound c
 
 ### Telegram
 
-Telegram sends bot webhook updates to `POST /api/telegram/webhook/{node_id}`. The payload is passed into the workflow as `update`, `message`, optional `callback_query`, sanitized `headers`, `trigger_node_id`, and `triggered_at`. If the selected credential has a secret token, Heym verifies `x-telegram-bot-api-secret-token` before execution.
+Telegram sends bot webhook updates to `POST /api/telegram/webhook/{node_id}`. The payload is passed into the workflow as `update`, `message`, optional `callback_query`, sanitized `headers`, `triggered_by`, `trigger_node_id`, and `triggered_at`. If the selected credential has a secret token, Heym verifies `x-telegram-bot-api-secret-token` before execution.
 
 ### Discord
 
-Discord sends interaction webhooks to `POST /api/discord/webhook/{node_id}`. The payload is passed into the workflow as `interaction`, `type`, `data`, sanitized `headers`, `trigger_node_id`, and `triggered_at`. Heym verifies the request using Ed25519 and the selected `discord_trigger` credential's application public key before execution.
+Discord sends interaction webhooks to `POST /api/discord/webhook/{node_id}`. The payload is passed into the workflow as `interaction`, `type`, `data`, sanitized `headers`, `triggered_by`, `trigger_node_id`, and `triggered_at`. Heym verifies the request using Ed25519 and the selected `discord_trigger` credential's application public key before execution.
 
 ### RabbitMQ
 
@@ -100,12 +100,12 @@ Execution history records `trigger_source` for every entry point:
 
 - **HTTP/Webhook**: `body`, `headers`, `query` from the request
 - **Cron**: `{"triggered_by": "cron"}`
-- **Telegram**: `update` + `message` + optional `callback_query` + sanitized `headers` + `triggered_by: "telegram"`
-- **Discord**: `interaction` + `type` + `data` + sanitized `headers` + `triggered_by: "Discord"`
-- **IMAP**: `email` + `triggered_by: "imap"` + `triggered_at`
+- **Telegram**: `update` + `message` + optional `callback_query` + sanitized `headers` + `triggered_by: "telegram"` + `trigger_node_id` + `triggered_at`
+- **Discord**: `interaction` + `type` + `data` + sanitized `headers` + `triggered_by: "Discord"` + `trigger_node_id` + `triggered_at`
+- **IMAP**: `email` + `triggered_by: "imap"` + `trigger_node_id` + `triggered_at`
 - **WebSocket**: `eventName` + `url` + `triggered_by: "websocket"` + `message` / `connection` / `close`
 - **RabbitMQ**: `message_data` + `triggered_by: "rabbitmq"`
-- **Slack**: `event` (full Slack event object) + `headers` (sanitized) + `triggered_by: "Slack"`
+- **Slack**: `event` (full Slack event object) + `headers` (sanitized) + `triggered_by: "Slack"` + `trigger_node_id`
 - **Portal**: `body.inputs` + optional `conversation_history`
 
 ## Related

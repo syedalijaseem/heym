@@ -8,7 +8,7 @@ The **Slack Trigger** node is a zero-input entry point that receives Slack Event
 |----------|-------|
 | Inputs | 0 |
 | Outputs | 1 |
-| Output | `$nodeLabel.event`, `$nodeLabel.headers` |
+| Output | `$nodeLabel.event`, `$nodeLabel.headers`, `$nodeLabel.triggered_by`, `$nodeLabel.trigger_node_id` |
 
 ## Parameters
 
@@ -57,6 +57,8 @@ After the node triggers, downstream nodes can access:
 | `$nodeLabel.event.channel` | Channel ID |
 | `$nodeLabel.event.ts` | Event timestamp |
 | `$nodeLabel.headers` | Sanitized HTTP headers from Slack |
+| `$nodeLabel.triggered_by` | Trigger source label (`"Slack"`) |
+| `$nodeLabel.trigger_node_id` | Canvas node ID that received the Slack event |
 
 ## Example Workflow
 
