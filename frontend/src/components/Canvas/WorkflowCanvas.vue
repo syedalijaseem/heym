@@ -129,6 +129,18 @@ function updateNodeInternalsAfterDom(nodeIds: string[]): void {
   });
 }
 
+function updateRunbookNodeInternals(): void {
+  const nodeIds = workflowStore.nodes.map((node) => node.id);
+  if (nodeIds.length === 0) return;
+
+  void nextTick(() => {
+    updateNodeInternals(nodeIds);
+    window.requestAnimationFrame(() => {
+      updateNodeInternals(nodeIds);
+    });
+  });
+}
+
 function handleOpenAgentMemory(nodeId: string): void {
   agentMemoryCanvasNodeId.value = nodeId;
   agentMemoryDialogOpen.value = true;
@@ -1425,21 +1437,30 @@ watch(
   () => workflowStore.nodes.length,
   () => {
     setTimeout(() => fitView({ padding: 0.2 }), 100);
-  }
+    if (isRunbookPlaying.value) {
+      updateRunbookNodeInternals();
+    }
+  },
+  { flush: "post" },
 );
 
 // Runbook: re-measure node handles repeatedly while the demo plays, so edges to
 // freshly slid-in nodes attach flush to the ports once their entrance animation
 // settles (a one-shot measure catches the last node mid-slide and looks broken).
-watch(isRunbookPlaying, (playing) => {
+watch(isRunbookPlaying, (playing, _previous, onCleanup) => {
   if (!playing) return;
+  updateRunbookNodeInternals();
   const interval = window.setInterval(() => {
     if (!isRunbookPlaying.value) {
       window.clearInterval(interval);
       return;
     }
-    updateNodeInternals();
-  }, 500);
+    updateRunbookNodeInternals();
+  }, 250);
+  onCleanup(() => {
+    window.clearInterval(interval);
+    updateRunbookNodeInternals();
+  });
 });
 
 // Auto-center canvas when debug panel height changes (after CSS height transition + layout)

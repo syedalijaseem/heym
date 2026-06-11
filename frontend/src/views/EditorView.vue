@@ -272,6 +272,27 @@ function stopPendingExecutionStream(): void {
   }
 }
 
+function isRunbookAutoPlayRequested(): boolean {
+  return route.query[RUNBOOK_QUERY_FLAG] === RUNBOOK_QUERY_VALUE;
+}
+
+async function playRunbookFromQueryIfReady(): Promise<void> {
+  if (!isRunbookAutoPlayRequested()) return;
+
+  const runbookQuery = { ...route.query };
+  delete runbookQuery[RUNBOOK_QUERY_FLAG];
+  await router.replace({
+    name: "editor",
+    params: { id: workflowId.value },
+    query: runbookQuery,
+  });
+
+  if (workflowStore.nodes.length !== 0) return;
+  await nextTick();
+  await nextTick();
+  void playRunbookInPlace();
+}
+
 async function refreshPendingExecutionOnce(): Promise<void> {
   const result = workflowStore.executionResult;
   const historyId = result?.execution_history_id;
@@ -538,24 +559,10 @@ onMounted(async () => {
       });
     }
 
-    // Auto-play the Runbook demo when navigated here with ?runbook=play.
-    if (
-      route.query[RUNBOOK_QUERY_FLAG] === RUNBOOK_QUERY_VALUE &&
-      workflowStore.nodes.length === 0
-    ) {
-      const runbookQuery = { ...route.query };
-      delete runbookQuery[RUNBOOK_QUERY_FLAG];
-      await router.replace({
-        name: "editor",
-        params: { id: workflowId.value },
-        query: runbookQuery,
-      });
-      await nextTick();
-      void playRunbookInPlace();
-    }
   } finally {
     loading.value = false;
   }
+  await playRunbookFromQueryIfReady();
 });
 
 onUnmounted(() => {
@@ -592,6 +599,7 @@ watch(
     const prevId = typeof oldId === "string" ? oldId : oldId?.[0];
     if (id && prevId && id !== prevId) {
       loading.value = true;
+      let loadedWorkflow = false;
       try {
         await workflowStore.loadWorkflow(id);
         if (workflowStore.currentWorkflow) {
@@ -601,10 +609,14 @@ watch(
         authHeaderKey.value = workflowStore.currentWorkflow?.auth_header_key || "";
         authHeaderValue.value = workflowStore.currentWorkflow?.auth_header_value || "";
         webhookBodyMode.value = workflowStore.currentWorkflow?.webhook_body_mode || "legacy";
+        loadedWorkflow = true;
       } catch {
         router.push({ name: "dashboard" });
       } finally {
         loading.value = false;
+      }
+      if (loadedWorkflow) {
+        await playRunbookFromQueryIfReady();
       }
     }
   },
