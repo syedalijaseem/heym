@@ -1,5 +1,6 @@
 """Google BigQuery OAuth2 authorization and callback endpoints."""
 
+import json
 import uuid
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
@@ -78,29 +79,33 @@ def build_auth_url(client_id: str, redirect_uri: str, state: str) -> str:
     return f"{_GOOGLE_AUTH_URL}?{urlencode(params)}"
 
 
+def _json_for_inline_script(payload: dict) -> str:
+    """Serialize JSON for direct embedding in an inline script element."""
+    return (
+        json.dumps(payload)
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+        .replace("\u2028", "\\u2028")
+        .replace("\u2029", "\\u2029")
+    )
+
+
 def _popup_html(success: bool, credential_id: str = "", message: str = "") -> str:
     """Return an HTML page that posts a message to the opener and closes."""
     if success:
-        script = f"""
-            if (window.opener) {{
-                window.opener.postMessage(
-                    {{type: 'google-oauth-success', credentialId: '{credential_id}'}},
-                    '*'
-                );
-            }}
-            window.close();
-        """
+        payload = {"type": "google-oauth-success", "credentialId": credential_id}
     else:
-        safe_msg = message.replace("'", "\\'").replace("\n", " ")
-        script = f"""
-            if (window.opener) {{
-                window.opener.postMessage(
-                    {{type: 'google-oauth-error', message: '{safe_msg}'}},
-                    '*'
-                );
-            }}
-            window.close();
-        """
+        payload = {"type": "google-oauth-error", "message": message.replace("\n", " ")}
+
+    script = f"""
+        const message = {_json_for_inline_script(payload)};
+        const targetOrigin = window.location.origin;
+        if (window.opener) {{
+            window.opener.postMessage(message, targetOrigin);
+        }}
+        window.close();
+    """
     return f"<html><body><script>{script}</script></body></html>"
 
 
