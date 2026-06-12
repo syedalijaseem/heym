@@ -105,6 +105,14 @@ def get_vector_store_service_from_config(config: dict):
     )
 
 
+async def _get_store_credential_config(
+    store: VectorStore,
+    user_id: uuid.UUID,
+    db: AsyncSession,
+) -> tuple[Credential, dict]:
+    return await get_credential_config(store.credential_id, user_id, db)
+
+
 @router.get("", response_model=list[VectorStoreListResponse])
 async def list_vector_stores(
     current_user: User = Depends(get_current_user),
@@ -437,15 +445,7 @@ async def clone_vector_store(
         count += 1
         new_name = f"{store.name} (Copy {count})"
 
-    cred_result = await db.execute(select(Credential).where(Credential.id == store.credential_id))
-    credential = cred_result.scalar_one_or_none()
-    if not credential:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Credential not found",
-        )
-
-    config = decrypt_config(credential.encrypted_config)
+    credential, config = await _get_store_credential_config(store, current_user.id, db)
     service = get_vector_store_service_from_config(config)
 
     try:
@@ -462,7 +462,7 @@ async def clone_vector_store(
         description=store.description,
         collection_name=new_collection,
         owner_id=current_user.id,
-        credential_id=store.credential_id,
+        credential_id=credential.id,
     )
     db.add(new_store)
     await db.flush()
