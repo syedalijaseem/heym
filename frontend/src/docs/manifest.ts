@@ -17,6 +17,7 @@ export const DOCS_MANIFEST: Record<string, DocCategory> = {
       { slug: "introduction", title: "Introduction" },
       { slug: "why-heym", title: "Why Heym" },
       { slug: "quick-start", title: "Quick Start" },
+      { slug: "migrate-to-heym", title: "Migrate to Heym" },
       { slug: "core-concepts", title: "Core Concepts" },
       { slug: "running-and-deployment", title: "Running & Deployment" },
     ],
