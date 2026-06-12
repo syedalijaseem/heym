@@ -18,6 +18,7 @@ Some integration nodes do **not** require credentials. [WebSocket Trigger](../no
 | **Grist** | [Grist node](../nodes/grist-node.md) | `api_key`, `server_url` |
 | **Google Sheets** | [Google Sheets node](../nodes/google-sheets-node.md) | `client_id`, `client_secret` + OAuth2 consent |
 | **BigQuery** | [BigQuery node](../nodes/bigquery-node.md) | `client_id`, `client_secret` + OAuth2 consent |
+| **Amazon S3** | [Amazon S3 node](../nodes/s3-node.md) | `aws_access_key_id`, `aws_secret_access_key`, `aws_region` |
 | **SMTP** | [Send Email](../nodes/send-email-node.md) | `host`, `port`, `email`, `password` |
 | **IMAP** | [IMAP Trigger node](../nodes/imap-trigger-node.md) | `imap_host`, `imap_port`, `imap_username`, `imap_password` |
 | **Telegram** | [Telegram Trigger node](../nodes/telegram-trigger-node.md), [Telegram node](../nodes/telegram-node.md) | `bot_token`, optional `secret_token` |
@@ -256,6 +257,35 @@ When the plugin is not installed, the `x-delay` header is ignored and messages a
 
 - [RabbitMQ node](../nodes/rabbitmq-node.md)
 - [Triggers](./triggers.md) (RabbitMQ as workflow trigger)
+
+---
+
+## Amazon S3
+
+The Amazon S3 credential connects Heym to [Amazon S3](https://aws.amazon.com/s3/). Use it with the [Amazon S3 node](../nodes/s3-node.md) to manage buckets and folders, upload and download objects, copy keys, and list or delete objects from workflows.
+
+### Required Fields
+
+| Field | Description |
+|-------|-------------|
+| `aws_access_key_id` | AWS IAM access key ID |
+| `aws_secret_access_key` | Secret access key paired with the access key ID |
+| `aws_region` | AWS region where buckets live (e.g. `us-east-1`) |
+
+### Optional Fields
+
+| Field | Description |
+|-------|-------------|
+| `aws_session_token` | Temporary session token when using AWS STS credentials |
+
+### Notes
+
+- The credential uses standard AWS SigV4 authentication via boto3.
+- Upload operations currently send UTF-8 text content; downloads can return text or base64 for binary objects.
+
+### Used By
+
+- [Amazon S3 node](../nodes/s3-node.md)
 
 ---
 

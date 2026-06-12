@@ -461,6 +461,7 @@ class CredentialType(str, Enum):
     flaresolverr = "flaresolverr"
     google_sheets = "google_sheets"
     bigquery = "bigquery"
+    s3 = "s3"
     elevenlabs = "elevenlabs"
 
 
@@ -505,6 +506,13 @@ class CredentialConfigDiscordTrigger(BaseModel):
 class CredentialConfigTelegram(BaseModel):
     bot_token: str
     secret_token: str | None = None
+
+
+class CredentialConfigS3(BaseModel):
+    aws_access_key_id: str
+    aws_secret_access_key: str
+    aws_region: str
+    aws_session_token: str | None = None
 
 
 class CredentialCreate(BaseModel):

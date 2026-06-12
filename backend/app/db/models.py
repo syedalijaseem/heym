@@ -46,6 +46,7 @@ class CredentialType(str, PyEnum):
     flaresolverr = "flaresolverr"
     google_sheets = "google_sheets"
     bigquery = "bigquery"
+    s3 = "s3"
     elevenlabs = "elevenlabs"
 
 

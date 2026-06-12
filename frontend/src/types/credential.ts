@@ -19,6 +19,7 @@ export type CredentialType =
   | "flaresolverr"
   | "google_sheets"
   | "bigquery"
+  | "s3"
   | "elevenlabs";
 
 export interface Credential {
@@ -171,6 +172,13 @@ export interface CredentialConfigGoogleSheets {
   scope?: string;
 }
 
+export interface CredentialConfigS3 {
+  aws_access_key_id: string;
+  aws_secret_access_key: string;
+  aws_region: string;
+  aws_session_token?: string;
+}
+
 export type CredentialConfig =
   | CredentialConfigOpenAI
   | CredentialConfigGoogle
@@ -191,6 +199,7 @@ export type CredentialConfig =
   | CredentialConfigCohere
   | CredentialConfigFlaresolverr
   | CredentialConfigGoogleSheets
+  | CredentialConfigS3
   | CredentialConfigElevenLabs;
 
 export interface CreateCredentialRequest {
@@ -225,6 +234,7 @@ export const CREDENTIAL_TYPE_LABELS: Record<CredentialType, string> = {
   flaresolverr: "FlareSolverr",
   google_sheets: "Google Sheets (OAuth2)",
   bigquery: "BigQuery (OAuth2)",
+  s3: "Amazon S3",
   elevenlabs: "ElevenLabs (Voice)",
 };
 
@@ -249,5 +259,6 @@ export const CREDENTIAL_TYPE_DESCRIPTIONS: Record<CredentialType, string> = {
   flaresolverr: "Connect to FlareSolverr for web scraping with browser automation",
   google_sheets: "Connect to Google Sheets via OAuth2 — read, write, append, and query spreadsheets",
   bigquery: "Connect to Google BigQuery via OAuth2 — run SQL queries and insert rows",
+  s3: "Connect to Amazon S3 — manage buckets, folders, and objects",
   elevenlabs: "Text-to-speech and speech-to-text for chat voice features",
 };

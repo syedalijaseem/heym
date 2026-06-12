@@ -87,6 +87,12 @@ def get_masked_value(credential_type: CredentialType, config: dict) -> str | Non
             return "connected"
         client_id = config.get("client_id", "")
         return mask_api_key(client_id) if client_id else None
+    elif credential_type == CredentialType.s3:
+        access_key = str(config.get("aws_access_key_id", "")).strip()
+        region = str(config.get("aws_region", "")).strip()
+        if access_key and region:
+            return f"{mask_api_key(access_key)} ({region})"
+        return mask_api_key(access_key) if access_key else None
     return None
 
 
@@ -827,6 +833,25 @@ def validate_credential_config(credential_type: CredentialType, config: dict) ->
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="BigQuery credential requires client_secret",
+            )
+    elif credential_type == CredentialType.s3:
+        if "aws_access_key_id" not in config or not str(config["aws_access_key_id"]).strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Amazon S3 credential requires aws_access_key_id",
+            )
+        if (
+            "aws_secret_access_key" not in config
+            or not str(config["aws_secret_access_key"]).strip()
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Amazon S3 credential requires aws_secret_access_key",
+            )
+        if "aws_region" not in config or not str(config["aws_region"]).strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Amazon S3 credential requires aws_region",
             )
     elif credential_type == CredentialType.flaresolverr:
         if "flaresolverr_url" not in config or not config["flaresolverr_url"]:

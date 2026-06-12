@@ -24,6 +24,7 @@ import {
   Repeat,
   Search,
   Send,
+  Server,
   Settings2,
   Sheet,
   Shuffle,
@@ -78,6 +79,7 @@ export const nodeIcons: Record<NodeType, ReturnType<typeof Type>> = {
   consoleLog: Terminal,
   playwright: MonitorPlay,
   drive: HardDrive,
+  s3: Server,
   mcpCall: Plug,
 };
 
@@ -123,5 +125,6 @@ export const nodeIconColorClass: Record<NodeType, string> = {
   consoleLog: "text-node-console-log",
   playwright: "text-node-playwright",
   drive: "text-node-drive",
+  s3: "text-node-drive",
   mcpCall: "text-node-agent",
 };

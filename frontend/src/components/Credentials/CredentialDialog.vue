@@ -14,6 +14,7 @@ import Input from "@/components/ui/Input.vue";
 import Label from "@/components/ui/Label.vue";
 import Select from "@/components/ui/Select.vue";
 import { credentialsApi } from "@/services/api";
+import { AWS_REGION_OPTIONS } from "@/lib/awsRegions";
 import {
   CREDENTIAL_TYPE_DESCRIPTIONS,
   CREDENTIAL_TYPE_LABELS,
@@ -84,6 +85,10 @@ const bqClientSecret = ref("");
 const bqOAuthConnected = ref(false);
 const bqOAuthConnecting = ref(false);
 const bqConnectedCredential = ref<import("@/types/credential").Credential | null>(null);
+const s3AccessKeyId = ref("");
+const s3SecretAccessKey = ref("");
+const s3Region = ref("us-east-1");
+const s3SessionToken = ref("");
 const showApiKey = ref(false);
 const saving = ref(false);
 const error = ref("");
@@ -110,6 +115,7 @@ const typeOptions = [
   { value: "flaresolverr", label: CREDENTIAL_TYPE_LABELS.flaresolverr },
   { value: "google_sheets", label: CREDENTIAL_TYPE_LABELS.google_sheets },
   { value: "bigquery", label: CREDENTIAL_TYPE_LABELS.bigquery },
+  { value: "s3", label: CREDENTIAL_TYPE_LABELS.s3 },
 ];
 
 function isTrustedOAuthMessage(evt: MessageEvent, popup: Window | null): boolean {
@@ -169,6 +175,10 @@ watch(
         bqClientSecret.value = "";
         bqOAuthConnected.value = props.credential.masked_value === "connected" && props.credential.type === "bigquery";
         bqConnectedCredential.value = null;
+        s3AccessKeyId.value = "";
+        s3SecretAccessKey.value = "";
+        s3Region.value = "us-east-1";
+        s3SessionToken.value = "";
       } else {
         name.value = "";
         type.value = props.presetType ?? "openai";
@@ -217,6 +227,10 @@ watch(
         bqClientSecret.value = "";
         bqOAuthConnected.value = false;
         bqConnectedCredential.value = null;
+        s3AccessKeyId.value = "";
+        s3SecretAccessKey.value = "";
+        s3Region.value = "us-east-1";
+        s3SessionToken.value = "";
       }
       showApiKey.value = false;
       error.value = "";
@@ -290,6 +304,12 @@ const isValid = computed(() => {
     return gsOAuthConnected.value || isEditing.value;
   } else if (type.value === "bigquery") {
     return bqOAuthConnected.value || isEditing.value;
+  } else if (type.value === "s3") {
+    return (
+      !!s3AccessKeyId.value.trim() &&
+      !!s3SecretAccessKey.value.trim() &&
+      !!s3Region.value.trim()
+    ) || isEditing.value;
   }
   return false;
 });
@@ -372,6 +392,13 @@ function buildConfig(): CredentialConfig {
     return {
       client_id: bqClientId.value.trim(),
       client_secret: bqClientSecret.value.trim(),
+    };
+  } else if (type.value === "s3") {
+    return {
+      aws_access_key_id: s3AccessKeyId.value.trim(),
+      aws_secret_access_key: s3SecretAccessKey.value.trim(),
+      aws_region: s3Region.value.trim(),
+      aws_session_token: s3SessionToken.value.trim(),
     };
   } else if (type.value === "slack") {
     return { webhook_url: webhookUrl.value.trim() };
@@ -591,6 +618,10 @@ async function handleSave(): Promise<void> {
           rabbitmqUsername.value.trim() ||
           rabbitmqPassword.value.trim() ||
           rabbitmqVhost.value.trim() ||
+          s3AccessKeyId.value.trim() ||
+          s3SecretAccessKey.value.trim() ||
+          s3Region.value.trim() ||
+          s3SessionToken.value.trim() ||
           cohereApiKey.value.trim() ||
           flaresolverrUrl.value.trim());
 
@@ -1610,6 +1641,76 @@ async function handleSave(): Promise<void> {
               {{ bqOAuthConnected ? 'Reconnect' : 'Connect' }}
             </Button>
           </div>
+        </div>
+      </template>
+
+      <template v-if="type === 's3'">
+        <div class="space-y-2">
+          <Label for="cred-s3-access-key-id">Access Key ID <span class="text-destructive">*</span></Label>
+          <Input
+            id="cred-s3-access-key-id"
+            v-model="s3AccessKeyId"
+            :placeholder="isEditing ? '(re-enter to update)' : 'AKIA...'"
+            :disabled="saving"
+          />
+          <p class="text-xs text-muted-foreground">
+            IAM access key ID for an AWS account with the required S3 permissions.
+          </p>
+        </div>
+
+        <div class="space-y-2">
+          <Label for="cred-s3-secret-access-key">Secret Access Key <span class="text-destructive">*</span></Label>
+          <div class="relative">
+            <Input
+              id="cred-s3-secret-access-key"
+              v-model="s3SecretAccessKey"
+              :type="showApiKey ? 'text' : 'password'"
+              :placeholder="isEditing ? '••••••• (re-enter to update)' : 'Enter secret key'"
+              :disabled="saving"
+              class="pr-10"
+            />
+            <button
+              type="button"
+              class="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              @click="showApiKey = !showApiKey"
+            >
+              <EyeOff
+                v-if="showApiKey"
+                class="w-4 h-4"
+              />
+              <Eye
+                v-else
+                class="w-4 h-4"
+              />
+            </button>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <Label for="cred-s3-region">Region <span class="text-destructive">*</span></Label>
+          <Select
+            id="cred-s3-region"
+            v-model="s3Region"
+            :options="AWS_REGION_OPTIONS"
+            placeholder="Select AWS region..."
+            :disabled="saving"
+          />
+          <p class="text-xs text-muted-foreground">
+            AWS region where the bucket lives (for example `us-east-1`).
+          </p>
+        </div>
+
+        <div class="space-y-2">
+          <Label for="cred-s3-session-token">Session Token</Label>
+          <Input
+            id="cred-s3-session-token"
+            v-model="s3SessionToken"
+            :placeholder="isEditing ? '(optional: re-enter to update)' : '(optional)'"
+            :disabled="saving"
+          />
+          <p class="text-xs text-muted-foreground">
+            Optional. Use when authenticating with temporary AWS STS credentials.
+          </p>
         </div>
       </template>
 
