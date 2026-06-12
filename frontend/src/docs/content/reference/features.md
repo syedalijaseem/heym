@@ -26,7 +26,7 @@ Pairs naturally with [Input](../nodes/input-node.md), [LLM](../nodes/llm-node.md
 
 ### [Core Concepts](../getting-started/core-concepts.md)
 
-Workflows are directed graphs of nodes connected by edges; execution flows from trigger nodes ([Input](../nodes/input-node.md), [Cron](../nodes/cron-node.md), [Telegram Trigger](../nodes/telegram-trigger-node.md), [IMAP Trigger](../nodes/imap-trigger-node.md), [WebSocket Trigger](../nodes/websocket-trigger-node.md)) through processing nodes to [Output](../nodes/output-node.md) nodes. Each node has a type, data (configuration), and inputs/outputs; edges define data flow. Nodes reference upstream data via [Expression DSL](./expression-dsl.md) expressions such as `$nodeLabel.field`; independent nodes run in [parallel](./parallel-execution.md) automatically.
+Workflows are directed graphs of nodes connected by edges; execution flows from trigger nodes ([Input](../nodes/input-node.md), [Cron](../nodes/cron-node.md), [Telegram Trigger](../nodes/telegram-trigger-node.md), [Discord Trigger](../nodes/discord-trigger-node.md), [IMAP Trigger](../nodes/imap-trigger-node.md), [WebSocket Trigger](../nodes/websocket-trigger-node.md)) through processing nodes to [Output](../nodes/output-node.md) nodes. Each node has a type, data (configuration), and inputs/outputs; edges define data flow. Nodes reference upstream data via [Expression DSL](./expression-dsl.md) expressions such as `$nodeLabel.field`; independent nodes run in [parallel](./parallel-execution.md) automatically.
 
 See also [Triggers](./triggers.md), [Parallel Execution](./parallel-execution.md), and [Workflow Structure](./workflow-structure.md).
 
@@ -77,6 +77,12 @@ Pairs with [Telegram](../nodes/telegram-node.md), [Agent Node](../nodes/agent-no
 The Slack Trigger node receives Slack Events API webhooks and starts a workflow automatically after verifying the request signature. It exposes the event payload and sanitized headers for downstream routing, [LLM](../nodes/llm-node.md)-based classification, and reply flows.
 
 Pairs with [Slack](../nodes/slack-node.md), [Agent Node](../nodes/agent-node.md), and [Third-Party Integrations](./integrations.md).
+
+#### [Discord Trigger](../nodes/discord-trigger-node.md)
+
+The Discord Trigger node receives Discord Interactions API webhooks, verifies Ed25519 signatures with the selected `discord_trigger` credential, and starts the workflow. It exposes the full interaction payload, command data, sanitized headers, and trigger metadata for downstream routing or replies.
+
+Pairs with [Output](../nodes/output-node.md), [Discord](../nodes/discord-node.md), [Agent Node](../nodes/agent-node.md), and [Third-Party Integrations](./integrations.md).
 
 #### [RabbitMQ](../nodes/rabbitmq-node.md)
 
@@ -198,6 +204,12 @@ The Slack node sends a message to a Slack channel via an Incoming Webhook. Confi
 
 Pairs with [Slack Trigger](../nodes/slack-trigger-node.md), [Error Handler](../nodes/error-handler-node.md), and [Third-Party Integrations](./integrations.md).
 
+#### [Discord](../nodes/discord-node.md)
+
+The Discord node sends a message to a Discord channel via an Incoming Webhook. Configure a Discord [credential](./credentials.md), compose the outgoing message with [Expression DSL](./expression-dsl.md), and optionally set webhook username or avatar overrides.
+
+Pairs with [Discord Trigger](../nodes/discord-trigger-node.md), [Output](../nodes/output-node.md), [Error Handler](../nodes/error-handler-node.md), and [Third-Party Integrations](./integrations.md).
+
 #### [Send Email](../nodes/send-email-node.md)
 
 The Send Email node sends emails via SMTP. Configure an SMTP [credential](./credentials.md) and [Expression DSL](./expression-dsl.md) expressions for recipient(s), subject, and body. Use it for notifications, alerts, and transactional emails. Output includes status, to, and subject.
@@ -306,7 +318,7 @@ Pairs with [Condition](../nodes/condition-node.md), [Error Handler](../nodes/err
 
 ### [Node Types](./node-types.md)
 
-Heym provides a variety of node types: triggers such as [Input](../nodes/input-node.md), [Cron](../nodes/cron-node.md), [Telegram Trigger](../nodes/telegram-trigger-node.md), [IMAP Trigger](../nodes/imap-trigger-node.md), [Slack Trigger](../nodes/slack-trigger-node.md), [RabbitMQ](../nodes/rabbitmq-node.md), and [Error Handler](../nodes/error-handler-node.md); AI nodes such as [LLM](../nodes/llm-node.md), [Agent Node](../nodes/agent-node.md), [Qdrant RAG](../nodes/rag-node.md), and [MCP Call](../nodes/mcp-call-node.md); logic nodes like [Condition](../nodes/condition-node.md), [Switch](../nodes/switch-node.md), [Merge](../nodes/merge-node.md), and [Loop](../nodes/loop-node.md); data nodes like [Set](../nodes/set-node.md), [Variable](../nodes/variable-node.md), and [Execute](../nodes/execute-node.md); integrations such as [HTTP](../nodes/http-node.md), [Telegram](../nodes/telegram-node.md), [Slack](../nodes/slack-node.md), [Send Email](../nodes/send-email-node.md), [Redis](../nodes/redis-node.md), [Grist](../nodes/grist-node.md), [Google Sheets](../nodes/google-sheets-node.md), [BigQuery](../nodes/bigquery-node.md), [DataTable](../nodes/datatable-node.md), and [Drive](../nodes/drive-node.md); automation nodes like [Crawler](../nodes/crawler-node.md) and [Playwright](../nodes/playwright-node.md); and utilities such as [Wait](../nodes/wait-node.md), [Output](../nodes/output-node.md), [JSON output mapper](../nodes/json-output-mapper-node.md), [Console Log](../nodes/console-log-node.md), [Throw Error](../nodes/throw-error-node.md), [Disable Node](../nodes/disable-node.md), and [Sticky Note](../nodes/sticky-note-node.md). Use expressions like `$input.text` and `$nodeLabel.field` in node configuration.
+Heym provides a variety of node types: triggers such as [Input](../nodes/input-node.md), [Cron](../nodes/cron-node.md), [Telegram Trigger](../nodes/telegram-trigger-node.md), [Discord Trigger](../nodes/discord-trigger-node.md), [IMAP Trigger](../nodes/imap-trigger-node.md), [Slack Trigger](../nodes/slack-trigger-node.md), [RabbitMQ](../nodes/rabbitmq-node.md), and [Error Handler](../nodes/error-handler-node.md); AI nodes such as [LLM](../nodes/llm-node.md), [Agent Node](../nodes/agent-node.md), [Qdrant RAG](../nodes/rag-node.md), and [MCP Call](../nodes/mcp-call-node.md); logic nodes like [Condition](../nodes/condition-node.md), [Switch](../nodes/switch-node.md), [Merge](../nodes/merge-node.md), and [Loop](../nodes/loop-node.md); data nodes like [Set](../nodes/set-node.md), [Variable](../nodes/variable-node.md), and [Execute](../nodes/execute-node.md); integrations such as [HTTP](../nodes/http-node.md), [Telegram](../nodes/telegram-node.md), [Slack](../nodes/slack-node.md), [Discord](../nodes/discord-node.md), [Send Email](../nodes/send-email-node.md), [Redis](../nodes/redis-node.md), [Grist](../nodes/grist-node.md), [Google Sheets](../nodes/google-sheets-node.md), [BigQuery](../nodes/bigquery-node.md), [DataTable](../nodes/datatable-node.md), and [Drive](../nodes/drive-node.md); automation nodes like [Crawler](../nodes/crawler-node.md) and [Playwright](../nodes/playwright-node.md); and utilities such as [Wait](../nodes/wait-node.md), [Output](../nodes/output-node.md), [JSON output mapper](../nodes/json-output-mapper-node.md), [Console Log](../nodes/console-log-node.md), [Throw Error](../nodes/throw-error-node.md), [Disable Node](../nodes/disable-node.md), and [Sticky Note](../nodes/sticky-note-node.md). Use expressions like `$input.text` and `$nodeLabel.field` in node configuration.
 
 See also [Triggers](./triggers.md), [Third-Party Integrations](./integrations.md), and [Parallel Execution](./parallel-execution.md).
 
@@ -445,7 +457,7 @@ See also [Webhooks](./webhooks.md), [Execution History](./execution-history.md),
 
 ### [Triggers](./triggers.md)
 
-Workflows are started by trigger nodes ([Input](../nodes/input-node.md), [Cron](../nodes/cron-node.md), [Telegram Trigger](../nodes/telegram-trigger-node.md), [IMAP Trigger](../nodes/imap-trigger-node.md), [RabbitMQ](../nodes/rabbitmq-node.md) receive) or entry points: [Webhook/API](./webhooks.md), [MCP](../tabs/mcp-tab.md), [Portal](./portal.md), Cron scheduler, Telegram webhook, IMAP trigger manager, RabbitMQ consumer, or Editor run. Each trigger has its own endpoint or background process; [Cron](../nodes/cron-node.md) runs every 60 seconds, [Telegram Trigger](../nodes/telegram-trigger-node.md) nodes receive bot webhooks, and [IMAP Trigger](../nodes/imap-trigger-node.md) nodes run on their configured polling interval. [Input](../nodes/input-node.md) nodes receive body, headers, and query from webhook requests.
+Workflows are started by trigger nodes ([Input](../nodes/input-node.md), [Cron](../nodes/cron-node.md), [Telegram Trigger](../nodes/telegram-trigger-node.md), [Discord Trigger](../nodes/discord-trigger-node.md), [IMAP Trigger](../nodes/imap-trigger-node.md), [RabbitMQ](../nodes/rabbitmq-node.md) receive) or entry points: [Webhook/API](./webhooks.md), [MCP](../tabs/mcp-tab.md), [Portal](./portal.md), Cron scheduler, Telegram webhook, Discord interaction webhook, IMAP trigger manager, RabbitMQ consumer, or Editor run. Each trigger has its own endpoint or background process; [Cron](../nodes/cron-node.md) runs every 60 seconds, [Telegram Trigger](../nodes/telegram-trigger-node.md) nodes receive bot webhooks, [Discord Trigger](../nodes/discord-trigger-node.md) nodes receive signed interaction webhooks, and [IMAP Trigger](../nodes/imap-trigger-node.md) nodes run on their configured polling interval. [Input](../nodes/input-node.md) nodes receive body, headers, and query from webhook requests.
 
 See also [Node Types](./node-types.md), [Webhooks](./webhooks.md), and [Parallel Execution](./parallel-execution.md).
 
