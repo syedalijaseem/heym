@@ -2,8 +2,6 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { AlertCircle, Copy, Download, Eye, EyeOff, Loader2, Moon, Send, Square, Sun, Upload, Workflow } from "lucide-vue-next";
-import { marked } from "marked";
-import DOMPurify from "dompurify";
 
 import Button from "@/components/ui/Button.vue";
 import ImageLightbox from "@/components/ui/ImageLightbox.vue";
@@ -12,6 +10,7 @@ import { onDismissOverlays } from "@/composables/useOverlayBackHandler";
 import Input from "@/components/ui/Input.vue";
 import Label from "@/components/ui/Label.vue";
 import WorkflowHeroBackground from "@/components/Layout/WorkflowHeroBackground.vue";
+import { markdownToPlainText, renderMarkdown } from "@/lib/markdown";
 import { useThemeStore } from "@/stores/theme";
 import { playSuccessSound } from "@/utils/audio";
 
@@ -843,23 +842,6 @@ function resetTextareaHeight(): void {
   }
 }
 
-function renderMarkdown(content: string): string {
-  if (!content) return "";
-  const html = marked(content, {
-    breaks: true,
-    gfm: true,
-  }) as string;
-  return DOMPurify.sanitize(html, {
-    ALLOWED_TAGS: [
-      "p", "br", "strong", "em", "u", "s", "code", "pre", "blockquote",
-      "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "a", "hr",
-      "table", "thead", "tbody", "tr", "th", "td", "img",
-      "video", "source",
-    ],
-    ALLOWED_ATTR: ["href", "target", "rel", "src", "alt", "controls", "playsinline", "muted", "loop", "preload", "type", "style"],
-  });
-}
-
 function handleMarkdownImageClick(event: MouseEvent): void {
   const target = event.target as HTMLElement;
   if (target.tagName === "IMG") {
@@ -868,18 +850,11 @@ function handleMarkdownImageClick(event: MouseEvent): void {
   }
 }
 
-function extractPlainText(html: string): string {
-  const tempDiv = document.createElement("div");
-  tempDiv.innerHTML = html;
-  return tempDiv.textContent || tempDiv.innerText || "";
-}
-
 async function copyMessage(message: ChatMessage): Promise<void> {
   try {
     let textToCopy = message.content;
     if (message.type === "assistant") {
-      const html = renderMarkdown(message.content);
-      textToCopy = extractPlainText(html);
+      textToCopy = markdownToPlainText(message.content);
     }
     await navigator.clipboard.writeText(textToCopy);
     copiedMessageId.value = message.id;
@@ -889,6 +864,25 @@ async function copyMessage(message: ChatMessage): Promise<void> {
   } catch {
     // Silently ignore clipboard errors (e.g., permission denied)
   }
+}
+
+function jsonForInlineScript(value: unknown): string {
+  return JSON.stringify(value).replace(/[<>&\u2028\u2029]/g, (char) => {
+    switch (char) {
+      case "<":
+        return "\\u003C";
+      case ">":
+        return "\\u003E";
+      case "&":
+        return "\\u0026";
+      case "\u2028":
+        return "\\u2028";
+      case "\u2029":
+        return "\\u2029";
+      default:
+        return char;
+    }
+  });
 }
 
 function downloadAsHTML(): void {
@@ -934,7 +928,7 @@ function downloadAsHTML(): void {
 
   const plainTexts = messages.value
     .filter(m => m.type === "user" || m.type === "assistant")
-    .map(m => m.content);
+    .map(m => (m.type === "assistant" ? markdownToPlainText(m.content) : m.content));
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -1027,7 +1021,7 @@ function downloadAsHTML(): void {
   Exported on ${new Date().toLocaleString()}
 </div>
 <script>
-var msgTexts=${JSON.stringify(plainTexts)};
+var msgTexts=${jsonForInlineScript(plainTexts)};
 function toggleTheme(){
   var b=document.body;
   var isDark=b.classList.contains('dark');
