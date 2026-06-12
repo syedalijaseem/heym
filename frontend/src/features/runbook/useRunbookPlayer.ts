@@ -55,6 +55,8 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
+const RUNBOOK_CURSOR_TRANSITION_MS = 700;
+
 export function useRunbookPlayer(): {
   isRunbookPlaying: typeof isRunbookPlaying;
   startRunbookNewWorkflow: () => Promise<void>;
@@ -138,8 +140,12 @@ export function useRunbookPlayer(): {
         moveCursorTo(
           elementCenter("[data-runbook-run]", { x: window.innerWidth - 150, y: 120 }),
         );
+        await sleep(RUNBOOK_CURSOR_TRANSITION_MS);
       }
-      await sleep(reduced ? 0 : RUNBOOK_RUN_DELAY_MS);
+      workflowStore.propertiesPanelTab = "config";
+      await sleep(
+        reduced ? 0 : Math.max(0, RUNBOOK_RUN_DELAY_MS - RUNBOOK_CURSOR_TRANSITION_MS),
+      );
 
       // Feed the sample input and run the real executor.
       workflowStore.runInputValues.text = RUNBOOK_INPUT_TEXT;

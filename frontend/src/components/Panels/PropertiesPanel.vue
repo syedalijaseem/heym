@@ -1135,6 +1135,11 @@ const isExecuting = computed(() => workflowStore.isExecuting);
 const { isRunbookPlaying } = useRunbookPlayer();
 const hasNodes = computed(() => workflowStore.nodes.length > 0);
 
+function revealRunTabForRunbook(): void {
+  if (!isRunbookPlaying.value) return;
+  activeTab.value = "config";
+}
+
 const lastExecutedNode = computed(() => {
   const results = workflowStore.nodeResults;
   if (!results || results.length === 0) return null;
@@ -5374,7 +5379,7 @@ onUnmounted(() => {
         :class="cn(
           'flex-1 px-3 py-2 min-h-[44px] text-sm font-medium transition-all flex items-center justify-center gap-2 rounded-lg',
           activeTab === 'properties'
-            ? 'text-primary bg-primary/10 shadow-sm'
+            ? 'text-primary bg-primary/10 shadow-sm dark:bg-primary/20 dark:text-primary-foreground'
             : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
         )"
         @click="activeTab = 'properties'"
@@ -5387,11 +5392,13 @@ onUnmounted(() => {
         :class="cn(
           'flex-1 px-3 py-2 min-h-[44px] text-sm font-medium transition-all flex items-center justify-center gap-2 rounded-lg',
           activeTab === 'config'
-            ? 'text-primary bg-primary/10 shadow-sm'
+            ? 'text-primary bg-primary/10 shadow-sm dark:bg-primary/20 dark:text-primary-foreground'
             : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
           isRunbookPlaying && 'runbook-pulse'
         )"
         @click="activeTab = 'config'"
+        @focus="revealRunTabForRunbook"
+        @mouseenter="revealRunTabForRunbook"
       >
         <Zap class="w-4 h-4" />
         <span class="hidden md:inline">Run</span>

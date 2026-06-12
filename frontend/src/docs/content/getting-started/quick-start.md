@@ -41,9 +41,12 @@ If you are reading the docs and want clarification before building, open [Chat w
 
 Alternatively, use the [AI Assistant](../reference/ai-assistant.md) from the Debug panel to create workflows with natural language—describe what you want and the AI generates nodes and edges.
 
+Already building automations in another tool? [Migrate to Heym](./migrate-to-heym.md) converts an n8n, Flowise, Dify, Langflow, sim.ai, or Activepieces workflow into a Heym workflow you can import.
+
 ## Related
 
 - [Core Concepts](./core-concepts.md) – Workflows, nodes, and execution flow
+- [Migrate to Heym](./migrate-to-heym.md) – Convert n8n, Flowise, Dify, Langflow, sim.ai, or Activepieces workflows to Heym with AI
 - [Running & Deployment](./running-and-deployment.md) – Start locally with `run.sh` or deploy with `deploy.sh`
 - [Settings](../reference/user-settings.md) – Configure name, User Rules, and password
 - [Canvas Features](../reference/canvas-features.md) – Data pin, execution logs, enable/disable, extract to sub-workflow

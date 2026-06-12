@@ -208,6 +208,7 @@ Heym is licensed under the **MIT License with the Commons Clause condition**. Th
 
 - [Introduction](./introduction.md) – Platform overview
 - [Quick Start](./quick-start.md) – Build your first workflow
+- [Migrate to Heym](./migrate-to-heym.md) – Bring your n8n, Flowise, Dify, or Langflow workflows over with AI
 - [Agent Node](../nodes/agent-node.md) – LLM node with tool calling, MCP, and skills
 - [Agent Architecture](../reference/agent-architecture.md) – Sub-agents, orchestrator, and tool dispatch
 - [Qdrant RAG Node](../nodes/rag-node.md) – Vector search and document insertion

@@ -36,6 +36,12 @@ Heym provides `run.sh` for local development (database in Docker, FastAPI backen
 
 See also [Security](./security.md), [Enterprise](./enterprise.md), and [Settings](./user-settings.md).
 
+### [Migrate to Heym](../getting-started/migrate-to-heym.md)
+
+The AI Convert tool turns a workflow from another platform (n8n, Flowise, Dify, Langflow, sim.ai, Activepieces) or a plain-English description into a Heym workflow, streamed live onto a canvas and ready to [download and import](./download-import.md). It runs an AI safety check, then generates the DSL with input and rate limits in place. Open it at [heym.run/convert](https://heym.run/convert).
+
+See also [Quick Start](../getting-started/quick-start.md), [Download & Import](./download-import.md), and [AI Assistant](./ai-assistant.md).
+
 ---
 
 ## Nodes
