@@ -43,6 +43,11 @@ services:
       OAUTH_ISSUER: ${OAUTH_ISSUER}
       DOCKER_LOGS_ENABLED: ${DOCKER_LOGS_ENABLED:-false}
       DOCKER_LOGS_ALLOWED_EMAILS: ${DOCKER_LOGS_ALLOWED_EMAILS:-}
+      # Python tool sandbox: untrusted user tools run in a hardened, throwaway
+      # sibling container (no network, no docker socket, read-only, non-root).
+      # Empty image = auto-detect this backend image.
+      HEYM_PYTHON_TOOL_SANDBOX: ${HEYM_PYTHON_TOOL_SANDBOX:-auto}
+      HEYM_PYTHON_TOOL_IMAGE: ${HEYM_PYTHON_TOOL_IMAGE:-}
       # OpenTelemetry tracing. When run inside compose, the backend reaches the
       # bundled Jaeger by its service name (not localhost, which is the host-only
       # value used by run.sh). Toggle with HEYM_OTEL_ENABLED in .env.
