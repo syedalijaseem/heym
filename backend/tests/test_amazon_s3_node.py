@@ -1,4 +1,4 @@
-"""Unit tests for S3 service and workflow executor integration."""
+"""Unit tests for Amazon S3 service and workflow executor integration."""
 
 import base64
 import unittest
@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
-from app.services.s3_service import normalize_s3_list_max_keys
+from app.services.amazon_s3_service import normalize_s3_list_max_keys
 
 
 def _make_s3_config() -> dict:
@@ -35,8 +35,8 @@ class S3ServiceTests(unittest.TestCase):
     def test_put_object_returns_metadata(self) -> None:
         fake_client = MagicMock()
         fake_client.put_object.return_value = {"ETag": '"abc123"'}
-        with patch("app.services.s3_service.boto3.client", return_value=fake_client):
-            from app.services.s3_service import S3Service
+        with patch("app.services.amazon_s3_service.boto3.client", return_value=fake_client):
+            from app.services.amazon_s3_service import S3Service
 
             result = S3Service(_make_s3_config()).put_object(
                 "my-bucket", "docs/hello.txt", "hello", "text/plain"
@@ -50,8 +50,8 @@ class S3ServiceTests(unittest.TestCase):
     def test_put_object_omits_content_type_when_empty(self) -> None:
         fake_client = MagicMock()
         fake_client.put_object.return_value = {"ETag": '"abc123"'}
-        with patch("app.services.s3_service.boto3.client", return_value=fake_client):
-            from app.services.s3_service import S3Service
+        with patch("app.services.amazon_s3_service.boto3.client", return_value=fake_client):
+            from app.services.amazon_s3_service import S3Service
 
             S3Service(_make_s3_config()).put_object("my-bucket", "hello.txt", "hello", None)
 
@@ -62,8 +62,8 @@ class S3ServiceTests(unittest.TestCase):
         )
 
     def test_build_client_uses_aws_credentials(self) -> None:
-        with patch("app.services.s3_service.boto3.client") as mock_boto_client:
-            from app.services.s3_service import S3Service
+        with patch("app.services.amazon_s3_service.boto3.client") as mock_boto_client:
+            from app.services.amazon_s3_service import S3Service
 
             S3Service(_make_s3_config())
 
@@ -84,8 +84,8 @@ class S3ServiceTests(unittest.TestCase):
             "LastModified": datetime(2026, 6, 12, tzinfo=timezone.utc),
             "Metadata": {"source": "test"},
         }
-        with patch("app.services.s3_service.boto3.client", return_value=fake_client):
-            from app.services.s3_service import S3Service
+        with patch("app.services.amazon_s3_service.boto3.client", return_value=fake_client):
+            from app.services.amazon_s3_service import S3Service
 
             result = S3Service(_make_s3_config()).get_object("bucket", "hello.txt")
 
@@ -98,8 +98,8 @@ class S3ServiceTests(unittest.TestCase):
         fake_body.read.return_value = b"\x00\x01\x02"
         fake_client = MagicMock()
         fake_client.get_object.return_value = {"Body": fake_body}
-        with patch("app.services.s3_service.boto3.client", return_value=fake_client):
-            from app.services.s3_service import S3Service
+        with patch("app.services.amazon_s3_service.boto3.client", return_value=fake_client):
+            from app.services.amazon_s3_service import S3Service
 
             result = S3Service(_make_s3_config()).get_object(
                 "bucket", "blob.bin", include_binary=True
@@ -109,8 +109,8 @@ class S3ServiceTests(unittest.TestCase):
 
     def test_create_bucket_uses_location_constraint_for_non_default_region(self) -> None:
         fake_client = MagicMock()
-        with patch("app.services.s3_service.boto3.client", return_value=fake_client):
-            from app.services.s3_service import S3Service
+        with patch("app.services.amazon_s3_service.boto3.client", return_value=fake_client):
+            from app.services.amazon_s3_service import S3Service
 
             result = S3Service(_make_s3_config()).create_bucket("new-bucket", "eu-west-1")
 
@@ -126,8 +126,8 @@ class S3ServiceTests(unittest.TestCase):
         fake_client = MagicMock()
         config = _make_s3_config()
         config["aws_region"] = "us-east-1"
-        with patch("app.services.s3_service.boto3.client", return_value=fake_client):
-            from app.services.s3_service import S3Service
+        with patch("app.services.amazon_s3_service.boto3.client", return_value=fake_client):
+            from app.services.amazon_s3_service import S3Service
 
             S3Service(config).create_bucket("new-bucket", "us-east-1")
 
@@ -135,8 +135,8 @@ class S3ServiceTests(unittest.TestCase):
 
     def test_delete_bucket_returns_success(self) -> None:
         fake_client = MagicMock()
-        with patch("app.services.s3_service.boto3.client", return_value=fake_client):
-            from app.services.s3_service import S3Service
+        with patch("app.services.amazon_s3_service.boto3.client", return_value=fake_client):
+            from app.services.amazon_s3_service import S3Service
 
             result = S3Service(_make_s3_config()).delete_bucket("old-bucket")
 
@@ -152,8 +152,8 @@ class S3ServiceTests(unittest.TestCase):
                 "LastModified": datetime(2026, 6, 12, tzinfo=timezone.utc),
             }
         }
-        with patch("app.services.s3_service.boto3.client", return_value=fake_client):
-            from app.services.s3_service import S3Service
+        with patch("app.services.amazon_s3_service.boto3.client", return_value=fake_client):
+            from app.services.amazon_s3_service import S3Service
 
             result = S3Service(_make_s3_config()).copy_object(
                 "src-bucket", "a.txt", "dest-bucket", "b.txt"
@@ -171,8 +171,8 @@ class S3ServiceTests(unittest.TestCase):
     def test_create_folder_writes_marker_object(self) -> None:
         fake_client = MagicMock()
         fake_client.put_object.return_value = {"ETag": '"folder-etag"'}
-        with patch("app.services.s3_service.boto3.client", return_value=fake_client):
-            from app.services.s3_service import S3Service
+        with patch("app.services.amazon_s3_service.boto3.client", return_value=fake_client):
+            from app.services.amazon_s3_service import S3Service
 
             result = S3Service(_make_s3_config()).create_folder("my-bucket", "docs/archive/")
 
@@ -187,8 +187,8 @@ class S3ServiceTests(unittest.TestCase):
     def test_create_folder_normalizes_trailing_slash(self) -> None:
         fake_client = MagicMock()
         fake_client.put_object.return_value = {"ETag": '"folder-etag"'}
-        with patch("app.services.s3_service.boto3.client", return_value=fake_client):
-            from app.services.s3_service import S3Service
+        with patch("app.services.amazon_s3_service.boto3.client", return_value=fake_client):
+            from app.services.amazon_s3_service import S3Service
 
             result = S3Service(_make_s3_config()).create_folder("my-bucket", "docs/archive")
 
@@ -210,8 +210,8 @@ class S3ServiceTests(unittest.TestCase):
                 }
             ],
         }
-        with patch("app.services.s3_service.boto3.client", return_value=fake_client):
-            from app.services.s3_service import S3Service
+        with patch("app.services.amazon_s3_service.boto3.client", return_value=fake_client):
+            from app.services.amazon_s3_service import S3Service
 
             result = S3Service(_make_s3_config()).list_buckets()
 
@@ -223,8 +223,8 @@ class S3ServiceTests(unittest.TestCase):
     def test_list_buckets_handles_empty_response(self) -> None:
         fake_client = MagicMock()
         fake_client.list_buckets.return_value = {}
-        with patch("app.services.s3_service.boto3.client", return_value=fake_client):
-            from app.services.s3_service import S3Service
+        with patch("app.services.amazon_s3_service.boto3.client", return_value=fake_client):
+            from app.services.amazon_s3_service import S3Service
 
             result = S3Service(_make_s3_config()).list_buckets()
 
@@ -234,8 +234,8 @@ class S3ServiceTests(unittest.TestCase):
 
     def test_create_folder_empty_path_raises(self) -> None:
         fake_client = MagicMock()
-        with patch("app.services.s3_service.boto3.client", return_value=fake_client):
-            from app.services.s3_service import S3Service
+        with patch("app.services.amazon_s3_service.boto3.client", return_value=fake_client):
+            from app.services.amazon_s3_service import S3Service
 
             with self.assertRaises(ValueError) as ctx:
                 S3Service(_make_s3_config()).create_folder("my-bucket", "   ")
@@ -249,8 +249,8 @@ class S3ServiceTests(unittest.TestCase):
             "VersionId": "ver-1",
             "DeleteMarker": True,
         }
-        with patch("app.services.s3_service.boto3.client", return_value=fake_client):
-            from app.services.s3_service import S3Service
+        with patch("app.services.amazon_s3_service.boto3.client", return_value=fake_client):
+            from app.services.amazon_s3_service import S3Service
 
             result = S3Service(_make_s3_config()).delete_object("my-bucket", "docs/hello.txt")
 
@@ -278,8 +278,8 @@ class S3ServiceTests(unittest.TestCase):
                 }
             ],
         }
-        with patch("app.services.s3_service.boto3.client", return_value=fake_client):
-            from app.services.s3_service import S3Service
+        with patch("app.services.amazon_s3_service.boto3.client", return_value=fake_client):
+            from app.services.amazon_s3_service import S3Service
 
             result = S3Service(_make_s3_config()).list_objects("my-bucket", "docs/", 25)
 
@@ -298,8 +298,8 @@ class S3ServiceTests(unittest.TestCase):
     def test_list_objects_passes_continuation_token(self) -> None:
         fake_client = MagicMock()
         fake_client.list_objects_v2.return_value = {"Contents": []}
-        with patch("app.services.s3_service.boto3.client", return_value=fake_client):
-            from app.services.s3_service import S3Service
+        with patch("app.services.amazon_s3_service.boto3.client", return_value=fake_client):
+            from app.services.amazon_s3_service import S3Service
 
             S3Service(_make_s3_config()).list_objects(
                 "my-bucket",
@@ -318,8 +318,8 @@ class S3ServiceTests(unittest.TestCase):
     def test_list_objects_ignores_blank_continuation_token(self) -> None:
         fake_client = MagicMock()
         fake_client.list_objects_v2.return_value = {"Contents": []}
-        with patch("app.services.s3_service.boto3.client", return_value=fake_client):
-            from app.services.s3_service import S3Service
+        with patch("app.services.amazon_s3_service.boto3.client", return_value=fake_client):
+            from app.services.amazon_s3_service import S3Service
 
             S3Service(_make_s3_config()).list_objects("my-bucket", "docs/", 100, "   ")
 
@@ -332,8 +332,8 @@ class S3ServiceTests(unittest.TestCase):
     def test_list_objects_clamps_max_keys(self) -> None:
         fake_client = MagicMock()
         fake_client.list_objects_v2.return_value = {"Contents": []}
-        with patch("app.services.s3_service.boto3.client", return_value=fake_client):
-            from app.services.s3_service import S3Service
+        with patch("app.services.amazon_s3_service.boto3.client", return_value=fake_client):
+            from app.services.amazon_s3_service import S3Service
 
             S3Service(_make_s3_config()).list_objects("my-bucket", "", 0)
 
@@ -356,8 +356,8 @@ class S3ServiceTests(unittest.TestCase):
                 "Contents": [{"Key": "docs/b.txt", "Size": 2, "ETag": '"b"'}],
             },
         ]
-        with patch("app.services.s3_service.boto3.client", return_value=fake_client):
-            from app.services.s3_service import S3Service
+        with patch("app.services.amazon_s3_service.boto3.client", return_value=fake_client):
+            from app.services.amazon_s3_service import S3Service
 
             result = S3Service(_make_s3_config()).get_all_folder("my-bucket", "docs")
 
@@ -374,8 +374,8 @@ class S3ServiceTests(unittest.TestCase):
 
     def test_get_all_folder_empty_path_raises(self) -> None:
         fake_client = MagicMock()
-        with patch("app.services.s3_service.boto3.client", return_value=fake_client):
-            from app.services.s3_service import S3Service
+        with patch("app.services.amazon_s3_service.boto3.client", return_value=fake_client):
+            from app.services.amazon_s3_service import S3Service
 
             with self.assertRaises(ValueError) as ctx:
                 S3Service(_make_s3_config()).get_all_folder("my-bucket", "   ")
@@ -397,8 +397,8 @@ class S3ServiceTests(unittest.TestCase):
             },
         ]
         fake_client.delete_objects.return_value = {"Errors": []}
-        with patch("app.services.s3_service.boto3.client", return_value=fake_client):
-            from app.services.s3_service import S3Service
+        with patch("app.services.amazon_s3_service.boto3.client", return_value=fake_client):
+            from app.services.amazon_s3_service import S3Service
 
             result = S3Service(_make_s3_config()).delete_folder("my-bucket", "docs")
 
@@ -421,8 +421,8 @@ class S3ServiceTests(unittest.TestCase):
             ],
         }
         fake_client.delete_objects.return_value = {"Deleted": [], "Errors": []}
-        with patch("app.services.s3_service.boto3.client", return_value=fake_client):
-            from app.services.s3_service import S3Service
+        with patch("app.services.amazon_s3_service.boto3.client", return_value=fake_client):
+            from app.services.amazon_s3_service import S3Service
 
             result = S3Service(_make_s3_config()).delete_folder("my-bucket", "docs/")
 
@@ -440,8 +440,8 @@ class S3ServiceTests(unittest.TestCase):
     def test_delete_folder_empty_prefix_deletes_nothing(self) -> None:
         fake_client = MagicMock()
         fake_client.list_objects_v2.return_value = {"IsTruncated": False, "Contents": []}
-        with patch("app.services.s3_service.boto3.client", return_value=fake_client):
-            from app.services.s3_service import S3Service
+        with patch("app.services.amazon_s3_service.boto3.client", return_value=fake_client):
+            from app.services.amazon_s3_service import S3Service
 
             result = S3Service(_make_s3_config()).delete_folder("my-bucket", "empty/")
 
@@ -457,8 +457,8 @@ class S3ServiceTests(unittest.TestCase):
         fake_client.delete_objects.return_value = {
             "Errors": [{"Key": "docs/a.txt", "Code": "AccessDenied"}],
         }
-        with patch("app.services.s3_service.boto3.client", return_value=fake_client):
-            from app.services.s3_service import S3Service
+        with patch("app.services.amazon_s3_service.boto3.client", return_value=fake_client):
+            from app.services.amazon_s3_service import S3Service
 
             with self.assertRaises(ValueError) as ctx:
                 S3Service(_make_s3_config()).delete_folder("my-bucket", "docs")
@@ -713,7 +713,7 @@ class S3ExecutorBranchTests(unittest.TestCase):
                 "s3ContentType": "text/plain",
             },
             service_patch=(
-                "app.services.s3_service.S3Service.put_object",
+                "app.services.amazon_s3_service.S3Service.put_object",
                 {"success": True, "bucket": "my-bucket", "key": "docs/hello.txt"},
             ),
         )
@@ -731,7 +731,7 @@ class S3ExecutorBranchTests(unittest.TestCase):
                 "s3Body": "",
             },
             service_patch=(
-                "app.services.s3_service.S3Service.put_object",
+                "app.services.amazon_s3_service.S3Service.put_object",
                 {"success": True, "bucket": "my-bucket", "key": "docs/empty.txt"},
             ),
         )
@@ -750,7 +750,7 @@ class S3ExecutorBranchTests(unittest.TestCase):
                 "s3ContentType": "   ",
             },
             service_patch=(
-                "app.services.s3_service.S3Service.put_object",
+                "app.services.amazon_s3_service.S3Service.put_object",
                 {"success": True, "bucket": "my-bucket", "key": "docs/hello.txt"},
             ),
         )
@@ -768,7 +768,7 @@ class S3ExecutorBranchTests(unittest.TestCase):
                 "s3Body": "hello",
             },
             service_patch=(
-                "app.services.s3_service.S3Service.put_object",
+                "app.services.amazon_s3_service.S3Service.put_object",
                 {
                     "success": True,
                     "bucket": "my-bucket",
@@ -793,7 +793,7 @@ class S3ExecutorBranchTests(unittest.TestCase):
                 "s3Key": "docs/hello.txt",
             },
             service_patch=(
-                "app.services.s3_service.S3Service.get_object",
+                "app.services.amazon_s3_service.S3Service.get_object",
                 {"body_text": "hello"},
             ),
         )
@@ -811,7 +811,7 @@ class S3ExecutorBranchTests(unittest.TestCase):
                 "s3IncludeBinary": True,
             },
             service_patch=(
-                "app.services.s3_service.S3Service.get_object",
+                "app.services.amazon_s3_service.S3Service.get_object",
                 {"body_base64": "AAEC"},
             ),
         )
@@ -828,7 +828,7 @@ class S3ExecutorBranchTests(unittest.TestCase):
                 "s3Key": "docs/hello.txt",
             },
             service_patch=(
-                "app.services.s3_service.S3Service.delete_object",
+                "app.services.amazon_s3_service.S3Service.delete_object",
                 {"success": True, "bucket": "my-bucket", "key": "docs/hello.txt"},
             ),
         )
@@ -846,7 +846,7 @@ class S3ExecutorBranchTests(unittest.TestCase):
                 "s3MaxKeys": "25",
             },
             service_patch=(
-                "app.services.s3_service.S3Service.list_objects",
+                "app.services.amazon_s3_service.S3Service.list_objects",
                 {"bucket": "my-bucket", "objects": [], "count": 0},
             ),
         )
@@ -863,7 +863,7 @@ class S3ExecutorBranchTests(unittest.TestCase):
                 "s3Prefix": "",
             },
             service_patch=(
-                "app.services.s3_service.S3Service.list_objects",
+                "app.services.amazon_s3_service.S3Service.list_objects",
                 {"bucket": "my-bucket", "objects": [], "count": 0},
             ),
         )
@@ -880,7 +880,7 @@ class S3ExecutorBranchTests(unittest.TestCase):
                 "s3MaxKeys": "not-a-number",
             },
             service_patch=(
-                "app.services.s3_service.S3Service.list_objects",
+                "app.services.amazon_s3_service.S3Service.list_objects",
                 {"bucket": "my-bucket", "objects": [], "count": 0},
             ),
         )
@@ -897,7 +897,7 @@ class S3ExecutorBranchTests(unittest.TestCase):
                 "s3MaxKeys": "5000",
             },
             service_patch=(
-                "app.services.s3_service.S3Service.list_objects",
+                "app.services.amazon_s3_service.S3Service.list_objects",
                 {"bucket": "my-bucket", "objects": [], "count": 0},
             ),
         )
@@ -914,7 +914,7 @@ class S3ExecutorBranchTests(unittest.TestCase):
                 "s3MaxKeys": "0",
             },
             service_patch=(
-                "app.services.s3_service.S3Service.list_objects",
+                "app.services.amazon_s3_service.S3Service.list_objects",
                 {"bucket": "my-bucket", "objects": [], "count": 0},
             ),
         )
@@ -931,7 +931,7 @@ class S3ExecutorBranchTests(unittest.TestCase):
                 "s3MaxKeys": "25.5",
             },
             service_patch=(
-                "app.services.s3_service.S3Service.list_objects",
+                "app.services.amazon_s3_service.S3Service.list_objects",
                 {"bucket": "my-bucket", "objects": [], "count": 0},
             ),
         )
@@ -949,7 +949,7 @@ class S3ExecutorBranchTests(unittest.TestCase):
                 "s3ContinuationToken": "page-2-token",
             },
             service_patch=(
-                "app.services.s3_service.S3Service.list_objects",
+                "app.services.amazon_s3_service.S3Service.list_objects",
                 {
                     "bucket": "my-bucket",
                     "objects": [],
@@ -970,7 +970,7 @@ class S3ExecutorBranchTests(unittest.TestCase):
                 "s3Bucket": "my-bucket",
             },
             service_patch=(
-                "app.services.s3_service.S3Service.list_objects",
+                "app.services.amazon_s3_service.S3Service.list_objects",
                 {
                     "bucket": "my-bucket",
                     "objects": [{"key": "a.txt"}],
@@ -994,7 +994,7 @@ class S3ExecutorBranchTests(unittest.TestCase):
                 "s3Bucket": "new-bucket",
             },
             service_patch=(
-                "app.services.s3_service.S3Service.create_bucket",
+                "app.services.amazon_s3_service.S3Service.create_bucket",
                 {"success": True, "bucket": "new-bucket", "region": "us-east-1"},
             ),
         )
@@ -1013,7 +1013,7 @@ class S3ExecutorBranchTests(unittest.TestCase):
             },
             decrypt_return=config,
             service_patch=(
-                "app.services.s3_service.S3Service.create_bucket",
+                "app.services.amazon_s3_service.S3Service.create_bucket",
                 {"success": True, "bucket": "new-bucket", "region": "eu-west-1"},
             ),
         )
@@ -1029,7 +1029,7 @@ class S3ExecutorBranchTests(unittest.TestCase):
                 "s3Bucket": "old-bucket",
             },
             service_patch=(
-                "app.services.s3_service.S3Service.delete_bucket",
+                "app.services.amazon_s3_service.S3Service.delete_bucket",
                 {"success": True, "bucket": "old-bucket"},
             ),
         )
@@ -1048,7 +1048,7 @@ class S3ExecutorBranchTests(unittest.TestCase):
                 "s3Key": "b.txt",
             },
             service_patch=(
-                "app.services.s3_service.S3Service.copy_object",
+                "app.services.amazon_s3_service.S3Service.copy_object",
                 {"success": True, "bucket": "dest-bucket", "key": "b.txt"},
             ),
         )
@@ -1066,7 +1066,7 @@ class S3ExecutorBranchTests(unittest.TestCase):
                 "s3Key": "b.txt",
             },
             service_patch=(
-                "app.services.s3_service.S3Service.copy_object",
+                "app.services.amazon_s3_service.S3Service.copy_object",
                 {"success": True},
             ),
         )
@@ -1085,7 +1085,7 @@ class S3ExecutorBranchTests(unittest.TestCase):
                 "s3Key": "b.txt",
             },
             service_patch=(
-                "app.services.s3_service.S3Service.copy_object",
+                "app.services.amazon_s3_service.S3Service.copy_object",
                 {"success": True},
             ),
         )
@@ -1102,7 +1102,7 @@ class S3ExecutorBranchTests(unittest.TestCase):
                 "s3Key": "docs/archive",
             },
             service_patch=(
-                "app.services.s3_service.S3Service.create_folder",
+                "app.services.amazon_s3_service.S3Service.create_folder",
                 {
                     "success": True,
                     "bucket": "my-bucket",
@@ -1209,7 +1209,7 @@ class S3ExecutorBranchTests(unittest.TestCase):
                 "s3Operation": "listBuckets",
             },
             service_patch=(
-                "app.services.s3_service.S3Service.list_buckets",
+                "app.services.amazon_s3_service.S3Service.list_buckets",
                 {"count": 1, "buckets": [{"name": "bucket-a"}]},
             ),
         )
@@ -1228,7 +1228,7 @@ class S3ExecutorBranchTests(unittest.TestCase):
                 "s3Operation": "listBuckets",
             },
             service_patch=(
-                "app.services.s3_service.S3Service.list_buckets",
+                "app.services.amazon_s3_service.S3Service.list_buckets",
                 buckets_output,
             ),
         )
@@ -1248,7 +1248,7 @@ class S3ExecutorBranchTests(unittest.TestCase):
                 "s3Key": "docs/archive",
             },
             service_patch=(
-                "app.services.s3_service.S3Service.delete_folder",
+                "app.services.amazon_s3_service.S3Service.delete_folder",
                 {
                     "success": True,
                     "bucket": "my-bucket",
@@ -1270,7 +1270,7 @@ class S3ExecutorBranchTests(unittest.TestCase):
                 "s3Key": "docs/archive",
             },
             service_patch=(
-                "app.services.s3_service.S3Service.get_all_folder",
+                "app.services.amazon_s3_service.S3Service.get_all_folder",
                 {
                     "bucket": "my-bucket",
                     "folder": "docs/archive/",
@@ -1337,7 +1337,7 @@ class S3ExecutorBranchTests(unittest.TestCase):
                 "s3Key": "docs/hello.txt",
             },
             service_patch=(
-                "app.services.s3_service.S3Service.get_object",
+                "app.services.amazon_s3_service.S3Service.get_object",
                 {
                     "body_text": "hello",
                     "content_type": "text/plain",
@@ -1360,7 +1360,7 @@ class S3ExecutorBranchTests(unittest.TestCase):
                 "s3ContinuationToken": "   ",
             },
             service_patch=(
-                "app.services.s3_service.S3Service.list_objects",
+                "app.services.amazon_s3_service.S3Service.list_objects",
                 {"bucket": "my-bucket", "objects": [], "count": 0},
             ),
         )
@@ -1377,7 +1377,7 @@ class S3ExecutorBranchTests(unittest.TestCase):
                 "s3Key": "docs/archive",
             },
             service_patch=(
-                "app.services.s3_service.S3Service.delete_folder",
+                "app.services.amazon_s3_service.S3Service.delete_folder",
                 {
                     "success": True,
                     "bucket": "my-bucket",

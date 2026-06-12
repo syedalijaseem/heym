@@ -8508,7 +8508,7 @@ class WorkflowExecutor:
             elif node_type == "s3":
                 from app.db.session import SessionLocal
                 from app.services.encryption import decrypt_config
-                from app.services.s3_service import S3Service, normalize_s3_list_max_keys
+                from app.services.amazon_s3_service import S3Service, normalize_s3_list_max_keys
 
                 credential_id = node_data.get("credentialId")
                 if not credential_id:
@@ -8626,9 +8626,12 @@ class WorkflowExecutor:
                         max_keys_raw = self.evaluate_nonempty_message_template(
                             max_keys_template, inputs, node_id
                         ).strip()
-                        continuation_token = self.evaluate_nonempty_message_template(
-                            str(node_data.get("s3ContinuationToken", "") or ""), inputs, node_id
-                        ).strip() or None
+                        continuation_token = (
+                            self.evaluate_nonempty_message_template(
+                                str(node_data.get("s3ContinuationToken", "") or ""), inputs, node_id
+                            ).strip()
+                            or None
+                        )
                         try:
                             max_keys = normalize_s3_list_max_keys(int(float(max_keys_raw or "100")))
                         except (TypeError, ValueError):
