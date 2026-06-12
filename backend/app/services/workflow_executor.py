@@ -8507,8 +8507,8 @@ class WorkflowExecutor:
 
             elif node_type == "s3":
                 from app.db.session import SessionLocal
-                from app.services.encryption import decrypt_config
                 from app.services.amazon_s3_service import S3Service, normalize_s3_list_max_keys
+                from app.services.encryption import decrypt_config
 
                 credential_id = node_data.get("credentialId")
                 if not credential_id:
