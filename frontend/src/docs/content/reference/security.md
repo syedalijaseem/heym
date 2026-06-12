@@ -62,9 +62,30 @@ Tokens are signed with the same application secret (`SECRET_KEY`) and checked on
 
 Use [Guardrails](./guardrails.md) on LLM and Agent nodes to block unsafe or policy-violating user messages before they reach the model. Guardrails support nine content categories (violence, hate speech, sexual content, etc.) with configurable sensitivity levels.
 
+## Python Tool Sandbox
+
+User-defined Python tools on the [Agent node](../nodes/agent-node.md) execute untrusted code. By default Heym runs each tool inside a hardened, throwaway Docker container with:
+
+- no network access,
+- a read-only root filesystem with a small `tmpfs` working directory,
+- a non-root user with all Linux capabilities dropped and `no-new-privileges`,
+- strict CPU, memory, and PID limits, and
+- **no Docker socket** mounted, so a tool cannot reach the host Docker daemon.
+
+The execution backend is controlled by the `HEYM_PYTHON_TOOL_SANDBOX` environment variable:
+
+| Value | Behavior |
+|-------|----------|
+| `auto` (default) | Run in the hardened Docker container. If Docker is unavailable, execution **fails closed** — it does not silently run untrusted code without OS isolation. |
+| `docker` | Same as `auto`, but never falls back. |
+| `subprocess` | Run in a local in-process subprocess guarded by an import allowlist. This is **not a security boundary** and is intended only for trusted code or local development. `run.sh` selects it for native dev. |
+
+Set `HEYM_PYTHON_TOOL_IMAGE` to pin the sandbox image; when empty, Heym auto-detects the running backend image. The in-process restrictions (an import allowlist plus attribute and introspection filtering) are applied as defense in depth, but the container is the real isolation boundary — keep the default `auto` (or `docker`) mode for multi-user and production deployments.
+
 ## Related
 
-- [Running & Deployment](../getting-started/running-and-deployment.md) – Configure `SECRET_KEY`, `ENCRYPTION_KEY`, and `ALLOW_REGISTER` at startup
+- [Running & Deployment](../getting-started/running-and-deployment.md) – Configure `SECRET_KEY`, `ENCRYPTION_KEY`, `ALLOW_REGISTER`, and `HEYM_PYTHON_TOOL_SANDBOX` at startup
+- [Agent Node](../nodes/agent-node.md) – Custom Python tools that run in the sandbox
 - [Execution Tokens](./execution-tokens.md) – Scoped JWTs for calling workflows from external systems
 - [Guardrails](./guardrails.md) – Block unsafe content in LLM and Agent nodes
 - [Settings](./user-settings.md) – Change your password

@@ -38,6 +38,8 @@ Key environment variables:
 | `DOCKER_LOGS_ENABLED` | Enables Docker-backed Logs tab access when set to `true`; also requires Docker socket access |
 | `DOCKER_LOGS_ALLOWED_EMAILS` | Comma-separated list of trusted user emails allowed to access Docker logs when `DOCKER_LOGS_ENABLED=true` |
 | `REQUEST_BODY_MAX_SIZE_MB` | Maximum HTTP request body size accepted before endpoint handlers run; defaults to `100`, one MB above `FILE_MAX_SIZE_MB` to leave room for multipart overhead |
+| `HEYM_PYTHON_TOOL_SANDBOX` | How user-defined Python tools run: `auto` (default — hardened, isolated Docker container; fail closed if Docker is unavailable), `docker` (same, never falls back), or `subprocess` (in-process local fallback; not a security boundary, trusted/dev only). `run.sh` sets `subprocess` for native dev. See [Security](../reference/security.md#python-tool-sandbox). |
+| `HEYM_PYTHON_TOOL_IMAGE` | Image used for the Python tool Docker sandbox. Empty = auto-detect the running backend image. |
 
 Database connection defaults (`POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`) are documented in `.env.example`.
 
@@ -150,7 +152,7 @@ docker run --rm \
   ghcr.io/heymrun/heym:latest
 ```
 
-> **Docker socket access.** Mounting `/var/run/docker.sock` gives the backend broad control over the host Docker daemon. The default Docker Compose service and the direct `docker run` example include it for Docker-based MCP stdio tools that run `docker` commands. The Logs tab still requires `DOCKER_LOGS_ENABLED=true` and `DOCKER_LOGS_ALLOWED_EMAILS` with a comma-separated list of trusted user emails. Create the trusted admin account before enabling Docker logs, or keep `ALLOW_REGISTER=false`, so an unverified self-registration cannot claim an allow-listed email.
+> **Docker socket access.** Mounting `/var/run/docker.sock` gives the backend broad control over the host Docker daemon. The default Docker Compose service and the direct `docker run` example include it for Docker-based MCP stdio tools that run `docker` commands. The Logs tab still requires `DOCKER_LOGS_ENABLED=true` and `DOCKER_LOGS_ALLOWED_EMAILS` with a comma-separated list of trusted user emails. Create the trusted admin account before enabling Docker logs, or keep `ALLOW_REGISTER=false`, so an unverified self-registration cannot claim an allow-listed email. User-defined Python tools do **not** get this socket: they run in a separate hardened container with no Docker socket. See [Security](../reference/security.md#python-tool-sandbox).
 
 **Minimum environment variables for direct image runs:**
 
@@ -169,6 +171,8 @@ docker run --rm \
 | `ALLOW_REGISTER` | Recommended | Set `false` in production unless open signup is intended |
 | `DOCKER_LOGS_ENABLED` | Optional | Set `true` to allow the Logs tab to use Docker socket access |
 | `DOCKER_LOGS_ALLOWED_EMAILS` | Required when `DOCKER_LOGS_ENABLED=true` | Comma-separated list of trusted user emails allowed to access Docker logs |
+| `HEYM_PYTHON_TOOL_SANDBOX` | Optional | Python tool isolation mode; defaults to `auto` (hardened Docker sandbox, fail closed). See [Security](../reference/security.md#python-tool-sandbox) |
+| `HEYM_PYTHON_TOOL_IMAGE` | Optional | Override the Python tool sandbox image; empty = auto-detect the backend image |
 
 **Notes:**
 

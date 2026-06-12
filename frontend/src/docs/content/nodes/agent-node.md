@@ -167,6 +167,8 @@ def count_characters(text: str) -> int:
     return len(text)
 ```
 
+> **Sandbox.** Python tools run as untrusted code in a hardened, isolated Docker container by default (no network, no Docker socket, read-only filesystem, non-root). Imports are limited to an allowlist of safe standard-library modules. See [Security → Python Tool Sandbox](../reference/security.md#python-tool-sandbox) for configuration (`HEYM_PYTHON_TOOL_SANDBOX`).
+
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `toolTimeoutSeconds` | number | Max seconds per tool execution (default: 30) |
