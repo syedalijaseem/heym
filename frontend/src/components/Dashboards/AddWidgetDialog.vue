@@ -31,12 +31,14 @@ const chartType = ref<ChartPayload["type"]>("bar");
 const chartTypeOptions = [
   { value: "bar", label: "Bar" },
   { value: "line", label: "Line" },
+  { value: "area", label: "Area" },
   { value: "pie", label: "Pie" },
   { value: "table", label: "Table" },
   { value: "numeric", label: "Numeric" },
   { value: "gauge", label: "Gauge" },
   { value: "scatter", label: "Scatter" },
   { value: "proportion", label: "Proportion" },
+  { value: "barGauge", label: "Bar gauge" },
 ];
 
 function submit(): void {

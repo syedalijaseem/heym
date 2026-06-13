@@ -33,9 +33,10 @@ router = APIRouter()
 
 _AI_WIDGET_SUFFIX = (
     " The workflow MUST end with a single chartOutput node that produces the chart. "
-    "Choose an appropriate chartType (pie, bar, line, table, numeric, gauge, scatter, or "
-    "proportion) and set "
-    "labelField/valueField (or series, or xField/yField for scatter, or min/max for gauge) on the "
+    "Choose an appropriate chartType (pie, bar, line, area, table, numeric, gauge, scatter, "
+    "proportion, or barGauge) and set "
+    "labelField/valueField (or series for multi-series line/area, or xField/yField for scatter, "
+    "or min/max for gauge) on the "
     "chartOutput node so it renders the requested metric. When the user only describes example or "
     "sample data, produce the upstream rows with a set node using "
     "$array(dict(key=value, ...), ...) — never use ${...} or bare {...} object literals."

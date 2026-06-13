@@ -3026,7 +3026,7 @@ Access the converted file downstream: `$convertDoc.id`, `$convertDoc.download_ur
   `[{"month": "Jan", "revenue": 120}, ...]`).
 - **Data fields**:
   - `label`: Node identifier (camelCase)
-  - `chartType`: `"pie"` | `"bar"` | `"line"` | `"table"` | `"numeric"` | `"gauge"` | `"scatter"` | `"proportion"` (required)
+  - `chartType`: `"pie"` | `"bar"` | `"line"` | `"area"` | `"table"` | `"numeric"` | `"gauge"` | `"scatter"` | `"proportion"` | `"barGauge"` (required)
   - `orientation`: `"horizontal"` | `"vertical"` (bar only, default `"vertical"`)
   - `dataPath`: optional dot path to the rows array inside the upstream output (e.g. `"data"` or `"result.items"`)
   - `labelField`: row key used as the category label (pie/bar/line)
@@ -3077,6 +3077,11 @@ Line, multi-series (upstream rows `[{day, sent, failed}]`):
 {"type": "chartOutput", "data": {"label": "deliveryChart", "chartType": "line", "dataPath": "rows", "labelField": "day", "series": [{"name": "Sent", "field": "sent"}, {"name": "Failed", "field": "failed"}]}}
 ```
 
+Area, multi-series (filled trend; upstream rows `[{time, memory, cpu}]`):
+```json
+{"type": "chartOutput", "data": {"label": "memCpu", "chartType": "area", "dataPath": "rows", "labelField": "time", "series": [{"name": "Memory", "field": "memory"}, {"name": "CPU", "field": "cpu"}], "title": "Memory / CPU"}}
+```
+
 Pie (upstream rows `[{status, count}]`; build with `$array(dict(status="success", count=150), ...)`):
 ```json
 {"type": "chartOutput", "data": {"label": "statusChart", "chartType": "pie", "dataPath": "rows", "labelField": "status", "valueField": "count"}}
@@ -3105,6 +3110,11 @@ Scatter (X/Y points; upstream rows `[{x, y}]`; e.g. `$array(dict(x=5, y=12), dic
 Proportion (one stacked bar split by share + a legend with percentages, e.g. a language breakdown; upstream rows `[{name, value}]`; e.g. `$array(dict(name="Kotlin", value=49.64), dict(name="JavaScript", value=23.73))`):
 ```json
 {"type": "chartOutput", "data": {"label": "languages", "chartType": "proportion", "dataPath": "rows", "labelField": "name", "valueField": "value", "title": "Most Used Languages"}}
+```
+
+Bar gauge (one horizontal gauge per row with a red→green gradient and a value, e.g. free disk space; upstream rows `[{name, value}]`; e.g. `$array(dict(name="sda1", value=73.1), dict(name="sda2", value=71.8))`; optional `max`, defaults to the largest value):
+```json
+{"type": "chartOutput", "data": {"label": "freeDisk", "chartType": "barGauge", "dataPath": "rows", "labelField": "name", "valueField": "value", "unit": "GB", "title": "Free disk space"}}
 ```
 
 ## Expression Syntax

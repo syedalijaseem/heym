@@ -46,6 +46,54 @@ const proportionSegments = computed((): ProportionSegment[] => {
   }));
 });
 
+// Interpolate the red -> amber -> green scale used by the bar-gauge rows.
+function gradientColorAt(t: number): string {
+  const stops = [
+    [239, 68, 68],
+    [245, 158, 11],
+    [34, 197, 94],
+  ];
+  const clamped = Math.max(0, Math.min(1, t));
+  const seg = clamped < 0.5 ? 0 : 1;
+  const local = clamped < 0.5 ? clamped / 0.5 : (clamped - 0.5) / 0.5;
+  const c0 = stops[seg];
+  const c1 = stops[seg + 1];
+  const r = Math.round(c0[0] + (c1[0] - c0[0]) * local);
+  const g = Math.round(c0[1] + (c1[1] - c0[1]) * local);
+  const b = Math.round(c0[2] + (c1[2] - c0[2]) * local);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+interface BarGaugeRow {
+  label: string;
+  value: number;
+  pct: number;
+  valueColor: string;
+  gradientSize: string;
+}
+
+const barGaugeRows = computed((): BarGaugeRow[] => {
+  const p = props.payload;
+  if (!p || p.type !== "barGauge") return [];
+  const data = (p.series?.[0]?.data ?? []) as number[];
+  const labels = p.labels ?? [];
+  const values = data.map((v) => (typeof v === "number" ? v : 0));
+  const max =
+    typeof p.max === "number" && p.max > 0 ? p.max : Math.max(1, ...values);
+  return values.map((value, i) => {
+    const pct = Math.max(0, Math.min(100, (value / max) * 100));
+    return {
+      label: String(labels[i] ?? `Row ${i + 1}`),
+      value,
+      pct,
+      valueColor: gradientColorAt(pct / 100),
+      // Scale the gradient so the full red->green spans the whole track; the fill
+      // width then reveals only the first `pct` of it (short bar = red, long = green).
+      gradientSize: pct > 0 ? `${(100 / pct) * 100}% 100%` : "100% 100%",
+    };
+  });
+});
+
 // ApexCharts pie/radialBar derive their radius from the resolved pixel height.
 // height="100%" can resolve to 0 on first mount inside a flex card, leaving the
 // chart invisible (the original pie-not-rendering bug). Track the real height and
@@ -87,10 +135,11 @@ const numericValue = computed((): string => {
   return String(raw);
 });
 
-const apexType = computed((): "pie" | "bar" | "line" | "scatter" | "radialBar" => {
+const apexType = computed((): "pie" | "bar" | "line" | "area" | "scatter" | "radialBar" => {
   const t = props.payload?.type;
   if (t === "pie") return "pie";
   if (t === "line") return "line";
+  if (t === "area") return "area";
   if (t === "scatter") return "scatter";
   if (t === "gauge") return "radialBar";
   return "bar";
@@ -180,8 +229,20 @@ const apexOptions = computed((): Record<string, unknown> => {
     return { ...base, xaxis: { type: "numeric" } };
   }
 
+  if (p.type === "area") {
+    return {
+      ...base,
+      colors: PROPORTION_COLORS,
+      xaxis: { categories: p.labels ?? [] },
+      stroke: { curve: "smooth", width: 2 },
+      fill: { type: "gradient", gradient: { opacityFrom: 0.45, opacityTo: 0.05 } },
+      legend: { position: "bottom", labels: { colors: themeStore.isDark ? "#e2e8f0" : "#0f172a" } },
+    };
+  }
+
   return {
     ...base,
+    colors: PROPORTION_COLORS,
     xaxis: { categories: p.labels ?? [] },
     plotOptions: { bar: { horizontal: p.type === "bar" && p.orientation === "horizontal" } },
   };
@@ -274,6 +335,39 @@ const apexOptions = computed((): Record<string, unknown> => {
           />
           <span class="truncate">{{ seg.label }} {{ seg.pct.toFixed(2) }}%</span>
         </div>
+      </div>
+    </div>
+
+    <div
+      v-else-if="payload && payload.type === 'barGauge'"
+      class="flex h-full flex-col justify-center gap-2 overflow-auto px-1 py-1"
+    >
+      <div
+        v-for="(row, i) in barGaugeRows"
+        :key="i"
+        class="flex items-center gap-2 text-sm"
+      >
+        <span class="w-14 shrink-0 truncate text-muted-foreground">{{ row.label }}</span>
+        <div class="relative h-4 flex-1 overflow-hidden rounded bg-muted">
+          <div
+            class="h-full rounded"
+            :style="{
+              width: row.pct + '%',
+              backgroundImage: 'linear-gradient(to right, #ef4444, #f59e0b, #22c55e)',
+              backgroundSize: row.gradientSize,
+              backgroundRepeat: 'no-repeat',
+            }"
+          />
+        </div>
+        <span
+          class="w-20 shrink-0 text-right font-semibold tabular-nums"
+          :style="{ color: row.valueColor }"
+        >
+          {{ row.value }}<span
+            v-if="payload.unit"
+            class="ml-1 text-xs font-normal text-muted-foreground"
+          >{{ payload.unit }}</span>
+        </span>
       </div>
     </div>
 

@@ -8207,12 +8207,14 @@ onUnmounted(() => {
                 :options="[
                   { value: 'bar', label: 'Bar' },
                   { value: 'line', label: 'Line' },
+                  { value: 'area', label: 'Area' },
                   { value: 'pie', label: 'Pie' },
                   { value: 'table', label: 'Table' },
                   { value: 'numeric', label: 'Numeric' },
                   { value: 'gauge', label: 'Gauge' },
                   { value: 'scatter', label: 'Scatter' },
                   { value: 'proportion', label: 'Proportion' },
+                  { value: 'barGauge', label: 'Bar gauge' },
                 ]"
                 @update:model-value="updateNodeData('chartType', $event)"
               />
@@ -8246,10 +8248,10 @@ onUnmounted(() => {
             </div>
 
             <template
-              v-if="['bar', 'line', 'pie', 'numeric', 'gauge', 'proportion'].includes(selectedNode.data.chartType || 'bar')"
+              v-if="['bar', 'line', 'area', 'pie', 'numeric', 'gauge', 'proportion', 'barGauge'].includes(selectedNode.data.chartType || 'bar')"
             >
               <div
-                v-if="['bar', 'line', 'pie', 'proportion'].includes(selectedNode.data.chartType || 'bar')"
+                v-if="['bar', 'line', 'area', 'pie', 'proportion', 'barGauge'].includes(selectedNode.data.chartType || 'bar')"
                 class="space-y-2"
               >
                 <Label>Label field</Label>
@@ -8312,7 +8314,20 @@ onUnmounted(() => {
             </div>
 
             <div
-              v-if="['numeric', 'gauge'].includes(selectedNode.data.chartType || 'bar')"
+              v-if="selectedNode.data.chartType === 'barGauge'"
+              class="space-y-2"
+            >
+              <Label>Max (optional)</Label>
+              <Input
+                type="number"
+                :model-value="selectedNode.data.max ?? ''"
+                placeholder="defaults to the largest row value"
+                @update:model-value="updateNodeData('max', $event)"
+              />
+            </div>
+
+            <div
+              v-if="['numeric', 'gauge', 'barGauge'].includes(selectedNode.data.chartType || 'bar')"
               class="space-y-2"
             >
               <Label>Unit</Label>

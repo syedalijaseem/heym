@@ -144,4 +144,10 @@ def build_chart_payload(config: dict, data: Any) -> dict:
     if chart_type == "bar":
         payload["orientation"] = config.get("orientation", "vertical")
 
+    if chart_type == "barGauge":
+        if config.get("unit"):
+            payload["unit"] = config["unit"]
+        if config.get("max") is not None:
+            payload["max"] = _coerce_number(config["max"])
+
     return payload

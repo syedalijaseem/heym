@@ -127,6 +127,45 @@ class TestBuildChartPayload(unittest.TestCase):
         payload = build_chart_payload(config, data)
         self.assertEqual(payload["series"], [{"name": "b", "data": [[1, 2], [3, 4]]}])
 
+    def test_area_multi_series(self):
+        config = {
+            "chartType": "area",
+            "labelField": "time",
+            "series": [
+                {"name": "Memory", "field": "memory"},
+                {"name": "CPU", "field": "cpu"},
+            ],
+        }
+        data = {"data": [{"time": "16:00", "memory": 20, "cpu": 30}]}
+        payload = build_chart_payload(config, data)
+        self.assertEqual(payload["type"], "area")
+        self.assertEqual(payload["labels"], ["16:00"])
+        self.assertEqual(
+            payload["series"],
+            [{"name": "Memory", "data": [20]}, {"name": "CPU", "data": [30]}],
+        )
+
+    def test_bar_gauge_with_unit_and_default_max(self):
+        config = {
+            "chartType": "barGauge",
+            "labelField": "name",
+            "valueField": "value",
+            "unit": "GB",
+        }
+        data = {"data": [{"name": "sda1", "value": 73.1}, {"name": "sda2", "value": 71.8}]}
+        payload = build_chart_payload(config, data)
+        self.assertEqual(payload["type"], "barGauge")
+        self.assertEqual(payload["labels"], ["sda1", "sda2"])
+        self.assertEqual(payload["series"], [{"name": "value", "data": [73.1, 71.8]}])
+        self.assertEqual(payload["unit"], "GB")
+        self.assertNotIn("max", payload)
+
+    def test_bar_gauge_explicit_max(self):
+        config = {"chartType": "barGauge", "labelField": "name", "valueField": "value", "max": 100}
+        data = [{"name": "a", "value": 40}]
+        payload = build_chart_payload(config, data)
+        self.assertEqual(payload["max"], 100)
+
     def test_proportion_uses_labels_and_single_series(self):
         config = {"chartType": "proportion", "labelField": "name", "valueField": "value"}
         data = {

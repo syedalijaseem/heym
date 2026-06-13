@@ -8,12 +8,14 @@ A widget is a single chart on the grid. Supported chart types:
 
 - **Bar** (vertical or horizontal)
 - **Line**
+- **Area** (filled trend, supports multiple series)
 - **Pie**
 - **Table** (scrollable)
 - **Numeric** (a single KPI value with an optional unit)
 - **Gauge** (a single value against a min–max range, e.g. a percentage)
 - **Scatter** (X/Y points for correlation plots)
 - **Proportion** (one bar split into shares with a percentage legend, e.g. a language breakdown)
+- **Bar gauge** (one horizontal gauge per row with a red→green gradient and a value, e.g. free disk space)
 
 Each widget loads its data asynchronously when you open the tab, so the page stays responsive while charts populate.
 

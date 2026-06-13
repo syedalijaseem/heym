@@ -26,7 +26,7 @@ When you only have example/sample data (no real source), produce these rows with
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `label` | string | Node identifier (camelCase) |
-| `chartType` | string | `pie`, `bar`, `line`, `table`, `numeric`, `gauge`, `scatter`, or `proportion` |
+| `chartType` | string | `pie`, `bar`, `line`, `area`, `table`, `numeric`, `gauge`, `scatter`, `proportion`, or `barGauge` |
 | `orientation` | string | `vertical` or `horizontal` (bar charts only) |
 | `dataPath` | string | Dot path to the rows array inside the upstream output (e.g. `data` or `result.items`). Leave empty to auto-detect. |
 | `labelField` | string | Row key used as the category label (pie/bar/line) |
@@ -40,12 +40,13 @@ When you only have example/sample data (no real source), produce these rows with
 
 ## Chart types
 
-- **bar / line / pie** — categorical charts driven by `labelField` + `valueField` (or `series` for multi-series bar/line).
+- **bar / line / area / pie** — categorical charts driven by `labelField` + `valueField` (or `series` for multi-series bar/line/area). `area` is a filled trend chart.
 - **table** — raw rows rendered as a scrollable table using `columns`.
 - **numeric** — a single KPI value from the first row, with an optional `unit`.
 - **gauge** — a single value shown against a `min`–`max` range (e.g. a percentage). Uses `valueField`.
 - **scatter** — X/Y points from `xField` and `yField` for correlation plots.
 - **proportion** — a single horizontal bar split into shares with a percentage legend (e.g. a language breakdown). Uses `labelField` + `valueField`.
+- **barGauge** — one horizontal gauge per row with a red→green gradient and a value (e.g. free disk space). Uses `labelField` + `valueField`, optional `unit` and `max` (defaults to the largest row value).
 
 ## How data is resolved
 
@@ -120,6 +121,42 @@ Proportion (one bar split by share + percentage legend):
 }
 ```
 
+Area (filled multi-series trend):
+
+```json
+{
+  "type": "chartOutput",
+  "data": {
+    "label": "memCpu",
+    "chartType": "area",
+    "dataPath": "rows",
+    "labelField": "time",
+    "series": [
+      { "name": "Memory", "field": "memory" },
+      { "name": "CPU", "field": "cpu" }
+    ],
+    "title": "Memory / CPU"
+  }
+}
+```
+
+Bar gauge (per-row gradient gauge with values):
+
+```json
+{
+  "type": "chartOutput",
+  "data": {
+    "label": "freeDisk",
+    "chartType": "barGauge",
+    "dataPath": "rows",
+    "labelField": "name",
+    "valueField": "value",
+    "unit": "GB",
+    "title": "Free disk space"
+  }
+}
+```
+
 ## Example AI prompts
 
 When generating a widget with **AI**, prompts like these map cleanly to each type:
@@ -130,6 +167,8 @@ When generating a widget with **AI**, prompts like these map cleanly to each typ
 - **Gauge** — "Show current CPU usage as a gauge from 0 to 100 percent."
 - **Scatter** — "Plot request latency versus payload size as a scatter chart with example data."
 - **Proportion** — "Show my most used languages as a proportion bar: Kotlin 49.64%, JavaScript 23.73%, TypeScript 11.64%, Java 8.92%, Python 6.06%. Use example data."
+- **Area** — "Show memory and CPU usage over the last 24 hours as an area chart with two series. Use example data."
+- **Bar gauge** — "Show free disk space per volume (sda1 to sda7) as a bar gauge in GB. Use example data."
 
 ## Related
 

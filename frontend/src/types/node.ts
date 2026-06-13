@@ -740,11 +740,13 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
         | "pie"
         | "bar"
         | "line"
+        | "area"
         | "table"
         | "numeric"
         | "gauge"
         | "scatter"
-        | "proportion",
+        | "proportion"
+        | "barGauge",
       orientation: "vertical" as "horizontal" | "vertical",
       dataPath: "",
       labelField: "",

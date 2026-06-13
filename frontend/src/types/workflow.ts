@@ -522,7 +522,17 @@ export interface NodeData {
   toolArguments?: Record<string, string>;
   timeoutSeconds?: number;
   // chartOutput node
-  chartType?: "pie" | "bar" | "line" | "table" | "numeric" | "gauge" | "scatter" | "proportion";
+  chartType?:
+    | "pie"
+    | "bar"
+    | "line"
+    | "area"
+    | "table"
+    | "numeric"
+    | "gauge"
+    | "scatter"
+    | "proportion"
+    | "barGauge";
   orientation?: "horizontal" | "vertical";
   dataPath?: string;
   labelField?: string;

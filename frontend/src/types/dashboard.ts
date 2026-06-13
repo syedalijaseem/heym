@@ -5,7 +5,17 @@ export interface ChartSeries {
 }
 
 export interface ChartPayload {
-  type: "pie" | "bar" | "line" | "table" | "numeric" | "gauge" | "scatter" | "proportion";
+  type:
+    | "pie"
+    | "bar"
+    | "line"
+    | "area"
+    | "table"
+    | "numeric"
+    | "gauge"
+    | "scatter"
+    | "proportion"
+    | "barGauge";
   orientation?: "horizontal" | "vertical";
   labels?: string[];
   series?: ChartSeries[];
