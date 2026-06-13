@@ -116,7 +116,7 @@ export const DOCS_MANIFEST: Record<string, DocCategory> = {
   },
   tabs: {
     id: "tabs",
-    label: "Dashboard Tabs",
+    label: "Tabs",
     items: [
       { slug: "workflows-tab", title: "Workflows" },
       { slug: "templates-tab", title: "Templates" },

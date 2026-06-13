@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { onMounted, onUnmounted, ref } from "vue";
 import { X } from "lucide-vue-next";
 
 import Button from "@/components/ui/Button.vue";
@@ -14,6 +14,15 @@ const emit = defineEmits<{
   (e: "close"): void;
   (e: "save", payload: WidgetUpdateRequest): void;
 }>();
+
+function onKeydown(event: KeyboardEvent): void {
+  if (event.key === "Escape") {
+    emit("close");
+  }
+}
+
+onMounted(() => window.addEventListener("keydown", onKeydown));
+onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 
 const title = ref(props.widget.title);
 const description = ref(props.widget.description ?? "");

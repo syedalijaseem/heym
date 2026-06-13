@@ -56,6 +56,7 @@ const activeTab = computed(() => {
     tabParam === "mcp" ||
     tabParam === "traces" ||
     tabParam === "analytics" ||
+    tabParam === "dashboard" ||
     tabParam === "logs" ||
     tabParam === "drive" ||
     tabParam === "datatable" ||

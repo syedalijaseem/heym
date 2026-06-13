@@ -205,6 +205,9 @@ const DASHBOARD_HIDDEN_NODE_TYPES = new Set<NodeType>([
   "discordTrigger",
   "imapTrigger",
   "websocketTrigger",
+  "rabbitmq",
+  "output",
+  "jsonOutputMapper",
 ]);
 
 const isDashboardWidget = computed(

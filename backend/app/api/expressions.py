@@ -28,7 +28,10 @@ from app.services.expression_evaluator import (
 from app.services.global_variables_service import get_global_variables_context
 from app.services.llm_service import execute_llm
 from app.services.llm_trace import LLMTraceContext
-from app.services.workflow_dsl_prompt import WORKFLOW_DSL_SYSTEM_PROMPT
+from app.services.workflow_dsl_prompt import (
+    DASHBOARD_WIDGET_PROMPT_HINT,
+    WORKFLOW_DSL_SYSTEM_PROMPT,
+)
 
 router = APIRouter()
 
@@ -229,6 +232,8 @@ async def _generate_expression(
         "Start the expression with `$`."
     )
     system_prompt = WORKFLOW_DSL_SYSTEM_PROMPT + generate_suffix
+    if getattr(workflow, "kind", None) == "dashboard_widget":
+        system_prompt += DASHBOARD_WIDGET_PROMPT_HINT
 
     node_context = _build_node_context_string(request.node_results)
     input_value = (request.input_value or "").strip()

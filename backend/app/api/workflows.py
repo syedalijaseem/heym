@@ -16,6 +16,7 @@ from app.api.deps import get_client_ip, get_current_user, get_current_user_optio
 from app.db.models import (
     Credential,
     CredentialType,
+    DashboardWidget,
     ExecutionHistory,
     RunHistory,
     Team,
@@ -1124,6 +1125,21 @@ async def update_workflow(
         workflow.sse_enabled = workflow_data.sse_enabled
     if workflow_data.sse_node_config is not None:
         workflow.sse_node_config = sanitized_sse_node_config
+
+    # Keep the dashboard widget title/description in sync when its hidden workflow
+    # is edited on the canvas (canvas -> dashboard direction).
+    if getattr(workflow, "kind", None) == "dashboard_widget" and (
+        workflow_data.name is not None or workflow_data.description is not None
+    ):
+        widget_result = await db.execute(
+            select(DashboardWidget).where(DashboardWidget.workflow_id == workflow_id)
+        )
+        widget = widget_result.scalar_one_or_none()
+        if widget is not None:
+            if workflow_data.name is not None:
+                widget.title = workflow.name
+            if workflow_data.description is not None:
+                widget.description = workflow.description
 
     if should_create_version:
         max_version_result = await db.execute(

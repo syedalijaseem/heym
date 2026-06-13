@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { Loader2, Sparkles, X } from "lucide-vue-next";
 
 import Button from "@/components/ui/Button.vue";
@@ -71,7 +71,16 @@ function submit(): void {
   });
 }
 
+function onKeydown(event: KeyboardEvent): void {
+  if (event.key === "Escape") {
+    emit("close");
+  }
+}
+
+onUnmounted(() => window.removeEventListener("keydown", onKeydown));
+
 onMounted(async () => {
+  window.addEventListener("keydown", onKeydown);
   try {
     credentials.value = await credentialsApi.listLLM();
     if (credentials.value.length > 0) {

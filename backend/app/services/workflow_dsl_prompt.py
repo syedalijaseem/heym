@@ -3037,9 +3037,31 @@ Access the converted file downstream: `$convertDoc.id`, `$convertDoc.download_ur
   - `title`: optional chart title
 - **Output**: a standardized chart payload (consumed by the dashboard renderer).
 
-**Example (bar chart):**
+**Examples — the node BEFORE chartOutput must output rows in the shape shown:**
+
+Bar (upstream rows `[{month, revenue}]`):
 ```json
 {"type": "chartOutput", "data": {"label": "revenueChart", "chartType": "bar", "orientation": "vertical", "dataPath": "data", "labelField": "month", "valueField": "revenue"}}
+```
+
+Line, multi-series (upstream rows `[{day, sent, failed}]`):
+```json
+{"type": "chartOutput", "data": {"label": "deliveryChart", "chartType": "line", "dataPath": "data", "labelField": "day", "series": [{"name": "Sent", "field": "sent"}, {"name": "Failed", "field": "failed"}]}}
+```
+
+Pie (upstream rows `[{status, count}]`):
+```json
+{"type": "chartOutput", "data": {"label": "statusChart", "chartType": "pie", "dataPath": "data", "labelField": "status", "valueField": "count"}}
+```
+
+Table (upstream rows `[{name, total}]`):
+```json
+{"type": "chartOutput", "data": {"label": "topCustomers", "chartType": "table", "dataPath": "data", "columns": ["name", "total"]}}
+```
+
+Numeric / KPI (upstream rows `[{total}]`, first row used):
+```json
+{"type": "chartOutput", "data": {"label": "signupsKpi", "chartType": "numeric", "dataPath": "data", "valueField": "total", "unit": "users"}}
 ```
 
 ## Expression Syntax
@@ -3870,6 +3892,28 @@ Access request context:
 - `$apiRequest.query.source` → query parameter
 - `$apiRequest.headers["x-client-id"]` → header value
 """
+
+
+DASHBOARD_WIDGET_PROMPT_HINT = (
+    "\n\n## Dashboard Widget Context\n"
+    "This workflow is a DASHBOARD WIDGET. It has no trigger or input node — it starts by "
+    "producing data and MUST end in a single chartOutput node. Build nodes that fetch or compute "
+    "an array of row objects and feed them into chartOutput (see the chartOutput chart-type "
+    "examples above for the expected row shapes). Do NOT add triggers, textInput, output, "
+    "jsonOutputMapper, rabbitmq, or portal/webhook concerns."
+)
+
+
+def is_dashboard_widget_workflow(workflow: dict | None) -> bool:
+    """Heuristic: a workflow is a dashboard widget if it is flagged as such or ends in chartOutput."""
+    if not workflow:
+        return False
+    if workflow.get("kind") == "dashboard_widget":
+        return True
+    nodes = workflow.get("nodes")
+    if isinstance(nodes, list):
+        return any(isinstance(n, dict) and n.get("type") == "chartOutput" for n in nodes)
+    return False
 
 
 def build_assistant_prompt(

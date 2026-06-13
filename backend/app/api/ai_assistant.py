@@ -61,7 +61,11 @@ from app.services.llm_trace import LLMTraceContext, record_llm_trace
 from app.services.run_history import record_run_history
 from app.services.schedule_range import resolve_schedule_tool_range
 from app.services.timezone_utils import get_configured_timezone
-from app.services.workflow_dsl_prompt import build_assistant_prompt
+from app.services.workflow_dsl_prompt import (
+    DASHBOARD_WIDGET_PROMPT_HINT,
+    build_assistant_prompt,
+    is_dashboard_widget_workflow,
+)
 from app.services.workflow_executor import WorkflowCancelledError, execute_workflow
 
 router = APIRouter()
@@ -3457,6 +3461,9 @@ async def workflow_assistant_stream(
             current_user.user_rules,
             available_node_templates=node_template_payload,
         )
+
+    if is_dashboard_widget_workflow(request.current_workflow):
+        system_prompt += DASHBOARD_WIDGET_PROMPT_HINT
 
     logger.debug(
         "\n" + "=" * 60 + "\n"

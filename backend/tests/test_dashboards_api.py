@@ -47,6 +47,25 @@ class TestWorkflowListExcludesWidgets(unittest.TestCase):
         self.assertIn('Workflow.kind == "workflow"', content)
 
 
+class TestIsDashboardWidgetWorkflow(unittest.TestCase):
+    def test_detects_by_chart_output_node(self):
+        from app.services.workflow_dsl_prompt import is_dashboard_widget_workflow
+
+        wf = {"nodes": [{"type": "set"}, {"type": "chartOutput"}]}
+        self.assertTrue(is_dashboard_widget_workflow(wf))
+
+    def test_detects_by_kind_flag(self):
+        from app.services.workflow_dsl_prompt import is_dashboard_widget_workflow
+
+        self.assertTrue(is_dashboard_widget_workflow({"kind": "dashboard_widget", "nodes": []}))
+
+    def test_normal_workflow_is_false(self):
+        from app.services.workflow_dsl_prompt import is_dashboard_widget_workflow
+
+        self.assertFalse(is_dashboard_widget_workflow({"nodes": [{"type": "llm"}]}))
+        self.assertFalse(is_dashboard_widget_workflow(None))
+
+
 class TestSeedWidgetNodes(unittest.TestCase):
     def test_seed_has_no_trigger_or_input_and_ends_in_chart(self):
         nodes, edges = dash_api._seed_widget_nodes("pie")
