@@ -540,6 +540,7 @@ async def list_workflows(
                 ),
             )
         )
+        .where(Workflow.kind == "workflow")
         .order_by(Workflow.updated_at.desc())
     )
     workflows = result.scalars().all()
@@ -598,6 +599,7 @@ async def list_workflows_with_inputs(
                 ),
             )
         )
+        .where(Workflow.kind == "workflow")
         .order_by(Workflow.updated_at.desc())
     )
     workflows = result.scalars().all()
