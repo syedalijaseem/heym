@@ -1,0 +1,43 @@
+# Dashboard
+
+The **Dashboard** tab is a Grafana-style space where you build a grid of chart widgets. Each widget is rendered from the output of its own hidden Heym workflow, so any data you can produce in a workflow — database queries, API calls, RAG lookups, LLM output — can become a chart.
+
+## Widgets
+
+A widget is a single chart on the grid. Supported chart types:
+
+- **Bar** (vertical or horizontal)
+- **Line**
+- **Pie**
+- **Table**
+- **Numeric** (a single KPI value with an optional unit)
+
+Each widget loads its data asynchronously when you open the tab, so the page stays responsive while charts populate.
+
+## Adding a widget
+
+1. Click **Add widget**, give it a title, and pick a chart type.
+2. The widget opens in the workflow editor with a starter graph: an input node connected to a [Chart Output](../nodes/chart-output-node.md) node.
+3. Build the workflow so the node feeding **Chart Output** produces an array of rows, then configure the Chart Output node's field mapping (label field, value field, etc.).
+4. Save, return to the Dashboard tab, and the widget renders.
+
+Double-click a widget (or use its edit button) to reopen its workflow at any time.
+
+## Generating a widget with AI
+
+Click **AI**, describe the metric you want (for example, "workflow success rate over the last 30 days as a bar chart"), and pick an LLM credential and model. Heym generates a complete widget workflow ending in a Chart Output node and adds it to the grid.
+
+## Editing the layout
+
+Toggle **Edit** to enter edit mode, where you can drag widgets and resize them on a 12-column grid. Layout changes are saved automatically. Widget titles are editable inline from the widget header.
+
+## Caching and refresh
+
+Each widget caches its last computed data on the server for a configurable time-to-live (TTL). While the cache is fresh, reopening the dashboard serves the stored result instead of re-running the workflow. The cache is replaced in place every time the data is recomputed (one cache per widget), and it is automatically invalidated when you edit the widget's workflow.
+
+Use a widget's **Refresh** button (or **Refresh** in the toolbar) to bypass the cache and recompute immediately.
+
+## Related
+
+- [Chart Output node](../nodes/chart-output-node.md)
+- [Analytics tab](analytics-tab.md) — built-in execution metrics (distinct from user-built dashboards)
