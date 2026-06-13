@@ -3451,7 +3451,7 @@ For boolean values, use them directly without `== true`:
 **If a function is NOT in the documentation above, it DOES NOT EXIST!**
 Use ONLY: `str()`, `int()`, `float()`, `bool()`, `list()`, `dict(key=value)`, `len()`, `abs()`, `min()`, `max()`, `round()`, `sum()`, `sorted()`, `randomInt()`, `range()`, `array()`, `notNull()`, `upper()`, `lower()`, `strip()`, `capitalize()`, `title()`, `split()`, `join()`, `replace()`, `regexReplace()`, `hash()`, and the documented string/array/object methods.
 
-### 31. s3 (Amazon S3 Operations)
+### 32. s3 (Amazon S3 Operations)
 - **Type**: `s3`
 - **Purpose**: Manage buckets and folders; list, upload, download, copy, and delete objects in Amazon S3
 - **Inputs**: 1 | **Outputs**: 1

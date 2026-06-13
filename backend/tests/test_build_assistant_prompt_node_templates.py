@@ -70,7 +70,7 @@ class TestBuildAssistantPromptNodeTemplates(unittest.TestCase):
     def test_includes_amazon_s3_guidance(self) -> None:
         prompt = build_assistant_prompt()
 
-        self.assertIn("### 31. s3 (Amazon S3 Operations)", prompt)
+        self.assertIn("### 32. s3 (Amazon S3 Operations)", prompt)
         self.assertIn('"type": "s3"', prompt)
         self.assertIn("s3Operation", prompt)
         self.assertIn("s3ContentType", prompt)
