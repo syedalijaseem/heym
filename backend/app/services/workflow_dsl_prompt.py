@@ -3018,6 +3018,30 @@ Access the converted file downstream: `$convertDoc.id`, `$convertDoc.download_ur
 **Downstream access:**
 - `$searchCall.result` → tool result (object or string)
 
+### 31. chartOutput (Dashboard Widget Chart) - TERMINAL NODE FOR DASHBOARD WIDGETS
+- **Purpose**: Terminal node that turns upstream rows into a chart for a dashboard widget.
+- **Inputs**: 1 | **Outputs**: 0 (it is the LAST node in a dashboard-widget workflow)
+- **WHEN TO USE**: Only in dashboard-widget workflows. The node before it must produce an array of
+  row objects (e.g. a `set`/`variable`/`http`/`bigquery` node yielding rows like
+  `[{"month": "Jan", "revenue": 120}, ...]`).
+- **Data fields**:
+  - `label`: Node identifier (camelCase)
+  - `chartType`: `"pie"` | `"bar"` | `"line"` | `"table"` | `"numeric"` (required)
+  - `orientation`: `"horizontal"` | `"vertical"` (bar only, default `"vertical"`)
+  - `dataPath`: optional dot path to the rows array inside the upstream output (e.g. `"data"` or `"result.items"`)
+  - `labelField`: row key used as the category label (pie/bar/line)
+  - `valueField`: row key used as the single-series numeric value (pie/bar/line/numeric)
+  - `series`: optional array `[{"name": "Sent", "field": "sent"}, ...]` for multi-series bar/line (overrides `valueField`)
+  - `columns`: optional array of column names for `table` (default: keys of the first row)
+  - `unit`: optional unit string for `numeric`
+  - `title`: optional chart title
+- **Output**: a standardized chart payload (consumed by the dashboard renderer).
+
+**Example (bar chart):**
+```json
+{"type": "chartOutput", "data": {"label": "revenueChart", "chartType": "bar", "orientation": "vertical", "dataPath": "data", "labelField": "month", "valueField": "revenue"}}
+```
+
 ## Expression Syntax
 
 Expressions use `$nodeName` to reference node outputs by their label.
