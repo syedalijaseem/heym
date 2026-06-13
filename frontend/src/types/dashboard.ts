@@ -1,10 +1,11 @@
 export interface ChartSeries {
   name: string;
-  data: number[];
+  // number[] for pie/bar/line; [x, y] tuples for scatter
+  data: number[] | (number | null)[][];
 }
 
 export interface ChartPayload {
-  type: "pie" | "bar" | "line" | "table" | "numeric";
+  type: "pie" | "bar" | "line" | "table" | "numeric" | "gauge" | "scatter" | "proportion";
   orientation?: "horizontal" | "vertical";
   labels?: string[];
   series?: ChartSeries[];
@@ -13,6 +14,8 @@ export interface ChartPayload {
   value?: number | string | null;
   unit?: string;
   decimals?: number;
+  min?: number;
+  max?: number;
   title?: string;
 }
 

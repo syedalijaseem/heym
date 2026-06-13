@@ -9,8 +9,11 @@ A widget is a single chart on the grid. Supported chart types:
 - **Bar** (vertical or horizontal)
 - **Line**
 - **Pie**
-- **Table**
+- **Table** (scrollable)
 - **Numeric** (a single KPI value with an optional unit)
+- **Gauge** (a single value against a min–max range, e.g. a percentage)
+- **Scatter** (X/Y points for correlation plots)
+- **Proportion** (one bar split into shares with a percentage legend, e.g. a language breakdown)
 
 Each widget loads its data asynchronously when you open the tab, so the page stays responsive while charts populate.
 
@@ -25,7 +28,9 @@ Double-click a widget (or use its edit button) to reopen its workflow at any tim
 
 ## Generating a widget with AI
 
-Click **AI**, describe the metric you want (for example, "workflow success rate over the last 30 days as a bar chart"), and pick an LLM credential and model. Heym generates a complete widget workflow ending in a Chart Output node and adds it to the grid.
+Click **AI**, describe the metric you want (for example, "workflow success rate over the last 30 days as a bar chart"), and pick an LLM credential and model. Heym generates a complete widget workflow ending in a Chart Output node and adds it to the grid. See [Chart Output](../nodes/chart-output-node.md#example-ai-prompts) for example prompts per chart type.
+
+Use a widget's **Fine-tune with AI** button to revise an existing widget with a new instruction. Each AI fine-tune snapshots the previous workflow into the widget's **Edit History**, so you can review or roll back changes from the workflow editor.
 
 ## Editing the layout
 

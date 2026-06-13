@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
-import { Loader2, Pencil, Plus, RefreshCw, Sparkles } from "lucide-vue-next";
+import { LayoutGrid, Loader2, Pencil, Plus, RefreshCw, Sparkles } from "lucide-vue-next";
 
 import AddWidgetDialog from "@/components/Dashboards/AddWidgetDialog.vue";
 import AiWidgetDialog from "@/components/Dashboards/AiWidgetDialog.vue";
@@ -116,6 +116,54 @@ function refreshAll(): void {
   reloadKey.value += 1;
 }
 
+// Randomly split N widgets into rows of 2 or 3 (with an occasional trailing 1),
+// producing variations like 2-2-2, 2-3-3, or 3-3-1 on each press.
+function buildRowSizes(count: number): number[] {
+  const rows: number[] = [];
+  let remaining = count;
+  while (remaining > 0) {
+    if (remaining <= 2) {
+      rows.push(remaining);
+      break;
+    }
+    const size = Math.random() < 0.5 ? 2 : 3;
+    rows.push(size);
+    remaining -= size;
+  }
+  return rows;
+}
+
+const TIDY_ROW_HEIGHT = 5; // grid row units per widget
+
+async function tidyUp(): Promise<void> {
+  if (widgets.value.length === 0) return;
+  const ordered = [...widgets.value].sort((a, b) => a.position - b.position);
+  const rowSizes = buildRowSizes(ordered.length);
+
+  const updates: { id: string; layout: WidgetLayout }[] = [];
+  let index = 0;
+  let y = 0;
+  for (const size of rowSizes) {
+    const w = Math.floor(12 / size);
+    for (let col = 0; col < size; col++) {
+      const widget = ordered[index];
+      if (widget) {
+        updates.push({ id: widget.id, layout: { x: col * w, y, w, h: TIDY_ROW_HEIGHT } });
+      }
+      index += 1;
+    }
+    y += TIDY_ROW_HEIGHT;
+  }
+
+  const layoutById = Object.fromEntries(updates.map((u) => [u.id, u.layout]));
+  // Replacing the layouts triggers DashboardGrid's deep watch, which repositions
+  // the items reactively (no remount, so widgets keep their already-loaded data).
+  widgets.value = widgets.value.map((w) =>
+    layoutById[w.id] ? { ...w, layout: layoutById[w.id] } : w,
+  );
+  await Promise.all(updates.map((u) => dashboardApi.updateWidget(u.id, { layout: u.layout })));
+}
+
 onMounted(() => {
   void loadDashboard();
 });
@@ -134,6 +182,15 @@ onMounted(() => {
           @click="refreshAll"
         >
           <RefreshCw class="mr-1 h-4 w-4" /> Refresh
+        </Button>
+        <Button
+          v-if="widgets.length > 0"
+          variant="ghost"
+          size="sm"
+          title="Rearrange widgets into a random tidy grid"
+          @click="tidyUp"
+        >
+          <LayoutGrid class="mr-1 h-4 w-4" /> Tidy up
         </Button>
         <Button
           :variant="editMode ? 'default' : 'ghost'"

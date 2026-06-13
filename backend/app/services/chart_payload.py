@@ -66,7 +66,7 @@ def build_chart_payload(config: dict, data: Any) -> dict:
         ]
         return payload
 
-    if chart_type == "numeric":
+    if chart_type in ("numeric", "gauge"):
         value_field = config.get("valueField")
         value: Any = None
         if rows and isinstance(rows[0], dict):
@@ -87,6 +87,21 @@ def build_chart_payload(config: dict, data: Any) -> dict:
             payload["unit"] = config["unit"]
         if config.get("decimals") is not None:
             payload["decimals"] = config["decimals"]
+        if chart_type == "gauge":
+            payload["min"] = _coerce_number(config.get("min", 0))
+            payload["max"] = _coerce_number(config.get("max", 100))
+        return payload
+
+    if chart_type == "scatter":
+        x_field = config.get("xField") or config.get("labelField")
+        y_field = config.get("yField") or config.get("valueField", "value")
+        points: list = []
+        for row in rows:
+            if isinstance(row, dict):
+                x = _coerce_number(row.get(x_field)) if x_field else None
+                y = _coerce_number(row.get(y_field))
+                points.append([x, y])
+        payload["series"] = [{"name": config.get("seriesName") or y_field, "data": points}]
         return payload
 
     # pie / bar / line share labels + series

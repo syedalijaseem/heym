@@ -3026,42 +3026,85 @@ Access the converted file downstream: `$convertDoc.id`, `$convertDoc.download_ur
   `[{"month": "Jan", "revenue": 120}, ...]`).
 - **Data fields**:
   - `label`: Node identifier (camelCase)
-  - `chartType`: `"pie"` | `"bar"` | `"line"` | `"table"` | `"numeric"` (required)
+  - `chartType`: `"pie"` | `"bar"` | `"line"` | `"table"` | `"numeric"` | `"gauge"` | `"scatter"` | `"proportion"` (required)
   - `orientation`: `"horizontal"` | `"vertical"` (bar only, default `"vertical"`)
   - `dataPath`: optional dot path to the rows array inside the upstream output (e.g. `"data"` or `"result.items"`)
   - `labelField`: row key used as the category label (pie/bar/line)
-  - `valueField`: row key used as the single-series numeric value (pie/bar/line/numeric)
+  - `valueField`: row key used as the single-series numeric value (pie/bar/line/numeric/gauge)
   - `series`: optional array `[{"name": "Sent", "field": "sent"}, ...]` for multi-series bar/line (overrides `valueField`)
   - `columns`: optional array of column names for `table` (default: keys of the first row)
-  - `unit`: optional unit string for `numeric`
+  - `xField` / `yField`: row keys for the X and Y numeric axes (scatter)
+  - `min` / `max`: numeric range for `gauge` (default `0` / `100`)
+  - `unit`: optional unit string for `numeric`/`gauge`
   - `title`: optional chart title
 - **Output**: a standardized chart payload (consumed by the dashboard renderer).
 
-**Examples — the node BEFORE chartOutput must output rows in the shape shown:**
+#### ⚠️ HOW TO PRODUCE THE UPSTREAM ROWS (CRITICAL — read this)
+
+The node BEFORE `chartOutput` must output an **array of row objects**. When the user asks for a
+chart with example/sample data (and there is no real data source), produce the rows with a `set`
+node using `$array(dict(...), dict(...))`.
+
+- ✅ CORRECT: `$array(dict(month="Jan", revenue=12000), dict(month="Feb", revenue=15000))`
+- ❌ FORBIDDEN: `$array(${"month": "Jan", "revenue": 12000}, ...)` — `${...}` object literals DO NOT
+  EXIST in Heym DSL and will fail. NEVER write `${ ... }`. Build objects ONLY with `dict(key=value)`.
+- ❌ FORBIDDEN: `$array({"month": "Jan"}, ...)` — bare `{...}` JSON objects are not valid either.
+
+`set` node keys: `dict(...)` uses `key=value` keyword args (identifier keys, no quotes on the key).
+String values use double quotes: `dict(status="success", count=150)`.
+
+**Full example — Bar chart with example data (set → chartOutput):**
+```json
+{
+  "heym": true,
+  "nodes": [
+    {"id": "n1", "type": "set", "position": {"x": 50, "y": 200}, "data": {"label": "revenueData", "mappings": [{"key": "rows", "value": "$array(dict(month=\"Jan\", revenue=12000), dict(month=\"Feb\", revenue=15000), dict(month=\"Mar\", revenue=18000), dict(month=\"Apr\", revenue=14000), dict(month=\"May\", revenue=22000), dict(month=\"Jun\", revenue=25000))"}]}},
+    {"id": "n2", "type": "chartOutput", "position": {"x": 350, "y": 200}, "data": {"label": "monthlyRevenue", "chartType": "bar", "orientation": "vertical", "dataPath": "rows", "labelField": "month", "valueField": "revenue", "title": "Monthly Revenue (Last 6 Months)"}}
+  ],
+  "edges": [{"id": "e1", "source": "n1", "target": "n2"}]
+}
+```
+
+**chartOutput config per type** (the node BEFORE chartOutput must output rows in the shape shown):
 
 Bar (upstream rows `[{month, revenue}]`):
 ```json
-{"type": "chartOutput", "data": {"label": "revenueChart", "chartType": "bar", "orientation": "vertical", "dataPath": "data", "labelField": "month", "valueField": "revenue"}}
+{"type": "chartOutput", "data": {"label": "revenueChart", "chartType": "bar", "orientation": "vertical", "dataPath": "rows", "labelField": "month", "valueField": "revenue"}}
 ```
 
 Line, multi-series (upstream rows `[{day, sent, failed}]`):
 ```json
-{"type": "chartOutput", "data": {"label": "deliveryChart", "chartType": "line", "dataPath": "data", "labelField": "day", "series": [{"name": "Sent", "field": "sent"}, {"name": "Failed", "field": "failed"}]}}
+{"type": "chartOutput", "data": {"label": "deliveryChart", "chartType": "line", "dataPath": "rows", "labelField": "day", "series": [{"name": "Sent", "field": "sent"}, {"name": "Failed", "field": "failed"}]}}
 ```
 
-Pie (upstream rows `[{status, count}]`):
+Pie (upstream rows `[{status, count}]`; build with `$array(dict(status="success", count=150), ...)`):
 ```json
-{"type": "chartOutput", "data": {"label": "statusChart", "chartType": "pie", "dataPath": "data", "labelField": "status", "valueField": "count"}}
+{"type": "chartOutput", "data": {"label": "statusChart", "chartType": "pie", "dataPath": "rows", "labelField": "status", "valueField": "count"}}
 ```
 
 Table (upstream rows `[{name, total}]`):
 ```json
-{"type": "chartOutput", "data": {"label": "topCustomers", "chartType": "table", "dataPath": "data", "columns": ["name", "total"]}}
+{"type": "chartOutput", "data": {"label": "topCustomers", "chartType": "table", "dataPath": "rows", "columns": ["name", "total"]}}
 ```
 
 Numeric / KPI (upstream rows `[{total}]`, first row used):
 ```json
-{"type": "chartOutput", "data": {"label": "signupsKpi", "chartType": "numeric", "dataPath": "data", "valueField": "total", "unit": "users"}}
+{"type": "chartOutput", "data": {"label": "signupsKpi", "chartType": "numeric", "dataPath": "rows", "valueField": "total", "unit": "users"}}
+```
+
+Gauge (single value vs. a range; upstream rows `[{value}]`, first row used; e.g. `$array(dict(value=72))`):
+```json
+{"type": "chartOutput", "data": {"label": "cpuGauge", "chartType": "gauge", "dataPath": "rows", "valueField": "value", "min": 0, "max": 100, "unit": "%"}}
+```
+
+Scatter (X/Y points; upstream rows `[{x, y}]`; e.g. `$array(dict(x=5, y=12), dict(x=8, y=20))`):
+```json
+{"type": "chartOutput", "data": {"label": "correlation", "chartType": "scatter", "dataPath": "rows", "xField": "x", "yField": "y"}}
+```
+
+Proportion (one stacked bar split by share + a legend with percentages, e.g. a language breakdown; upstream rows `[{name, value}]`; e.g. `$array(dict(name="Kotlin", value=49.64), dict(name="JavaScript", value=23.73))`):
+```json
+{"type": "chartOutput", "data": {"label": "languages", "chartType": "proportion", "dataPath": "rows", "labelField": "name", "valueField": "value", "title": "Most Used Languages"}}
 ```
 
 ## Expression Syntax

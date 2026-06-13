@@ -265,9 +265,11 @@ class TestAiRefineWidget(unittest.IsolatedAsyncioTestCase):
         from app.models.dashboard_schemas import AiRefineRequest
 
         credential = MagicMock(type=CredentialType.openai)
+        record_version = AsyncMock()
         with (
             patch.object(dash_api, "generate_widget_dsl", AsyncMock(return_value=fake_dsl)),
             patch.object(dash_api, "get_credential_for_user", AsyncMock(return_value=credential)),
+            patch.object(dash_api, "_record_chat_workflow_edit_version", record_version),
         ):
             resp = await dash_api.ai_refine_widget(
                 widget_id=widget.id,
@@ -281,3 +283,66 @@ class TestAiRefineWidget(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(workflow.nodes, fake_dsl["nodes"])
         self.assertIsNone(widget.cached_payload)
         self.assertIsNone(widget.cached_at)
+        # AI fine-tune records a pre-edit snapshot so it appears in Edit History.
+        record_version.assert_awaited_once()
+
+    async def test_refine_records_change_history_snapshot(self):
+        user = _User()
+        widget = MagicMock()
+        widget.id = uuid.uuid4()
+        widget.workflow_id = uuid.uuid4()
+        widget.chart_type = "bar"
+        widget.position = 0
+        widget.title = "W"
+        widget.description = None
+        widget.layout = {"x": 0, "y": 0, "w": 4, "h": 4}
+        widget.cache_ttl_seconds = 300
+        widget.cached_payload = None
+        widget.cached_at = None
+        workflow = MagicMock()
+        workflow.nodes = [{"id": "old", "type": "chartOutput", "data": {"chartType": "bar"}}]
+        workflow.edges = []
+
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                MagicMock(scalar_one_or_none=MagicMock(return_value=widget)),
+                MagicMock(scalar_one_or_none=MagicMock(return_value=workflow)),
+            ]
+        )
+        db.commit = AsyncMock()
+
+        async def fake_refresh(obj):
+            obj.updated_at = datetime.datetime.now()
+
+        db.refresh = AsyncMock(side_effect=fake_refresh)
+
+        fake_dsl = {
+            "nodes": [{"id": "c", "type": "chartOutput", "data": {"chartType": "line"}}],
+            "edges": [],
+        }
+
+        from app.db.models import CredentialType
+        from app.models.dashboard_schemas import AiRefineRequest
+
+        credential = MagicMock(type=CredentialType.openai)
+        record_version = AsyncMock()
+        with (
+            patch.object(dash_api, "generate_widget_dsl", AsyncMock(return_value=fake_dsl)),
+            patch.object(dash_api, "get_credential_for_user", AsyncMock(return_value=credential)),
+            patch.object(dash_api, "_record_chat_workflow_edit_version", record_version),
+        ):
+            await dash_api.ai_refine_widget(
+                widget_id=widget.id,
+                body=AiRefineRequest(prompt="line it", credential_id=uuid.uuid4(), model="m"),
+                current_user=user,
+                db=db,
+            )
+        # The snapshot must capture the OLD nodes (before the overwrite).
+        record_version.assert_awaited_once()
+        _, kwargs = record_version.await_args
+        self.assertEqual(
+            kwargs["old_nodes"],
+            [{"id": "old", "type": "chartOutput", "data": {"chartType": "bar"}}],
+        )
+        self.assertIs(kwargs["workflow"], workflow)

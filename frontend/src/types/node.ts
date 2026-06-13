@@ -736,11 +736,23 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
     outputs: 0,
     defaultData: {
       label: "chartOutput",
-      chartType: "bar" as "pie" | "bar" | "line" | "table" | "numeric",
+      chartType: "bar" as
+        | "pie"
+        | "bar"
+        | "line"
+        | "table"
+        | "numeric"
+        | "gauge"
+        | "scatter"
+        | "proportion",
       orientation: "vertical" as "horizontal" | "vertical",
       dataPath: "",
       labelField: "",
       valueField: "",
+      xField: "",
+      yField: "",
+      min: 0,
+      max: 100,
       series: [] as { name: string; field: string }[],
       columns: [] as string[],
       unit: "",

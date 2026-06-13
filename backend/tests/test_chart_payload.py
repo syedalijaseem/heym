@@ -97,3 +97,45 @@ class TestBuildChartPayload(unittest.TestCase):
         config = {"chartType": "numeric", "valueField": "v", "title": "Total"}
         payload = build_chart_payload(config, {"data": [{"v": 1}]})
         self.assertEqual(payload["title"], "Total")
+
+    def test_gauge_value_with_default_range(self):
+        config = {"chartType": "gauge", "valueField": "cpu", "unit": "%"}
+        payload = build_chart_payload(config, {"data": [{"cpu": 72}]})
+        self.assertEqual(payload["type"], "gauge")
+        self.assertEqual(payload["value"], 72)
+        self.assertEqual(payload["min"], 0)
+        self.assertEqual(payload["max"], 100)
+        self.assertEqual(payload["unit"], "%")
+
+    def test_gauge_custom_range(self):
+        config = {"chartType": "gauge", "valueField": "v", "min": 10, "max": 50}
+        payload = build_chart_payload(config, {"data": [{"v": 30}]})
+        self.assertEqual(payload["value"], 30)
+        self.assertEqual(payload["min"], 10)
+        self.assertEqual(payload["max"], 50)
+
+    def test_scatter_builds_xy_points(self):
+        config = {"chartType": "scatter", "xField": "x", "yField": "y"}
+        data = {"data": [{"x": 5, "y": 12}, {"x": 8, "y": 20}]}
+        payload = build_chart_payload(config, data)
+        self.assertEqual(payload["type"], "scatter")
+        self.assertEqual(payload["series"], [{"name": "y", "data": [[5, 12], [8, 20]]}])
+
+    def test_scatter_falls_back_to_label_value_fields(self):
+        config = {"chartType": "scatter", "labelField": "a", "valueField": "b"}
+        data = [{"a": 1, "b": 2}, {"a": 3, "b": 4}]
+        payload = build_chart_payload(config, data)
+        self.assertEqual(payload["series"], [{"name": "b", "data": [[1, 2], [3, 4]]}])
+
+    def test_proportion_uses_labels_and_single_series(self):
+        config = {"chartType": "proportion", "labelField": "name", "valueField": "value"}
+        data = {
+            "data": [
+                {"name": "Kotlin", "value": 49.64},
+                {"name": "JavaScript", "value": 23.73},
+            ]
+        }
+        payload = build_chart_payload(config, data)
+        self.assertEqual(payload["type"], "proportion")
+        self.assertEqual(payload["labels"], ["Kotlin", "JavaScript"])
+        self.assertEqual(payload["series"], [{"name": "value", "data": [49.64, 23.73]}])

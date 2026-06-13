@@ -8210,6 +8210,9 @@ onUnmounted(() => {
                   { value: 'pie', label: 'Pie' },
                   { value: 'table', label: 'Table' },
                   { value: 'numeric', label: 'Numeric' },
+                  { value: 'gauge', label: 'Gauge' },
+                  { value: 'scatter', label: 'Scatter' },
+                  { value: 'proportion', label: 'Proportion' },
                 ]"
                 @update:model-value="updateNodeData('chartType', $event)"
               />
@@ -8242,9 +8245,11 @@ onUnmounted(() => {
               </p>
             </div>
 
-            <template v-if="selectedNode.data.chartType !== 'table'">
+            <template
+              v-if="['bar', 'line', 'pie', 'numeric', 'gauge', 'proportion'].includes(selectedNode.data.chartType || 'bar')"
+            >
               <div
-                v-if="selectedNode.data.chartType !== 'numeric'"
+                v-if="['bar', 'line', 'pie', 'proportion'].includes(selectedNode.data.chartType || 'bar')"
                 class="space-y-2"
               >
                 <Label>Label field</Label>
@@ -8265,8 +8270,49 @@ onUnmounted(() => {
               </div>
             </template>
 
+            <template v-if="selectedNode.data.chartType === 'scatter'">
+              <div class="space-y-2">
+                <Label>X field</Label>
+                <Input
+                  :model-value="selectedNode.data.xField || ''"
+                  placeholder="row key for the X axis (numeric)"
+                  @update:model-value="updateNodeData('xField', $event)"
+                />
+              </div>
+              <div class="space-y-2">
+                <Label>Y field</Label>
+                <Input
+                  :model-value="selectedNode.data.yField || ''"
+                  placeholder="row key for the Y axis (numeric)"
+                  @update:model-value="updateNodeData('yField', $event)"
+                />
+              </div>
+            </template>
+
             <div
-              v-if="selectedNode.data.chartType === 'numeric'"
+              v-if="selectedNode.data.chartType === 'gauge'"
+              class="grid grid-cols-2 gap-2"
+            >
+              <div class="space-y-2">
+                <Label>Min</Label>
+                <Input
+                  type="number"
+                  :model-value="selectedNode.data.min ?? 0"
+                  @update:model-value="updateNodeData('min', $event)"
+                />
+              </div>
+              <div class="space-y-2">
+                <Label>Max</Label>
+                <Input
+                  type="number"
+                  :model-value="selectedNode.data.max ?? 100"
+                  @update:model-value="updateNodeData('max', $event)"
+                />
+              </div>
+            </div>
+
+            <div
+              v-if="['numeric', 'gauge'].includes(selectedNode.data.chartType || 'bar')"
               class="space-y-2"
             >
               <Label>Unit</Label>

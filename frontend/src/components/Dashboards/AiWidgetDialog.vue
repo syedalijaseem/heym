@@ -73,14 +73,17 @@ function submit(): void {
 
 function onKeydown(event: KeyboardEvent): void {
   if (event.key === "Escape") {
+    event.stopPropagation();
     emit("close");
   }
 }
 
-onUnmounted(() => window.removeEventListener("keydown", onKeydown));
+// Capture phase so Escape reaches us before any ancestor keydown handler can
+// stopPropagation (several exist in the dashboard view) and swallow the event.
+onUnmounted(() => window.removeEventListener("keydown", onKeydown, true));
 
 onMounted(async () => {
-  window.addEventListener("keydown", onKeydown);
+  window.addEventListener("keydown", onKeydown, true);
   try {
     credentials.value = await credentialsApi.listLLM();
     if (credentials.value.length > 0) {
@@ -95,77 +98,79 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-    @click.self="emit('close')"
-  >
-    <div class="w-full max-w-lg rounded-lg border bg-card p-5 shadow-lg">
-      <div class="mb-4 flex items-center justify-between">
-        <h2 class="flex items-center gap-2 text-base font-semibold">
-          <Sparkles class="h-4 w-4" /> {{ props.heading }}
-        </h2>
-        <button
-          class="rounded p-1 text-muted-foreground hover:bg-accent"
-          @click="emit('close')"
-        >
-          <X class="h-4 w-4" />
-        </button>
-      </div>
-
-      <div
-        v-if="loadError"
-        class="mb-3 rounded border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive"
-      >
-        {{ loadError }}
-      </div>
-
-      <div class="space-y-3">
-        <div class="space-y-1">
-          <label class="text-sm font-medium">What should this widget show?</label>
-          <textarea
-            v-model="prompt"
-            rows="3"
-            class="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring"
-            :placeholder="props.placeholder"
-          />
+  <Teleport to="body">
+    <div
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      @click.self="emit('close')"
+    >
+      <div class="w-full max-w-lg rounded-lg border bg-card p-5 shadow-lg">
+        <div class="mb-4 flex items-center justify-between">
+          <h2 class="flex items-center gap-2 text-base font-semibold">
+            <Sparkles class="h-4 w-4" /> {{ props.heading }}
+          </h2>
+          <button
+            class="rounded p-1 text-muted-foreground hover:bg-accent"
+            @click="emit('close')"
+          >
+            <X class="h-4 w-4" />
+          </button>
         </div>
 
-        <div class="grid grid-cols-2 gap-3">
+        <div
+          v-if="loadError"
+          class="mb-3 rounded border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+        >
+          {{ loadError }}
+        </div>
+
+        <div class="space-y-3">
           <div class="space-y-1">
-            <label class="text-sm font-medium">Credential</label>
-            <Select
-              v-model="selectedCredentialId"
-              :options="credentialOptions"
+            <label class="text-sm font-medium">What should this widget show?</label>
+            <textarea
+              v-model="prompt"
+              rows="3"
+              class="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring"
+              :placeholder="props.placeholder"
             />
           </div>
-          <div class="space-y-1">
-            <label class="text-sm font-medium">Model</label>
-            <Select
-              v-model="selectedModel"
-              :options="modelOptions"
-            />
+
+          <div class="grid grid-cols-2 gap-3">
+            <div class="space-y-1">
+              <label class="text-sm font-medium">Credential</label>
+              <Select
+                v-model="selectedCredentialId"
+                :options="credentialOptions"
+              />
+            </div>
+            <div class="space-y-1">
+              <label class="text-sm font-medium">Model</label>
+              <Select
+                v-model="selectedModel"
+                :options="modelOptions"
+              />
+            </div>
           </div>
         </div>
-      </div>
 
-      <div class="mt-5 flex justify-end gap-2">
-        <Button
-          variant="ghost"
-          @click="emit('close')"
-        >
-          Cancel
-        </Button>
-        <Button
-          :disabled="!canGenerate"
-          @click="submit"
-        >
-          <Loader2
-            v-if="generating"
-            class="mr-1 h-4 w-4 animate-spin"
-          />
-          {{ props.submitLabel }}
-        </Button>
+        <div class="mt-5 flex justify-end gap-2">
+          <Button
+            variant="ghost"
+            @click="emit('close')"
+          >
+            Cancel
+          </Button>
+          <Button
+            :disabled="!canGenerate"
+            @click="submit"
+          >
+            <Loader2
+              v-if="generating"
+              class="mr-1 h-4 w-4 animate-spin"
+            />
+            {{ props.submitLabel }}
+          </Button>
+        </div>
       </div>
     </div>
-  </div>
+  </Teleport>
 </template>

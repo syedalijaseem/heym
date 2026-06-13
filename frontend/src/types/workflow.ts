@@ -522,11 +522,15 @@ export interface NodeData {
   toolArguments?: Record<string, string>;
   timeoutSeconds?: number;
   // chartOutput node
-  chartType?: "pie" | "bar" | "line" | "table" | "numeric";
+  chartType?: "pie" | "bar" | "line" | "table" | "numeric" | "gauge" | "scatter" | "proportion";
   orientation?: "horizontal" | "vertical";
   dataPath?: string;
   labelField?: string;
   valueField?: string;
+  xField?: string;
+  yField?: string;
+  min?: number;
+  max?: number;
   series?: { name: string; field: string }[];
   columns?: string[];
   unit?: string;

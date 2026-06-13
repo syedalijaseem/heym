@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.ai_assistant import (
     WORKFLOW_BUILDER_TEMPERATURE,
     _extract_generated_workflow_config,
+    _record_chat_workflow_edit_version,
     get_credential_for_user,
     get_openai_client,
 )
@@ -32,8 +33,12 @@ router = APIRouter()
 
 _AI_WIDGET_SUFFIX = (
     " The workflow MUST end with a single chartOutput node that produces the chart. "
-    "Choose an appropriate chartType (pie, bar, line, table, or numeric) and set "
-    "labelField/valueField (or series) on the chartOutput node so it renders the requested metric."
+    "Choose an appropriate chartType (pie, bar, line, table, numeric, gauge, scatter, or "
+    "proportion) and set "
+    "labelField/valueField (or series, or xField/yField for scatter, or min/max for gauge) on the "
+    "chartOutput node so it renders the requested metric. When the user only describes example or "
+    "sample data, produce the upstream rows with a set node using "
+    "$array(dict(key=value, ...), ...) — never use ${...} or bare {...} object literals."
 )
 
 
@@ -84,6 +89,17 @@ def _seed_widget_nodes(chart_type: str) -> tuple[list, list]:
     # source (http, bigquery, rag, ...) when building the widget.
     src_id = str(uuid.uuid4())
     chart_id = str(uuid.uuid4())
+    chart_data: dict = {"label": "chart", "chartType": chart_type, "dataPath": "rows"}
+    if chart_type == "scatter":
+        chart_data["xField"] = "x"
+        chart_data["yField"] = "y"
+    elif chart_type == "gauge":
+        chart_data["valueField"] = "value"
+        chart_data["min"] = 0
+        chart_data["max"] = 100
+    elif chart_type not in ("table",):
+        chart_data["labelField"] = "label"
+        chart_data["valueField"] = "value"
     nodes = [
         {
             "id": src_id,
@@ -95,7 +111,7 @@ def _seed_widget_nodes(chart_type: str) -> tuple[list, list]:
             "id": chart_id,
             "type": "chartOutput",
             "position": {"x": 320, "y": 0},
-            "data": {"label": "chart", "chartType": chart_type, "dataPath": "rows"},
+            "data": chart_data,
         },
     ]
     edges = [{"id": str(uuid.uuid4()), "source": src_id, "target": chart_id}]
@@ -357,6 +373,15 @@ async def ai_refine_widget(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="AI did not produce a chartOutput node",
         )
+
+    # Snapshot the pre-edit workflow so the AI fine-tune shows up in Edit History.
+    await _record_chat_workflow_edit_version(
+        db=db,
+        workflow=workflow,
+        user_id=current_user.id,
+        old_nodes=workflow.nodes or [],
+        old_edges=workflow.edges or [],
+    )
 
     workflow.nodes = nodes
     workflow.edges = edges
