@@ -93,6 +93,30 @@ const showApiKey = ref(false);
 const saving = ref(false);
 const error = ref("");
 
+function parseS3RegionFromMaskedValue(maskedValue: string | null): string {
+  if (!maskedValue) {
+    return "";
+  }
+  const match = maskedValue.match(/\(([^)]+)\)$/);
+  return match?.[1]?.trim() ?? "";
+}
+
+const storedS3Region = computed((): string => {
+  if (!props.credential || props.credential.type !== "s3") {
+    return "";
+  }
+  return parseS3RegionFromMaskedValue(props.credential.masked_value);
+});
+
+const hasS3CredentialConfigChange = computed((): boolean => {
+  return (
+    !!s3AccessKeyId.value.trim() ||
+    !!s3SecretAccessKey.value.trim() ||
+    !!s3SessionToken.value.trim() ||
+    (!!s3Region.value.trim() && s3Region.value.trim() !== storedS3Region.value)
+  );
+});
+
 const typeOptions = [
   { value: "openai", label: CREDENTIAL_TYPE_LABELS.openai },
   { value: "google", label: CREDENTIAL_TYPE_LABELS.google },
@@ -177,7 +201,10 @@ watch(
         bqConnectedCredential.value = null;
         s3AccessKeyId.value = "";
         s3SecretAccessKey.value = "";
-        s3Region.value = "us-east-1";
+        s3Region.value =
+          props.credential.type === "s3"
+            ? parseS3RegionFromMaskedValue(props.credential.masked_value)
+            : "";
         s3SessionToken.value = "";
       } else {
         name.value = "";
@@ -305,11 +332,18 @@ const isValid = computed(() => {
   } else if (type.value === "bigquery") {
     return bqOAuthConnected.value || isEditing.value;
   } else if (type.value === "s3") {
+    if (isEditing.value) {
+      return !hasS3CredentialConfigChange.value || (
+        !!s3AccessKeyId.value.trim() &&
+        !!s3SecretAccessKey.value.trim() &&
+        !!s3Region.value.trim()
+      );
+    }
     return (
       !!s3AccessKeyId.value.trim() &&
       !!s3SecretAccessKey.value.trim() &&
       !!s3Region.value.trim()
-    ) || isEditing.value;
+    );
   }
   return false;
 });
@@ -618,10 +652,7 @@ async function handleSave(): Promise<void> {
           rabbitmqUsername.value.trim() ||
           rabbitmqPassword.value.trim() ||
           rabbitmqVhost.value.trim() ||
-          s3AccessKeyId.value.trim() ||
-          s3SecretAccessKey.value.trim() ||
-          s3Region.value.trim() ||
-          s3SessionToken.value.trim() ||
+          (type.value === "s3" && hasS3CredentialConfigChange.value) ||
           cohereApiKey.value.trim() ||
           flaresolverrUrl.value.trim());
 
@@ -1655,6 +1686,7 @@ async function handleSave(): Promise<void> {
           />
           <p class="text-xs text-muted-foreground">
             IAM access key ID for an AWS account with the required S3 permissions.
+            <span v-if="isEditing"> Leave all S3 fields blank to keep the current config unchanged.</span>
           </p>
         </div>
 
@@ -1697,6 +1729,7 @@ async function handleSave(): Promise<void> {
           />
           <p class="text-xs text-muted-foreground">
             AWS region where the bucket lives (for example `us-east-1`).
+            <span v-if="isEditing"> Re-enter access key, secret key, and region together to replace the stored config.</span>
           </p>
         </div>
 

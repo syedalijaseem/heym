@@ -3352,6 +3352,101 @@ For boolean values, use them directly without `== true`:
 **If a function is NOT in the documentation above, it DOES NOT EXIST!**
 Use ONLY: `str()`, `int()`, `float()`, `bool()`, `list()`, `dict(key=value)`, `len()`, `abs()`, `min()`, `max()`, `round()`, `sum()`, `sorted()`, `randomInt()`, `range()`, `array()`, `notNull()`, `upper()`, `lower()`, `strip()`, `capitalize()`, `title()`, `split()`, `join()`, `replace()`, `regexReplace()`, `hash()`, and the documented string/array/object methods.
 
+### 31. s3 (Amazon S3 Operations)
+- **Type**: `s3`
+- **Purpose**: Manage buckets and folders; list, upload, download, copy, and delete objects in Amazon S3
+- **Inputs**: 1 | **Outputs**: 1
+- **Required setup**: `credentialId` must point to an Amazon S3 credential
+- **Key data fields**:
+  - `label`: Node identifier
+  - `credentialId`: UUID of the S3 credential
+  - `s3Operation`: One of `putObject`, `getObject`, `deleteObject`, `listObjects`, `createBucket`, `deleteBucket`, `createFolder`, `deleteFolder`, `getAllFolder`, `listBuckets`, `copyObject`
+  - `s3Bucket`: Bucket name for all operations except `listBuckets`
+  - `s3Key`: Object key or folder path depending on the operation
+  - `s3SourceBucket`: Optional source bucket for `copyObject`
+  - `s3SourceKey`: Required source object key for `copyObject`
+  - `s3Prefix`: Optional prefix for `listObjects`
+  - `s3ContinuationToken`: Optional continuation token for `listObjects`
+  - `s3MaxKeys`: Optional page size for `listObjects` (1-1000)
+  - `s3Body`: Text content for `putObject`
+  - `s3ContentType`: Optional MIME type for `putObject` (for example `text/plain` or `application/json`)
+  - `s3IncludeBinary`: Boolean for `getObject`; when true the node returns `body_base64`
+
+**Amazon S3 examples**:
+```json
+{
+  "type": "s3",
+  "data": {
+    "label": "storeReport",
+    "credentialId": "s3-credential-uuid",
+    "s3Operation": "putObject",
+    "s3Bucket": "reports-bucket",
+    "s3Key": "$input.filename || 'daily-report.txt'",
+    "s3Body": "$input.text",
+    "s3ContentType": "text/plain"
+  }
+}
+```
+
+**Example workflow - Create a bucket from input and return the result**:
+```json
+{
+  "nodes": [
+    {
+      "id": "node_1",
+      "type": "textInput",
+      "position": {"x": 100, "y": 100},
+      "data": {
+        "label": "bucketRequest",
+        "inputFields": [
+          {"key": "bucketName"},
+          {"key": "region", "defaultValue": "us-east-1"}
+        ]
+      }
+    },
+    {
+      "id": "node_2",
+      "type": "s3",
+      "position": {"x": 350, "y": 100},
+      "data": {
+        "label": "createBucket",
+        "credentialId": "s3-credential-uuid",
+        "s3Operation": "createBucket",
+        "s3Bucket": "$bucketRequest.body.bucketName"
+      }
+    },
+    {
+      "id": "node_3",
+      "type": "output",
+      "position": {"x": 600, "y": 100},
+      "data": {
+        "label": "returnBucketStatus",
+        "message": "Bucket $createBucket.bucket created successfully",
+        "allowDownstream": false
+      }
+    }
+  ],
+  "edges": [
+    {"id": "edge_1", "source": "node_1", "target": "node_2"},
+    {"id": "edge_2", "source": "node_2", "target": "node_3"}
+  ]
+}
+```
+
+```json
+{
+  "type": "s3",
+  "data": {
+    "label": "listArchive",
+    "credentialId": "s3-credential-uuid",
+    "s3Operation": "listObjects",
+    "s3Bucket": "reports-bucket",
+    "s3Prefix": "archive/",
+    "s3MaxKeys": "100"
+  }
+}
+```
+
 ## Edge Connections
 
 Edges connect nodes. Handle specification depends on the node type:

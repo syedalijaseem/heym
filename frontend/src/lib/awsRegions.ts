@@ -19,6 +19,11 @@ export const AWS_REGIONS: AwsRegionData[] = [
     location: "Hong Kong",
   },
   {
+    name: "ap-east-2",
+    displayName: "Asia Pacific",
+    location: "Taipei",
+  },
+  {
     name: "ap-south-1",
     displayName: "Asia Pacific",
     location: "Mumbai",
@@ -52,6 +57,11 @@ export const AWS_REGIONS: AwsRegionData[] = [
     name: "ap-southeast-5",
     displayName: "Asia Pacific",
     location: "Malaysia",
+  },
+  {
+    name: "ap-southeast-6",
+    displayName: "Asia Pacific",
+    location: "New Zealand",
   },
   {
     name: "ap-southeast-7",
