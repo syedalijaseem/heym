@@ -101,6 +101,13 @@ import type {
 } from "@/types/agentMemory";
 import type { ExpressionGenerateRequest, ExpressionGenerateResponse } from "@/types/expression";
 import type {
+  DashboardData,
+  DashboardWidget,
+  WidgetCreateRequest,
+  WidgetDataResponse,
+  WidgetUpdateRequest,
+} from "@/types/dashboard";
+import type {
   Conversation,
   ConversationCreate,
   ConversationDetail,
@@ -1181,6 +1188,47 @@ export const gristApi = {
       `/workflows/grist/columns?doc_id=${docId}&table_id=${tableId}`,
     );
     return response.data.columns;
+  },
+};
+
+export const dashboardApi = {
+  getDashboard: async (): Promise<DashboardData> => {
+    const response = await api.get<DashboardData>("/dashboards");
+    return response.data;
+  },
+
+  createWidget: async (body: WidgetCreateRequest): Promise<DashboardWidget> => {
+    const response = await api.post<DashboardWidget>("/dashboards/widgets", body);
+    return response.data;
+  },
+
+  updateWidget: async (id: string, body: WidgetUpdateRequest): Promise<DashboardWidget> => {
+    const response = await api.patch<DashboardWidget>(`/dashboards/widgets/${id}`, body);
+    return response.data;
+  },
+
+  deleteWidget: async (id: string): Promise<void> => {
+    await api.delete(`/dashboards/widgets/${id}`);
+  },
+
+  getWidgetData: async (id: string, force = false): Promise<WidgetDataResponse> => {
+    const response = await api.get<WidgetDataResponse>(`/dashboards/widgets/${id}/data`, {
+      params: { force },
+    });
+    return response.data;
+  },
+
+  aiGenerateWidget: async (
+    prompt: string,
+    credentialId: string,
+    model: string,
+  ): Promise<DashboardWidget> => {
+    const response = await api.post<DashboardWidget>("/dashboards/widgets/ai-generate", {
+      prompt,
+      credential_id: credentialId,
+      model,
+    });
+    return response.data;
   },
 };
 
