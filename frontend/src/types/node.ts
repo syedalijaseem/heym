@@ -726,4 +726,39 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
       timeoutSeconds: 30,
     },
   },
+  chartOutput: {
+    type: "chartOutput",
+    label: "Chart Output",
+    description: "Terminal node that turns upstream rows into a dashboard chart",
+    color: "node-output",
+    icon: "BarChart3",
+    inputs: 1,
+    outputs: 0,
+    defaultData: {
+      label: "chartOutput",
+      chartType: "bar" as
+        | "pie"
+        | "bar"
+        | "line"
+        | "area"
+        | "table"
+        | "numeric"
+        | "gauge"
+        | "scatter"
+        | "proportion"
+        | "barGauge",
+      orientation: "vertical" as "horizontal" | "vertical",
+      dataPath: "",
+      labelField: "",
+      valueField: "",
+      xField: "",
+      yField: "",
+      min: 0,
+      max: 100,
+      series: [] as { name: string; field: string }[],
+      columns: [] as string[],
+      unit: "",
+      title: "",
+    },
+  },
 };

@@ -26,6 +26,7 @@ import {
 } from "lucide-vue-next";
 
 import AnalyticsDashboard from "@/components/Analytics/AnalyticsDashboard.vue";
+import DashboardsPanel from "@/components/Dashboards/DashboardsPanel.vue";
 import CredentialsPanel from "@/components/Credentials/CredentialsPanel.vue";
 import TemplatesPage from "@/features/templates/components/TemplatesPage.vue";
 import { useRunbookPlayer } from "@/features/runbook/useRunbookPlayer";
@@ -98,11 +99,11 @@ function parseTabParam(raw: string | undefined | null): { tab: string; subPath: 
 
 const validTabs = new Set([
   "workflows", "schedules", "credentials", "globalvariables", "vectorstores", "mcp",
-  "traces", "analytics", "templates", "teams", "logs", "drive", "datatable",
+  "traces", "analytics", "dashboard", "templates", "teams", "logs", "drive", "datatable",
 ]);
 
 const parsedInitial = parseTabParam(tabParam === "chat" ? undefined : tabParam);
-type TabKey = "workflows" | "schedules" | "credentials" | "globalvariables" | "vectorstores" | "mcp" | "traces" | "analytics" | "templates" | "teams" | "logs" | "drive" | "datatable";
+type TabKey = "workflows" | "schedules" | "credentials" | "globalvariables" | "vectorstores" | "mcp" | "traces" | "analytics" | "dashboard" | "templates" | "teams" | "logs" | "drive" | "datatable";
 const initialTab: TabKey = validTabs.has(parsedInitial.tab) ? (parsedInitial.tab as TabKey) : "workflows";
 const dataTableInitialId = ref<string | null>(parsedInitial.tab === "datatable" ? parsedInitial.subPath : null);
 const activeTab = ref<TabKey>(initialTab);
@@ -1977,6 +1978,8 @@ async function restoreFromTrash(workflowId: string, event: Event): Promise<void>
             v-else-if="activeTab === 'analytics'"
             @open-error-history="(wfId) => { historyWorkflowId = wfId; historyInitialStatus = 'error'; historyOpen = true; pushOverlayState(); }"
           />
+
+          <DashboardsPanel v-else-if="activeTab === 'dashboard'" />
 
           <TeamsPanel v-else-if="activeTab === 'teams'" />
 

@@ -9,6 +9,7 @@ import {
   FlaskConical,
   HardDrive,
   Key,
+  LayoutDashboard,
   LayoutTemplate,
   MessageCircle,
   Server,
@@ -32,11 +33,12 @@ const tabs = [
   { id: "chat", label: "Chat", icon: MessageCircle },
   { id: "drive", label: "Drive", icon: HardDrive },
   { id: "datatable", label: "DataTable", icon: Table2 },
-  { id: "credentials", label: "Credentials", icon: Key },
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "vectorstores", label: "Vectors", icon: Database },
   { id: "mcp", label: "MCP", icon: Server },
   { id: "traces", label: "Traces", icon: Activity },
   { id: "analytics", label: "Analytics", icon: BarChart3 },
+  { id: "credentials", label: "Credentials", icon: Key },
   { id: "evals", label: "Evals", icon: FlaskConical },
   { id: "teams", label: "Teams", icon: Users },
   { id: "logs", label: "Logs", icon: Terminal },
@@ -54,6 +56,7 @@ const activeTab = computed(() => {
     tabParam === "mcp" ||
     tabParam === "traces" ||
     tabParam === "analytics" ||
+    tabParam === "dashboard" ||
     tabParam === "logs" ||
     tabParam === "drive" ||
     tabParam === "datatable" ||

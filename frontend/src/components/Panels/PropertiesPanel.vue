@@ -9,7 +9,7 @@ import {
   type ComponentPublicInstance,
 } from "vue";
 import { useRouter } from "vue-router";
-import { AlertTriangle, Ban, BookOpen, Bot, Braces, Brain, Bug, CalendarClock, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock, Copy, Database, Download, ExternalLink, FileArchive, FileJson, GitBranch, GitMerge, Globe, HardDrive, Inbox, Loader2, Mail, Maximize2, MessageSquare, Minus, Minimize2, MonitorPlay, MousePointerClick, Play, Plug, Plus, Power, Rabbit, Radio, Repeat, Search, Send, Server, Settings, Settings2, Sheet, ShieldAlert, Shuffle, Sparkles, StickyNote, Table2, Terminal, Trash2, Type, Variable, X, XCircle, Zap } from "lucide-vue-next";
+import { AlertTriangle, Ban, BarChart3, BookOpen, Bot, Braces, Brain, Bug, CalendarClock, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock, Copy, Database, Download, ExternalLink, FileArchive, FileJson, GitBranch, GitMerge, Globe, HardDrive, Inbox, Loader2, Mail, Maximize2, MessageSquare, Minus, Minimize2, MonitorPlay, MousePointerClick, Play, Plug, Plus, Power, Rabbit, Radio, Repeat, Search, Send, Server, Settings, Settings2, Sheet, ShieldAlert, Shuffle, Sparkles, StickyNote, Table2, Terminal, Trash2, Type, Variable, X, XCircle, Zap } from "lucide-vue-next";
 
 import type { CredentialListItem, LLMModel } from "@/types/credential";
 import type {
@@ -64,6 +64,7 @@ import type { WebSocketTriggerEventName } from "@/types/workflow";
 import { NODE_DEFINITIONS } from "@/types/node";
 
 const nodeIcons: Record<NodeType, ReturnType<typeof Type>> = {
+  chartOutput: BarChart3,
   textInput: Type,
   cron: CalendarClock,
   websocketTrigger: Radio,
@@ -109,6 +110,7 @@ const nodeIcons: Record<NodeType, ReturnType<typeof Type>> = {
 };
 
 const nodeColorMap: Record<NodeType, string> = {
+  chartOutput: "node-output",
   textInput: "node-input",
   cron: "node-cron",
   websocketTrigger: "node-websocket",
@@ -154,6 +156,7 @@ const nodeColorMap: Record<NodeType, string> = {
 };
 
 const nodeDocSlugMap: Record<NodeType, string> = {
+  chartOutput: "chart-output-node",
   textInput: "input-node",
   cron: "cron-node",
   websocketTrigger: "websocket-trigger-node",
@@ -8193,6 +8196,155 @@ onUnmounted(() => {
               <p class="text-xs text-muted-foreground">
                 Written to backend (server) console only; not visible in the browser.
               </p>
+            </div>
+          </template>
+
+          <template v-if="selectedNode.type === 'chartOutput'">
+            <div class="space-y-2">
+              <Label>Chart type</Label>
+              <Select
+                :model-value="selectedNode.data.chartType || 'bar'"
+                :options="[
+                  { value: 'bar', label: 'Bar' },
+                  { value: 'line', label: 'Line' },
+                  { value: 'area', label: 'Area' },
+                  { value: 'pie', label: 'Pie' },
+                  { value: 'table', label: 'Table' },
+                  { value: 'numeric', label: 'Numeric' },
+                  { value: 'gauge', label: 'Gauge' },
+                  { value: 'scatter', label: 'Scatter' },
+                  { value: 'proportion', label: 'Proportion' },
+                  { value: 'barGauge', label: 'Bar gauge' },
+                ]"
+                @update:model-value="updateNodeData('chartType', $event)"
+              />
+            </div>
+
+            <div
+              v-if="selectedNode.data.chartType === 'bar'"
+              class="space-y-2"
+            >
+              <Label>Orientation</Label>
+              <Select
+                :model-value="selectedNode.data.orientation || 'vertical'"
+                :options="[
+                  { value: 'vertical', label: 'Vertical' },
+                  { value: 'horizontal', label: 'Horizontal' },
+                ]"
+                @update:model-value="updateNodeData('orientation', $event)"
+              />
+            </div>
+
+            <div class="space-y-2">
+              <Label>Data path</Label>
+              <Input
+                :model-value="selectedNode.data.dataPath || ''"
+                placeholder="e.g. data or result.items"
+                @update:model-value="updateNodeData('dataPath', $event)"
+              />
+              <p class="text-xs text-muted-foreground">
+                Dot path to the rows array inside the upstream output. Leave empty to auto-detect.
+              </p>
+            </div>
+
+            <template
+              v-if="['bar', 'line', 'area', 'pie', 'numeric', 'gauge', 'proportion', 'barGauge'].includes(selectedNode.data.chartType || 'bar')"
+            >
+              <div
+                v-if="['bar', 'line', 'area', 'pie', 'proportion', 'barGauge'].includes(selectedNode.data.chartType || 'bar')"
+                class="space-y-2"
+              >
+                <Label>Label field</Label>
+                <Input
+                  :model-value="selectedNode.data.labelField || ''"
+                  placeholder="row key used as category label"
+                  @update:model-value="updateNodeData('labelField', $event)"
+                />
+              </div>
+
+              <div class="space-y-2">
+                <Label>Value field</Label>
+                <Input
+                  :model-value="selectedNode.data.valueField || ''"
+                  placeholder="row key used as numeric value"
+                  @update:model-value="updateNodeData('valueField', $event)"
+                />
+              </div>
+            </template>
+
+            <template v-if="selectedNode.data.chartType === 'scatter'">
+              <div class="space-y-2">
+                <Label>X field</Label>
+                <Input
+                  :model-value="selectedNode.data.xField || ''"
+                  placeholder="row key for the X axis (numeric)"
+                  @update:model-value="updateNodeData('xField', $event)"
+                />
+              </div>
+              <div class="space-y-2">
+                <Label>Y field</Label>
+                <Input
+                  :model-value="selectedNode.data.yField || ''"
+                  placeholder="row key for the Y axis (numeric)"
+                  @update:model-value="updateNodeData('yField', $event)"
+                />
+              </div>
+            </template>
+
+            <div
+              v-if="selectedNode.data.chartType === 'gauge'"
+              class="grid grid-cols-2 gap-2"
+            >
+              <div class="space-y-2">
+                <Label>Min</Label>
+                <Input
+                  type="number"
+                  :model-value="selectedNode.data.min ?? 0"
+                  @update:model-value="updateNodeData('min', $event)"
+                />
+              </div>
+              <div class="space-y-2">
+                <Label>Max</Label>
+                <Input
+                  type="number"
+                  :model-value="selectedNode.data.max ?? 100"
+                  @update:model-value="updateNodeData('max', $event)"
+                />
+              </div>
+            </div>
+
+            <div
+              v-if="selectedNode.data.chartType === 'barGauge'"
+              class="space-y-2"
+            >
+              <Label>Max (optional)</Label>
+              <Input
+                type="number"
+                :model-value="selectedNode.data.max ?? ''"
+                placeholder="defaults to the largest row value"
+                @update:model-value="updateNodeData('max', $event)"
+              />
+            </div>
+
+            <div
+              v-if="['numeric', 'gauge', 'barGauge'].includes(selectedNode.data.chartType || 'bar')"
+              class="space-y-2"
+            >
+              <Label>Unit</Label>
+              <Input
+                :model-value="selectedNode.data.unit || ''"
+                placeholder="e.g. USD, %, ms"
+                @update:model-value="updateNodeData('unit', $event)"
+              />
+            </div>
+
+            <div class="space-y-2">
+              <Label>Title</Label>
+              <Input
+                :model-value="selectedNode.data.title || ''"
+                placeholder="optional chart title"
+                @update:model-value="updateNodeData('title', $event)"
+              />
             </div>
           </template>
 

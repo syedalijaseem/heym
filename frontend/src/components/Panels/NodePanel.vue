@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, watch, nextTick, ref } from "vue";
-import { AlertTriangle, Ban, Bot, Brain, Braces, Bug, CalendarClock, Clock, Database, FileJson, GitBranch, GitMerge, Globe, HardDrive, Inbox, LayoutTemplate, Mail, MessageSquare, MonitorPlay, Play, Plug, Rabbit, Radio, Repeat, Search, Send, Server, Settings2, Sheet, Shuffle, StickyNote, Table2, Terminal, Type, Variable, X, XCircle } from "lucide-vue-next";
+import { AlertTriangle, Ban, BarChart3, Bot, Brain, Braces, Bug, CalendarClock, Clock, Database, FileJson, GitBranch, GitMerge, Globe, HardDrive, Inbox, LayoutTemplate, Mail, MessageSquare, MonitorPlay, Play, Plug, Rabbit, Radio, Repeat, Search, Send, Server, Settings2, Sheet, Shuffle, StickyNote, Table2, Terminal, Type, Variable, X, XCircle } from "lucide-vue-next";
 
 import type { NodeTemplate } from "@/features/templates/types/template.types";
 import type { NodeType, WorkflowEdge, WorkflowNode } from "@/types/workflow";
@@ -186,6 +186,7 @@ const icons = {
   drive: HardDrive,
   s3: Server,
   mcpCall: Plug,
+  chartOutput: BarChart3,
 };
 
 const allNodeTypes = Object.values(NODE_DEFINITIONS);
@@ -195,13 +196,37 @@ const { isRunbookPlaying } = useRunbookPlayer();
 /** While the runbook demo plays, the panel shows only the nodes it builds. */
 const RUNBOOK_PANEL_NODE_TYPES: NodeType[] = ["textInput", "wait", "consoleLog"];
 
+/** Dashboard-widget workflows have no trigger/input — they start by producing data. */
+const DASHBOARD_HIDDEN_NODE_TYPES = new Set<NodeType>([
+  "textInput",
+  "cron",
+  "telegramTrigger",
+  "slackTrigger",
+  "discordTrigger",
+  "imapTrigger",
+  "websocketTrigger",
+  "rabbitmq",
+  "output",
+  "jsonOutputMapper",
+]);
+
+const isDashboardWidget = computed(
+  () => workflowStore.currentWorkflow?.kind === "dashboard_widget",
+);
+
+const paletteNodeTypes = computed(() =>
+  isDashboardWidget.value
+    ? allNodeTypes.filter((node) => !DASHBOARD_HIDDEN_NODE_TYPES.has(node.type))
+    : allNodeTypes,
+);
+
 const nodeTypes = computed(() => {
   if (isRunbookPlaying.value) {
     return RUNBOOK_PANEL_NODE_TYPES.map((type) => NODE_DEFINITIONS[type]);
   }
   const query = searchQuery.value.toLowerCase().trim();
-  if (!query) return allNodeTypes;
-  return allNodeTypes.filter(
+  if (!query) return paletteNodeTypes.value;
+  return paletteNodeTypes.value.filter(
     (node) =>
       node.label.toLowerCase().includes(query) ||
       node.description.toLowerCase().includes(query)

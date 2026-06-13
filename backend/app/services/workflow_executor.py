@@ -31,6 +31,7 @@ from simpleeval import DEFAULT_FUNCTIONS, EvalWithCompoundTypes, SimpleEval
 from app.api.data_tables import _coerce_row_data
 from app.http_identity import HEYM_USER_AGENT
 from app.observability import tracing
+from app.services.chart_payload import build_chart_payload
 from app.services.execution_cancellation import (
     clear_execution as _clear_sub_execution,
 )
@@ -8855,6 +8856,19 @@ class WorkflowExecutor:
                 output = first_input if isinstance(first_input, dict) else {"value": first_input}
                 output = dict(output)
                 output["logMessage"] = self._unwrap_value(resolved)
+
+            elif node_type == "chartOutput":
+                if len(inputs) == 1:
+                    source_data = next(iter(inputs.values()))
+                elif inputs:
+                    merged: dict = {}
+                    for value in inputs.values():
+                        if isinstance(value, dict):
+                            merged.update(value)
+                    source_data = merged
+                else:
+                    source_data = {}
+                output = build_chart_payload(node_data, source_data)
 
             elif node_type == "playwright":
                 output = self._execute_playwright_node(node_data, inputs, node_id, node_label)

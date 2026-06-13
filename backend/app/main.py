@@ -20,6 +20,7 @@ from app.api import (
     chats,
     config,
     credentials,
+    dashboards,
     data_tables,
     discord,
     evals,
@@ -245,6 +246,7 @@ app.include_router(hitl.router, prefix="/api/hitl", tags=["HITL"])
 app.include_router(files.router, prefix="/api/files", tags=["Files"])
 app.include_router(portal.router, prefix="/api/workflows", tags=["Portal Settings"])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["Analytics"])
+app.include_router(dashboards.router, prefix="/api/dashboards", tags=["Dashboards"])
 app.include_router(logs.router, prefix="/api/logs", tags=["Logs"])
 app.include_router(evals.router, prefix="/api/evals", tags=["Evals"])
 app.include_router(chats.router, prefix="/api/chats", tags=["Chats"])

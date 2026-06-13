@@ -947,6 +947,18 @@ function getDefaultNodeData(type: NodeType): WorkflowNode["data"] {
       toolArguments: {},
       timeoutSeconds: 30,
     },
+    chartOutput: {
+      label: "chartOutput",
+      chartType: "bar",
+      orientation: "vertical",
+      dataPath: "",
+      labelField: "",
+      valueField: "",
+      series: [],
+      columns: [],
+      unit: "",
+      title: "",
+    },
   };
   return defaults[type];
 }

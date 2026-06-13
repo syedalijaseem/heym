@@ -251,6 +251,7 @@ class Workflow(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    kind: Mapped[str] = mapped_column(String(32), default="workflow", nullable=False, index=True)
     nodes: Mapped[dict] = mapped_column(JSON, default=list)
     edges: Mapped[dict] = mapped_column(JSON, default=list)
     auth_type: Mapped[WorkflowAuthType] = mapped_column(
@@ -354,6 +355,58 @@ class WorkflowVersion(Base):
 
     workflow: Mapped["Workflow"] = relationship("Workflow", back_populates="versions")
     created_by: Mapped["User"] = relationship("User")
+
+
+class Dashboard(Base):
+    __tablename__ = "dashboards"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False, default="Dashboard")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    widgets: Mapped[list["DashboardWidget"]] = relationship(
+        "DashboardWidget", back_populates="dashboard", cascade="all, delete-orphan"
+    )
+
+
+class DashboardWidget(Base):
+    __tablename__ = "dashboard_widgets"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    dashboard_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("dashboards.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    workflow_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("workflows.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    title: Mapped[str] = mapped_column(String(255), nullable=False, default="Untitled")
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    chart_type: Mapped[str] = mapped_column(String(32), nullable=False, default="bar")
+    layout: Mapped[dict] = mapped_column(JSON, default=lambda: {"x": 0, "y": 0, "w": 4, "h": 4})
+    cache_ttl_seconds: Mapped[int] = mapped_column(Integer, default=300, nullable=False)
+    position: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    cached_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    cached_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cached_workflow_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    dashboard: Mapped["Dashboard"] = relationship("Dashboard", back_populates="widgets")
+    workflow: Mapped["Workflow"] = relationship("Workflow")
 
 
 class WorkflowShare(Base):

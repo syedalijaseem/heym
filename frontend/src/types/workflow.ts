@@ -18,6 +18,7 @@ export interface Workflow {
   id: string;
   name: string;
   description: string | null;
+  kind?: string;
   nodes: WorkflowNode[];
   edges: WorkflowEdge[];
   auth_type: WorkflowAuthType;
@@ -164,7 +165,8 @@ export type NodeType =
   | "s3"
   | "slackTrigger"
   | "discordTrigger"
-  | "mcpCall";
+  | "mcpCall"
+  | "chartOutput";
 
 export type VariableType =
   | "string"
@@ -519,6 +521,30 @@ export interface NodeData {
   selectedTool?: string;
   toolArguments?: Record<string, string>;
   timeoutSeconds?: number;
+  // chartOutput node
+  chartType?:
+    | "pie"
+    | "bar"
+    | "line"
+    | "area"
+    | "table"
+    | "numeric"
+    | "gauge"
+    | "scatter"
+    | "proportion"
+    | "barGauge";
+  orientation?: "horizontal" | "vertical";
+  dataPath?: string;
+  labelField?: string;
+  valueField?: string;
+  xField?: string;
+  yField?: string;
+  min?: number;
+  max?: number;
+  series?: { name: string; field: string }[];
+  columns?: string[];
+  unit?: string;
+  title?: string;
 }
 
 export interface WorkflowShare {

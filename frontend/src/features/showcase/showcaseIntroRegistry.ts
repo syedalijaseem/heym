@@ -18,6 +18,7 @@ export const SHOWCASE_INTRO_VIDEO_BY_CONTEXT: Record<ShowcaseContext, string> = 
   "dashboard:mcp": "/features/showcase/mcp.webm",
   "dashboard:traces": "/features/showcase/traces.webm",
   "dashboard:analytics": "/features/showcase/analytics.webm",
+  "dashboard:dashboard": "/features/showcase/analytics.webm",
   evals: "/features/showcase/evals.webm",
   "dashboard:teams": "/features/showcase/teams.webm",
   "dashboard:logs": "/features/showcase/logs.mp4",
@@ -61,6 +62,10 @@ export const SHOWCASE_INTRO_CONTENT_BY_CONTEXT: Record<ShowcaseContext, Showcase
   "dashboard:analytics": {
     title: "Track platform performance",
     description: "Monitor adoption and execution trends to decide what to optimize next with real usage signals.",
+  },
+  "dashboard:dashboard": {
+    title: "Build your own dashboards",
+    description: "Assemble chart widgets backed by workflows so the metrics you care about are visible at a glance.",
   },
   "dashboard:teams": {
     title: "Scale collaboration cleanly",
