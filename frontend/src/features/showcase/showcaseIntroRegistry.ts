@@ -18,7 +18,7 @@ export const SHOWCASE_INTRO_VIDEO_BY_CONTEXT: Record<ShowcaseContext, string> = 
   "dashboard:mcp": "/features/showcase/mcp.webm",
   "dashboard:traces": "/features/showcase/traces.webm",
   "dashboard:analytics": "/features/showcase/analytics.webm",
-  "dashboard:dashboard": "/features/showcase/analytics.webm",
+  "dashboard:dashboard": "/features/showcase/dashboard.webm",
   evals: "/features/showcase/evals.webm",
   "dashboard:teams": "/features/showcase/teams.webm",
   "dashboard:logs": "/features/showcase/logs.mp4",
