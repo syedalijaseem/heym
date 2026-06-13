@@ -110,7 +110,7 @@ New tables (Alembic migration; UUID PKs; index FKs):
 
 ## Caching (PostgreSQL — no Redis)
 
-- Cache is stored on the `dashboard_widgets` row: `cached_payload` (JSONB), `cached_at`, `cached_workflow_version`.
+- Cache is stored on the `dashboard_widgets` row: `cached_payload` (JSONB), `cached_at`, `cached_workflow_version`. **One cache per widget (1:1)** — each recompute overwrites the previous payload in place; no cache history is kept.
 - Freshness rule: serve cache when within TTL and version matches; otherwise recompute and upsert.
 - `?force=true` always recomputes. Workflow edits change the version, auto-invalidating the cache.
 - Redis is never used (it is optional/absent in deployments). This mirrors the existing PostgreSQL `WorkflowAnalyticsSnapshot` pattern.
