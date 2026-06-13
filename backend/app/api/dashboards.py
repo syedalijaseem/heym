@@ -1,13 +1,21 @@
+import asyncio
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.ai_assistant import (
+    WORKFLOW_BUILDER_TEMPERATURE,
+    _extract_generated_workflow_config,
+    get_credential_for_user,
+    get_openai_client,
+)
 from app.api.deps import get_current_user
-from app.db.models import Dashboard, DashboardWidget, User, Workflow
+from app.db.models import CredentialType, Dashboard, DashboardWidget, User, Workflow
 from app.db.session import get_db
 from app.models.dashboard_schemas import (
+    AiWidgetRequest,
     DashboardResponse,
     DashboardWidgetResponse,
     WidgetCreateRequest,
@@ -15,8 +23,39 @@ from app.models.dashboard_schemas import (
     WidgetUpdateRequest,
 )
 from app.services.dashboard_data import compute_widget_data
+from app.services.encryption import decrypt_config
+from app.services.llm_provider import is_reasoning_model
+from app.services.workflow_dsl_prompt import build_assistant_prompt
 
 router = APIRouter()
+
+_AI_WIDGET_SUFFIX = (
+    " The workflow MUST end with a single chartOutput node that produces the chart. "
+    "Choose an appropriate chartType (pie, bar, line, table, or numeric) and set "
+    "labelField/valueField (or series) on the chartOutput node so it renders the requested metric."
+)
+
+
+async def generate_widget_dsl(prompt: str, *, credential, model: str, user: User) -> dict:
+    """Generate a widget workflow DSL (nodes + edges) ending in a chartOutput node."""
+    config = decrypt_config(credential.encrypted_config)
+    client, _ = get_openai_client(credential.type, config)
+    system_prompt = build_assistant_prompt(None, [], getattr(user, "user_rules", None))
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": prompt + _AI_WIDGET_SUFFIX},
+    ]
+    kwargs: dict = {"model": model, "messages": messages, "stream": False}
+    if not is_reasoning_model(model):
+        kwargs["temperature"] = WORKFLOW_BUILDER_TEMPERATURE
+
+    def _call() -> str:
+        resp = client.chat.completions.create(**kwargs)
+        choice = resp.choices[0] if resp.choices else None
+        return choice.message.content if choice else ""
+
+    content = await asyncio.to_thread(_call)
+    return _extract_generated_workflow_config(content or "", prompt)
 
 
 async def _get_or_create_dashboard(db: AsyncSession, user: User) -> Dashboard:
@@ -176,3 +215,62 @@ async def get_widget_data(
 ) -> WidgetDataResponse:
     widget = await _load_widget(db, widget_id, current_user)
     return await compute_widget_data(db, widget, current_user, force=force)
+
+
+@router.post(
+    "/widgets/ai-generate",
+    response_model=DashboardWidgetResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def ai_generate_widget(
+    body: AiWidgetRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> DashboardWidgetResponse:
+    credential = await get_credential_for_user(body.credential_id, current_user, db)
+    if credential is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Credential not found")
+    if credential.type not in (
+        CredentialType.openai,
+        CredentialType.google,
+        CredentialType.custom,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Credential must be an LLM type (OpenAI, Google, or Custom)",
+        )
+
+    dashboard = await _get_or_create_dashboard(db, current_user)
+    dsl = await generate_widget_dsl(
+        body.prompt, credential=credential, model=body.model, user=current_user
+    )
+    nodes = dsl.get("nodes", [])
+    edges = dsl.get("edges", [])
+    chart_nodes = [n for n in nodes if n.get("type") == "chartOutput"]
+    if not chart_nodes:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="AI did not produce a chartOutput node",
+        )
+    chart_type = chart_nodes[-1].get("data", {}).get("chartType", "bar")
+    workflow = Workflow(
+        name="[widget] AI generated",
+        owner_id=current_user.id,
+        kind="dashboard_widget",
+        nodes=nodes,
+        edges=edges,
+    )
+    db.add(workflow)
+    await db.flush()
+    widget = DashboardWidget(
+        dashboard_id=dashboard.id,
+        workflow_id=workflow.id,
+        title=body.prompt[:60],
+        chart_type=chart_type,
+        layout={"x": 0, "y": 0, "w": 4, "h": 4},
+        cache_ttl_seconds=300,
+    )
+    db.add(widget)
+    await db.commit()
+    await db.refresh(widget)
+    return _widget_to_response(widget)

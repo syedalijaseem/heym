@@ -101,11 +101,21 @@ class TestAiGenerateWidget(unittest.IsolatedAsyncioTestCase):
             "edges": [{"id": "e", "source": "a", "target": "b"}],
         }
 
+        from app.db.models import CredentialType
         from app.models.dashboard_schemas import AiWidgetRequest
 
-        with patch.object(dash_api, "generate_widget_dsl", AsyncMock(return_value=fake_dsl)):
+        credential = MagicMock(type=CredentialType.openai)
+
+        with (
+            patch.object(dash_api, "generate_widget_dsl", AsyncMock(return_value=fake_dsl)),
+            patch.object(dash_api, "get_credential_for_user", AsyncMock(return_value=credential)),
+        ):
             resp = await dash_api.ai_generate_widget(
-                body=AiWidgetRequest(prompt="show signups by month"),
+                body=AiWidgetRequest(
+                    prompt="show signups by month",
+                    credential_id=uuid.uuid4(),
+                    model="gpt-4o",
+                ),
                 current_user=user,
                 db=db,
             )

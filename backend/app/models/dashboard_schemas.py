@@ -53,3 +53,5 @@ class WidgetDataResponse(BaseModel):
 
 class AiWidgetRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=2000)
+    credential_id: uuid.UUID
+    model: str = Field(min_length=1, max_length=200)
