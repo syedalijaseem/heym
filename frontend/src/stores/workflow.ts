@@ -1901,6 +1901,78 @@ export const useWorkflowStore = defineStore("workflow", () => {
           });
         }
       }
+
+      if (node.type === "s3") {
+        if (!node.data.credentialId || !isValidUUID(node.data.credentialId)) {
+          errors.push({
+            nodeId: node.id,
+            nodeLabel: node.data.label,
+            nodeType: "Amazon S3",
+            message: "Credential is not selected",
+          });
+        }
+        if (!node.data.s3Operation) {
+          errors.push({
+            nodeId: node.id,
+            nodeLabel: node.data.label,
+            nodeType: "Amazon S3",
+            message: "Operation is not selected",
+          });
+        }
+        if (
+          node.data.s3Operation !== "listBuckets" &&
+          (!node.data.s3Bucket || node.data.s3Bucket.trim() === "")
+        ) {
+          errors.push({
+            nodeId: node.id,
+            nodeLabel: node.data.label,
+            nodeType: "Amazon S3",
+            message: "Bucket is required",
+          });
+        }
+        if (
+          (node.data.s3Operation === "createFolder" ||
+            node.data.s3Operation === "deleteFolder" ||
+            node.data.s3Operation === "getAllFolder") &&
+          (!node.data.s3Key || node.data.s3Key.trim() === "")
+        ) {
+          errors.push({
+            nodeId: node.id,
+            nodeLabel: node.data.label,
+            nodeType: "Amazon S3",
+            message: "Folder path is required",
+          });
+        }
+        if (
+          node.data.s3Operation &&
+          node.data.s3Operation !== "listObjects" &&
+          node.data.s3Operation !== "createBucket" &&
+          node.data.s3Operation !== "deleteBucket" &&
+          node.data.s3Operation !== "listBuckets" &&
+          node.data.s3Operation !== "createFolder" &&
+          node.data.s3Operation !== "deleteFolder" &&
+          node.data.s3Operation !== "getAllFolder" &&
+          (!node.data.s3Key || node.data.s3Key.trim() === "")
+        ) {
+          errors.push({
+            nodeId: node.id,
+            nodeLabel: node.data.label,
+            nodeType: "Amazon S3",
+            message: "Object key is required for this operation",
+          });
+        }
+        if (
+          node.data.s3Operation === "copyObject" &&
+          (!node.data.s3SourceKey || node.data.s3SourceKey.trim() === "")
+        ) {
+          errors.push({
+            nodeId: node.id,
+            nodeLabel: node.data.label,
+            nodeType: "Amazon S3",
+            message: "Source object key is required for copy operation",
+          });
+        }
+      }
     }
 
     return {

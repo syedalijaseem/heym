@@ -161,6 +161,7 @@ export type NodeType =
   | "playwright"
   | "dataTable"
   | "drive"
+  | "s3"
   | "slackTrigger"
   | "discordTrigger"
   | "mcpCall";
@@ -479,6 +480,17 @@ export interface NodeData {
   driveIncludeBinary?: boolean;
   driveSourceUrl?: string;
   driveConvertTargetFormat?: string;
+  s3Operation?: "putObject" | "getObject" | "deleteObject" | "listObjects" | "createBucket" | "deleteBucket" | "createFolder" | "deleteFolder" | "getAllFolder" | "listBuckets" | "copyObject";
+  s3Bucket?: string;
+  s3Key?: string;
+  s3SourceBucket?: string;
+  s3SourceKey?: string;
+  s3Prefix?: string;
+  s3ContinuationToken?: string;
+  s3Body?: string;
+  s3ContentType?: string;
+  s3MaxKeys?: string;
+  s3IncludeBinary?: boolean;
   bqOperation?: string;
   bqProjectId?: string;
   bqQuery?: string;

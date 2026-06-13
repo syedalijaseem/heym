@@ -24,6 +24,8 @@ Credentials store API keys and secrets used by workflow nodes. You add them in t
 | [Redis](../nodes/redis-node.md) | Redis | Connection |
 | [Grist](../nodes/grist-node.md) | Grist | API key + server URL |
 | [Google Sheets](../nodes/google-sheets-node.md) | Google Sheets (OAuth2) | Client ID + Client Secret + OAuth2 consent |
+| [BigQuery](../nodes/bigquery-node.md) | BigQuery (OAuth2) | Client ID + Client Secret + OAuth2 consent |
+| [Amazon S3](../nodes/amazon-s3-node.md) | Amazon S3 | Access key, secret key, region |
 | [RabbitMQ](../nodes/rabbitmq-node.md) | RabbitMQ | AMQP URL |
 
 For detailed setup (hosts, ports, provider-specific fields), see [Third-Party Integrations](./integrations.md). That includes Telegram bot setup, inbound email via IMAP, and outbound email via SMTP.

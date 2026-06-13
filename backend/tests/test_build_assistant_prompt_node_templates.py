@@ -67,6 +67,20 @@ class TestBuildAssistantPromptNodeTemplates(unittest.TestCase):
         self.assertIn("websocketTriggerEvents", prompt)
         self.assertIn("websocketMessage", prompt)
 
+    def test_includes_amazon_s3_guidance(self) -> None:
+        prompt = build_assistant_prompt()
+
+        self.assertIn("### 31. s3 (Amazon S3 Operations)", prompt)
+        self.assertIn('"type": "s3"', prompt)
+        self.assertIn("s3Operation", prompt)
+        self.assertIn("s3ContentType", prompt)
+        self.assertIn("putObject", prompt)
+        self.assertIn("createBucket", prompt)
+        self.assertIn('"nodes": [', prompt)
+        self.assertIn('"edges": [', prompt)
+        self.assertIn('"label": "bucketRequest"', prompt)
+        self.assertIn('"s3Bucket": "$bucketRequest.body.bucketName"', prompt)
+
 
 if __name__ == "__main__":
     unittest.main()
