@@ -262,6 +262,29 @@ export const SHOWCASE_DEFINITIONS: Record<ShowcaseContext, ShowcaseDefinition> =
     ],
     docsTarget: docsTarget("tabs", "analytics-tab", "Analytics Tab"),
   },
+  "dashboard:dashboard": {
+    id: "dashboard:dashboard",
+    title: "Dashboard",
+    summary: "Build a grid of chart widgets, each rendered from its own workflow, so the data you care about is visible at a glance.",
+    bullets: [
+      "Each widget is backed by a workflow that produces data and feeds a Chart Output node.",
+      "Use bar, line, pie, table, and numeric widgets to fit the metric.",
+      "Generate or fine-tune widgets with AI, and cache results so the page stays fast.",
+    ],
+    highlights: [
+      { eyebrow: "Compose", title: "Workflow-backed charts", description: "Any data a workflow can produce becomes a chart.", tone: "primary" },
+      { eyebrow: "Speed", title: "Cached results", description: "Per-widget caching avoids re-running workflows on every visit.", tone: "amber" },
+      { eyebrow: "AI", title: "Generate and fine-tune", description: "Describe a metric and let AI build or adjust the widget.", tone: "blue" },
+    ],
+    actions: [
+      docsAction("dashboard-docs", "Open dashboard docs", "Read how to build dashboard widgets.", docsTarget("tabs", "dashboard-tab", "Dashboard Tab")),
+    ],
+    details: [
+      { id: "dashboard-purpose", title: "What this is for", content: "Use the dashboard when you want a persistent, at-a-glance view of metrics assembled from your own workflows." },
+      { id: "dashboard-followup", title: "How to build it", content: "Add a widget, build its workflow so the last node before Chart Output produces rows, then arrange and resize widgets on the grid." },
+    ],
+    docsTarget: docsTarget("tabs", "dashboard-tab", "Dashboard Tab"),
+  },
   "dashboard:teams": {
     id: "dashboard:teams",
     title: "Teams",

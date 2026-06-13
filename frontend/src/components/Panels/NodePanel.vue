@@ -196,13 +196,34 @@ const { isRunbookPlaying } = useRunbookPlayer();
 /** While the runbook demo plays, the panel shows only the nodes it builds. */
 const RUNBOOK_PANEL_NODE_TYPES: NodeType[] = ["textInput", "wait", "consoleLog"];
 
+/** Dashboard-widget workflows have no trigger/input — they start by producing data. */
+const DASHBOARD_HIDDEN_NODE_TYPES = new Set<NodeType>([
+  "textInput",
+  "cron",
+  "telegramTrigger",
+  "slackTrigger",
+  "discordTrigger",
+  "imapTrigger",
+  "websocketTrigger",
+]);
+
+const isDashboardWidget = computed(
+  () => workflowStore.currentWorkflow?.kind === "dashboard_widget",
+);
+
+const paletteNodeTypes = computed(() =>
+  isDashboardWidget.value
+    ? allNodeTypes.filter((node) => !DASHBOARD_HIDDEN_NODE_TYPES.has(node.type))
+    : allNodeTypes,
+);
+
 const nodeTypes = computed(() => {
   if (isRunbookPlaying.value) {
     return RUNBOOK_PANEL_NODE_TYPES.map((type) => NODE_DEFINITIONS[type]);
   }
   const query = searchQuery.value.toLowerCase().trim();
-  if (!query) return allNodeTypes;
-  return allNodeTypes.filter(
+  if (!query) return paletteNodeTypes.value;
+  return paletteNodeTypes.value.filter(
     (node) =>
       node.label.toLowerCase().includes(query) ||
       node.description.toLowerCase().includes(query)

@@ -27,6 +27,7 @@ export interface DashboardWidget {
   id: string;
   workflow_id: string;
   title: string;
+  description: string | null;
   chart_type: ChartPayload["type"];
   layout: WidgetLayout;
   cache_ttl_seconds: number;
@@ -50,6 +51,7 @@ export interface WidgetDataResponse {
 
 export interface WidgetCreateRequest {
   title: string;
+  description?: string | null;
   chart_type: ChartPayload["type"];
   layout: WidgetLayout;
   cache_ttl_seconds: number;
@@ -57,6 +59,7 @@ export interface WidgetCreateRequest {
 
 export interface WidgetUpdateRequest {
   title?: string;
+  description?: string | null;
   chart_type?: ChartPayload["type"];
   layout?: WidgetLayout;
   cache_ttl_seconds?: number;

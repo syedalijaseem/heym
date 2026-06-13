@@ -4,33 +4,26 @@ import { X } from "lucide-vue-next";
 
 import Button from "@/components/ui/Button.vue";
 import Input from "@/components/ui/Input.vue";
-import Select from "@/components/ui/Select.vue";
-import type { ChartPayload, WidgetCreateRequest } from "@/types/dashboard";
+import type { DashboardWidget, WidgetUpdateRequest } from "@/types/dashboard";
+
+const props = defineProps<{
+  widget: DashboardWidget;
+}>();
 
 const emit = defineEmits<{
   (e: "close"): void;
-  (e: "create", body: WidgetCreateRequest): void;
+  (e: "save", payload: WidgetUpdateRequest): void;
 }>();
 
-const title = ref("New widget");
-const description = ref("");
-const chartType = ref<ChartPayload["type"]>("bar");
+const title = ref(props.widget.title);
+const description = ref(props.widget.description ?? "");
+const cacheTtlSeconds = ref(props.widget.cache_ttl_seconds);
 
-const chartTypeOptions = [
-  { value: "bar", label: "Bar" },
-  { value: "line", label: "Line" },
-  { value: "pie", label: "Pie" },
-  { value: "table", label: "Table" },
-  { value: "numeric", label: "Numeric" },
-];
-
-function submit(): void {
-  emit("create", {
+function save(): void {
+  emit("save", {
     title: title.value.trim() || "Untitled",
     description: description.value.trim() ? description.value.trim() : null,
-    chart_type: chartType.value,
-    layout: { x: 0, y: 0, w: 4, h: 4 },
-    cache_ttl_seconds: 300,
+    cache_ttl_seconds: Number(cacheTtlSeconds.value) || 0,
   });
 }
 </script>
@@ -43,7 +36,7 @@ function submit(): void {
     <div class="w-full max-w-md rounded-lg border bg-card p-5 shadow-lg">
       <div class="mb-4 flex items-center justify-between">
         <h2 class="text-base font-semibold">
-          Add widget
+          Widget settings
         </h2>
         <button
           class="rounded p-1 text-muted-foreground hover:bg-accent"
@@ -64,15 +57,20 @@ function submit(): void {
             v-model="description"
             rows="2"
             class="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring"
-            placeholder="Optional. Shown on the canvas, not on the grid."
+            placeholder="Shown on the canvas; not displayed on the dashboard grid."
           />
         </div>
         <div class="space-y-1">
-          <label class="text-sm font-medium">Chart type</label>
-          <Select
-            v-model="chartType"
-            :options="chartTypeOptions"
+          <label class="text-sm font-medium">Cache duration (seconds)</label>
+          <Input
+            v-model.number="cacheTtlSeconds"
+            type="number"
+            min="0"
           />
+          <p class="text-xs text-muted-foreground">
+            How long a computed result is reused before the workflow runs again. Use the widget's
+            Refresh button to bypass the cache.
+          </p>
         </div>
       </div>
 
@@ -83,8 +81,8 @@ function submit(): void {
         >
           Cancel
         </Button>
-        <Button @click="submit">
-          Create &amp; edit
+        <Button @click="save">
+          Save
         </Button>
       </div>
     </div>

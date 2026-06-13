@@ -18,6 +18,7 @@ export interface Workflow {
   id: string;
   name: string;
   description: string | null;
+  kind?: string;
   nodes: WorkflowNode[];
   edges: WorkflowEdge[];
   auth_type: WorkflowAuthType;

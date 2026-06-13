@@ -6,9 +6,15 @@ import { Loader2, Pencil, Plus, RefreshCw, Sparkles } from "lucide-vue-next";
 import AddWidgetDialog from "@/components/Dashboards/AddWidgetDialog.vue";
 import AiWidgetDialog from "@/components/Dashboards/AiWidgetDialog.vue";
 import DashboardGrid from "@/components/Dashboards/DashboardGrid.vue";
+import WidgetSettingsDialog from "@/components/Dashboards/WidgetSettingsDialog.vue";
 import Button from "@/components/ui/Button.vue";
 import { dashboardApi } from "@/services/api";
-import type { DashboardWidget, WidgetCreateRequest, WidgetLayout } from "@/types/dashboard";
+import type {
+  DashboardWidget,
+  WidgetCreateRequest,
+  WidgetLayout,
+  WidgetUpdateRequest,
+} from "@/types/dashboard";
 
 const router = useRouter();
 
@@ -17,6 +23,8 @@ const loading = ref(true);
 const editMode = ref(false);
 const showAdd = ref(false);
 const showAi = ref(false);
+const refineWidget = ref<DashboardWidget | null>(null);
+const settingsWidget = ref<DashboardWidget | null>(null);
 const reloadKey = ref(0);
 
 async function loadDashboard(): Promise<void> {
@@ -61,6 +69,35 @@ async function handleGenerate(payload: {
 async function handleDelete(widgetId: string): Promise<void> {
   await dashboardApi.deleteWidget(widgetId);
   widgets.value = widgets.value.filter((w) => w.id !== widgetId);
+}
+
+async function handleRefine(payload: {
+  prompt: string;
+  credentialId: string;
+  model: string;
+}): Promise<void> {
+  const target = refineWidget.value;
+  if (!target) return;
+  try {
+    const updated = await dashboardApi.aiRefineWidget(
+      target.id,
+      payload.prompt,
+      payload.credentialId,
+      payload.model,
+    );
+    widgets.value = widgets.value.map((w) => (w.id === updated.id ? updated : w));
+    refineWidget.value = null;
+  } catch {
+    // keep the dialog open on failure so the user can retry
+  }
+}
+
+async function handleSettingsSave(payload: WidgetUpdateRequest): Promise<void> {
+  const target = settingsWidget.value;
+  if (!target) return;
+  const updated = await dashboardApi.updateWidget(target.id, payload);
+  widgets.value = widgets.value.map((w) => (w.id === updated.id ? updated : w));
+  settingsWidget.value = null;
 }
 
 async function handleTitleChange(payload: { id: string; title: string }): Promise<void> {
@@ -156,6 +193,8 @@ onMounted(() => {
         :edit-mode="editMode"
         @edit="openEditor"
         @delete="handleDelete"
+        @refine="refineWidget = $event"
+        @settings="settingsWidget = $event"
         @title-change="handleTitleChange"
         @layout-change="handleLayoutChange"
       />
@@ -170,6 +209,20 @@ onMounted(() => {
       v-if="showAi"
       @close="showAi = false"
       @generate="handleGenerate"
+    />
+    <AiWidgetDialog
+      v-if="refineWidget"
+      heading="Fine-tune widget with AI"
+      placeholder="e.g. Make it a horizontal bar chart and only show the top 5"
+      submit-label="Apply"
+      @close="refineWidget = null"
+      @generate="handleRefine"
+    />
+    <WidgetSettingsDialog
+      v-if="settingsWidget"
+      :widget="settingsWidget"
+      @close="settingsWidget = null"
+      @save="handleSettingsSave"
     />
   </div>
 </template>

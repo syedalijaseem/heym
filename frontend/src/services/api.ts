@@ -1230,6 +1230,20 @@ export const dashboardApi = {
     });
     return response.data;
   },
+
+  aiRefineWidget: async (
+    id: string,
+    prompt: string,
+    credentialId: string,
+    model: string,
+  ): Promise<DashboardWidget> => {
+    const response = await api.post<DashboardWidget>(`/dashboards/widgets/${id}/ai-refine`, {
+      prompt,
+      credential_id: credentialId,
+      model,
+    });
+    return response.data;
+  },
 };
 
 export const globalVariablesApi = {

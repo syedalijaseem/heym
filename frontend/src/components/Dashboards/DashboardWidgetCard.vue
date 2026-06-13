@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
-import { Loader2, Pencil, RefreshCw, Trash2 } from "lucide-vue-next";
+import { onMounted, ref, watch } from "vue";
+import { Loader2, Pencil, RefreshCw, Settings, Sparkles, Trash2 } from "lucide-vue-next";
 
 import ChartRenderer from "@/components/Dashboards/ChartRenderer.vue";
 import { dashboardApi } from "@/services/api";
@@ -14,6 +14,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: "edit", workflowId: string): void;
   (e: "delete", widgetId: string): void;
+  (e: "refine", widget: DashboardWidget): void;
+  (e: "settings", widget: DashboardWidget): void;
   (e: "title-change", payload: { id: string; title: string }): void;
 }>();
 
@@ -51,6 +53,15 @@ function onBodyDoubleClick(): void {
   emit("edit", props.widget.workflow_id);
 }
 
+// Reload when the widget's workflow changes (AI refine, settings) — updated_at bumps.
+watch(
+  () => props.widget.updated_at,
+  () => {
+    titleDraft.value = props.widget.title;
+    void loadData(true);
+  },
+);
+
 onMounted(() => {
   void loadData();
 });
@@ -79,6 +90,13 @@ onMounted(() => {
       <div class="flex shrink-0 items-center gap-1">
         <button
           class="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+          title="Fine-tune with AI"
+          @click="emit('refine', widget)"
+        >
+          <Sparkles class="h-3.5 w-3.5" />
+        </button>
+        <button
+          class="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
           title="Refresh"
           @click="loadData(true)"
         >
@@ -92,9 +110,15 @@ onMounted(() => {
           <Pencil class="h-3.5 w-3.5" />
         </button>
         <button
-          v-if="editMode"
+          class="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+          title="Settings"
+          @click="emit('settings', widget)"
+        >
+          <Settings class="h-3.5 w-3.5" />
+        </button>
+        <button
           class="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-          title="Delete"
+          title="Delete widget"
           @click="emit('delete', widget.id)"
         >
           <Trash2 class="h-3.5 w-3.5" />

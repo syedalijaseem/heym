@@ -114,6 +114,9 @@ let pendingExecutionStreamHistoryId: string | null = null;
 const workflowId = computed(() => route.params.id as string);
 const workflowName = computed(() => workflowStore.currentWorkflow?.name || "Workflow");
 const workflowDescription = computed(() => workflowStore.currentWorkflow?.description || "");
+const isDashboardWidget = computed(
+  () => workflowStore.currentWorkflow?.kind === "dashboard_widget",
+);
 const hasUnsavedChanges = computed(() => workflowStore.hasUnsavedChanges);
 const isSaving = computed(() => workflowStore.isSaving);
 const isEditing = computed(() => isTitleEditing.value || isDescriptionEditing.value);
@@ -1263,6 +1266,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
           Download
         </Button>
         <Button
+          v-if="!isDashboardWidget"
           variant="ghost"
           size="sm"
           class="hidden lg:inline-flex gap-2 text-foreground"
@@ -1272,6 +1276,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
           Portal
         </Button>
         <Button
+          v-if="!isDashboardWidget"
           variant="ghost"
           size="sm"
           class="hidden lg:inline-flex gap-2 text-foreground"
@@ -1281,6 +1286,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
           Share
         </Button>
         <Button
+          v-if="!isDashboardWidget"
           variant="ghost"
           size="sm"
           class="hidden xl:inline-flex gap-2 text-foreground"
@@ -1291,6 +1297,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
           Template
         </Button>
         <Button
+          v-if="!isDashboardWidget"
           variant="ghost"
           size="sm"
           class="hidden xl:inline-flex gap-2 text-foreground"

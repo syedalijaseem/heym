@@ -7,6 +7,19 @@ import Select from "@/components/ui/Select.vue";
 import { credentialsApi } from "@/services/api";
 import type { CredentialListItem, LLMModel } from "@/types/credential";
 
+const props = withDefaults(
+  defineProps<{
+    heading?: string;
+    placeholder?: string;
+    submitLabel?: string;
+  }>(),
+  {
+    heading: "Generate widget with AI",
+    placeholder: "e.g. Workflow success rate over the last 30 days as a bar chart",
+    submitLabel: "Generate",
+  },
+);
+
 const emit = defineEmits<{
   (e: "close"): void;
   (e: "generate", payload: { prompt: string; credentialId: string; model: string }): void;
@@ -80,7 +93,7 @@ onMounted(async () => {
     <div class="w-full max-w-lg rounded-lg border bg-card p-5 shadow-lg">
       <div class="mb-4 flex items-center justify-between">
         <h2 class="flex items-center gap-2 text-base font-semibold">
-          <Sparkles class="h-4 w-4" /> Generate widget with AI
+          <Sparkles class="h-4 w-4" /> {{ props.heading }}
         </h2>
         <button
           class="rounded p-1 text-muted-foreground hover:bg-accent"
@@ -104,7 +117,7 @@ onMounted(async () => {
             v-model="prompt"
             rows="3"
             class="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring"
-            placeholder="e.g. Workflow success rate over the last 30 days as a bar chart"
+            :placeholder="props.placeholder"
           />
         </div>
 
@@ -141,7 +154,7 @@ onMounted(async () => {
             v-if="generating"
             class="mr-1 h-4 w-4 animate-spin"
           />
-          Generate
+          {{ props.submitLabel }}
         </Button>
       </div>
     </div>

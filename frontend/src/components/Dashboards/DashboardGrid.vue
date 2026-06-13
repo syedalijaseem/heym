@@ -17,6 +17,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: "edit", workflowId: string): void;
   (e: "delete", widgetId: string): void;
+  (e: "refine", widget: DashboardWidget): void;
+  (e: "settings", widget: DashboardWidget): void;
   (e: "title-change", payload: { id: string; title: string }): void;
   (e: "layout-change", payload: { id: string; layout: WidgetLayout }): void;
 }>();
@@ -71,6 +73,8 @@ function emitItemLayout(id: string): void {
         :class="editMode ? 'widget-drag-handle cursor-move' : ''"
         @edit="emit('edit', $event)"
         @delete="emit('delete', $event)"
+        @refine="emit('refine', $event)"
+        @settings="emit('settings', $event)"
         @title-change="emit('title-change', $event)"
       />
     </GridItem>
