@@ -194,7 +194,7 @@ const nodeDocSlugMap: Record<NodeType, string> = {
   playwright: "playwright-node",
   dataTable: "datatable-node",
   drive: "drive-node",
-  s3: "s3-node",
+  s3: "amazon-s3-node",
   mcpCall: "mcp-call-node",
 };
 
