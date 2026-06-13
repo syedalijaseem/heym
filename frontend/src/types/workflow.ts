@@ -164,7 +164,8 @@ export type NodeType =
   | "s3"
   | "slackTrigger"
   | "discordTrigger"
-  | "mcpCall";
+  | "mcpCall"
+  | "chartOutput";
 
 export type VariableType =
   | "string"
@@ -519,6 +520,16 @@ export interface NodeData {
   selectedTool?: string;
   toolArguments?: Record<string, string>;
   timeoutSeconds?: number;
+  // chartOutput node
+  chartType?: "pie" | "bar" | "line" | "table" | "numeric";
+  orientation?: "horizontal" | "vertical";
+  dataPath?: string;
+  labelField?: string;
+  valueField?: string;
+  series?: { name: string; field: string }[];
+  columns?: string[];
+  unit?: string;
+  title?: string;
 }
 
 export interface WorkflowShare {

@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   Ban,
+  BarChart3,
   Bot,
   Brain,
   Braces,
@@ -56,6 +57,7 @@ export const nodeIcons: Record<NodeType, ReturnType<typeof Type>> = {
   merge: GitMerge,
   set: Settings2,
   jsonOutputMapper: Braces,
+  chartOutput: BarChart3,
   telegram: MessageSquare,
   slack: MessageSquare,
   slackTrigger: MessageSquare,
@@ -85,6 +87,7 @@ export const nodeIcons: Record<NodeType, ReturnType<typeof Type>> = {
 
 /** Tailwind text-* classes aligned with canvas node header tints (BaseNode). */
 export const nodeIconColorClass: Record<NodeType, string> = {
+  chartOutput: "text-node-output",
   textInput: "text-node-input",
   cron: "text-node-cron",
   telegramTrigger: "text-node-telegram",

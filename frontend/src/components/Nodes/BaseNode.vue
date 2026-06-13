@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { Handle, Position, useVueFlow } from "@vue-flow/core";
-import { AlertTriangle, Ban, Bot, Brain, Braces, Bug, CalendarClock, Clock, Database, FileJson, GitBranch, GitMerge, Globe, HardDrive, Inbox, Loader2, Mail, MessageSquare, MonitorPlay, Pin, Play, Plug, Rabbit, Radio, RefreshCw, Repeat, Search, Send, Server, Settings2, Sheet, Shuffle, StickyNote, Table2, Terminal, Type, Variable, XCircle } from "lucide-vue-next";
+import { AlertTriangle, Ban, BarChart3, Bot, Brain, Braces, Bug, CalendarClock, Clock, Database, FileJson, GitBranch, GitMerge, Globe, HardDrive, Inbox, Loader2, Mail, MessageSquare, MonitorPlay, Pin, Play, Plug, Rabbit, Radio, RefreshCw, Repeat, Search, Send, Server, Settings2, Sheet, Shuffle, StickyNote, Table2, Terminal, Type, Variable, XCircle } from "lucide-vue-next";
 
 import type { NodeData, NodeType } from "@/types/workflow";
 
@@ -22,6 +22,7 @@ const emit = defineEmits<{
 }>();
 
 const icons = {
+  chartOutput: BarChart3,
   textInput: Type,
   cron: CalendarClock,
   telegramTrigger: MessageSquare,
@@ -67,6 +68,7 @@ const icons = {
 };
 
 const nodeColorMap = {
+  chartOutput: "node-output",
   textInput: "node-input",
   cron: "node-cron",
   telegramTrigger: "node-telegram",
