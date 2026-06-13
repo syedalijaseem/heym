@@ -48,10 +48,13 @@ class TestWorkflowListExcludesWidgets(unittest.TestCase):
 
 
 class TestSeedWidgetNodes(unittest.TestCase):
-    def test_seed_creates_textinput_and_chartoutput(self):
+    def test_seed_has_no_trigger_or_input_and_ends_in_chart(self):
         nodes, edges = dash_api._seed_widget_nodes("pie")
         types = [n["type"] for n in nodes]
-        self.assertIn("textInput", types)
+        # Dashboard widgets must not start with a trigger or input node.
+        for trigger in ("textInput", "cron", "slackTrigger", "telegramTrigger", "imapTrigger"):
+            self.assertNotIn(trigger, types)
+        self.assertIn("set", types)
         self.assertIn("chartOutput", types)
         self.assertEqual(nodes[1]["data"]["chartType"], "pie")
         self.assertEqual(len(edges), 1)
@@ -120,3 +123,142 @@ class TestAiGenerateWidget(unittest.IsolatedAsyncioTestCase):
                 db=db,
             )
         self.assertEqual(resp.chart_type, "pie")
+
+    async def test_ai_generate_uses_dsl_name_and_description(self):
+        user = _User()
+        db = MagicMock()
+        dashboard = MagicMock(id=uuid.uuid4())
+        existing = MagicMock()
+        existing.scalars.return_value.first.return_value = dashboard
+        db.execute = AsyncMock(return_value=existing)
+        added: list = []
+        db.add = MagicMock(side_effect=lambda obj: added.append(obj))
+        db.commit = AsyncMock()
+        _wire_db_inserts(db)
+
+        fake_dsl = {
+            "name": "Signups by month",
+            "description": "Monthly signups bar chart",
+            "nodes": [{"id": "b", "type": "chartOutput", "data": {"chartType": "bar"}}],
+            "edges": [],
+        }
+
+        from app.db.models import CredentialType
+        from app.models.dashboard_schemas import AiWidgetRequest
+
+        credential = MagicMock(type=CredentialType.openai)
+        with (
+            patch.object(dash_api, "generate_widget_dsl", AsyncMock(return_value=fake_dsl)),
+            patch.object(dash_api, "get_credential_for_user", AsyncMock(return_value=credential)),
+        ):
+            resp = await dash_api.ai_generate_widget(
+                body=AiWidgetRequest(prompt="anything", credential_id=uuid.uuid4(), model="m"),
+                current_user=user,
+                db=db,
+            )
+        self.assertEqual(resp.title, "Signups by month")
+        self.assertEqual(resp.description, "Monthly signups bar chart")
+        # the hidden workflow inherits the AI name/description
+        workflows = [o for o in added if getattr(o, "kind", None) == "dashboard_widget"]
+        self.assertTrue(workflows)
+        self.assertEqual(workflows[0].name, "Signups by month")
+        self.assertEqual(workflows[0].description, "Monthly signups bar chart")
+
+
+class TestUpdateWidgetSync(unittest.IsolatedAsyncioTestCase):
+    async def test_title_change_syncs_to_workflow(self):
+        user = _User()
+        widget = MagicMock()
+        widget.id = uuid.uuid4()
+        widget.workflow_id = uuid.uuid4()
+        widget.title = "Old"
+        widget.description = None
+        widget.position = 0
+        widget.layout = {"x": 0, "y": 0, "w": 4, "h": 4}
+        widget.cache_ttl_seconds = 300
+        widget.chart_type = "bar"
+        workflow = MagicMock()
+
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                MagicMock(scalar_one_or_none=MagicMock(return_value=widget)),
+                MagicMock(scalar_one_or_none=MagicMock(return_value=workflow)),
+            ]
+        )
+        db.commit = AsyncMock()
+
+        async def fake_refresh(obj):
+            obj.updated_at = datetime.datetime.now()
+
+        db.refresh = AsyncMock(side_effect=fake_refresh)
+
+        from app.models.dashboard_schemas import WidgetUpdateRequest
+
+        resp = await dash_api.update_widget(
+            widget_id=widget.id,
+            body=WidgetUpdateRequest(title="New", description="Desc"),
+            current_user=user,
+            db=db,
+        )
+        self.assertEqual(resp.title, "New")
+        self.assertEqual(workflow.name, "New")
+        self.assertEqual(workflow.description, "Desc")
+
+
+class TestAiRefineWidget(unittest.IsolatedAsyncioTestCase):
+    async def test_refine_updates_workflow_and_invalidates_cache(self):
+        user = _User()
+        widget = MagicMock()
+        widget.id = uuid.uuid4()
+        widget.workflow_id = uuid.uuid4()
+        widget.chart_type = "bar"
+        widget.position = 0
+        widget.title = "W"
+        widget.description = None
+        widget.layout = {"x": 0, "y": 0, "w": 4, "h": 4}
+        widget.cache_ttl_seconds = 300
+        widget.cached_payload = {"old": True}
+        widget.cached_at = datetime.datetime.now()
+        widget.cached_workflow_version = "v"
+        workflow = MagicMock()
+
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                MagicMock(scalar_one_or_none=MagicMock(return_value=widget)),
+                MagicMock(scalar_one_or_none=MagicMock(return_value=workflow)),
+            ]
+        )
+        db.commit = AsyncMock()
+
+        async def fake_refresh(obj):
+            obj.updated_at = datetime.datetime.now()
+
+        db.refresh = AsyncMock(side_effect=fake_refresh)
+
+        fake_dsl = {
+            "nodes": [{"id": "c", "type": "chartOutput", "data": {"chartType": "line"}}],
+            "edges": [],
+        }
+
+        from app.db.models import CredentialType
+        from app.models.dashboard_schemas import AiRefineRequest
+
+        credential = MagicMock(type=CredentialType.openai)
+        with (
+            patch.object(dash_api, "generate_widget_dsl", AsyncMock(return_value=fake_dsl)),
+            patch.object(dash_api, "get_credential_for_user", AsyncMock(return_value=credential)),
+        ):
+            resp = await dash_api.ai_refine_widget(
+                widget_id=widget.id,
+                body=AiRefineRequest(
+                    prompt="make it a line chart", credential_id=uuid.uuid4(), model="m"
+                ),
+                current_user=user,
+                db=db,
+            )
+        self.assertEqual(resp.chart_type, "line")
+        self.assertEqual(workflow.nodes, fake_dsl["nodes"])
+        self.assertIsNone(widget.cached_payload)
+        self.assertIsNone(widget.cached_at)

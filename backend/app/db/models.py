@@ -392,6 +392,7 @@ class DashboardWidget(Base):
         index=True,
     )
     title: Mapped[str] = mapped_column(String(255), nullable=False, default="Untitled")
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
     chart_type: Mapped[str] = mapped_column(String(32), nullable=False, default="bar")
     layout: Mapped[dict] = mapped_column(JSON, default=lambda: {"x": 0, "y": 0, "w": 4, "h": 4})
     cache_ttl_seconds: Mapped[int] = mapped_column(Integer, default=300, nullable=False)

@@ -15,6 +15,7 @@ from app.api.deps import get_current_user
 from app.db.models import CredentialType, Dashboard, DashboardWidget, User, Workflow
 from app.db.session import get_db
 from app.models.dashboard_schemas import (
+    AiRefineRequest,
     AiWidgetRequest,
     DashboardResponse,
     DashboardWidgetResponse,
@@ -36,11 +37,17 @@ _AI_WIDGET_SUFFIX = (
 )
 
 
-async def generate_widget_dsl(prompt: str, *, credential, model: str, user: User) -> dict:
-    """Generate a widget workflow DSL (nodes + edges) ending in a chartOutput node."""
+async def generate_widget_dsl(
+    prompt: str, *, credential, model: str, user: User, current_workflow: dict | None = None
+) -> dict:
+    """Generate a widget workflow DSL (nodes + edges) ending in a chartOutput node.
+
+    When ``current_workflow`` is provided the model edits that existing widget
+    workflow (used by the per-widget AI refine action) instead of building a new one.
+    """
     config = decrypt_config(credential.encrypted_config)
     client, _ = get_openai_client(credential.type, config)
-    system_prompt = build_assistant_prompt(None, [], getattr(user, "user_rules", None))
+    system_prompt = build_assistant_prompt(current_workflow, [], getattr(user, "user_rules", None))
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": prompt + _AI_WIDGET_SUFFIX},
@@ -72,20 +79,23 @@ async def _get_or_create_dashboard(db: AsyncSession, user: User) -> Dashboard:
 
 
 def _seed_widget_nodes(chart_type: str) -> tuple[list, list]:
+    # Dashboard widgets have no trigger/input — they start with a data-producing
+    # node (a `set` node) that feeds the chartOutput. Replace it with a real data
+    # source (http, bigquery, rag, ...) when building the widget.
     src_id = str(uuid.uuid4())
     chart_id = str(uuid.uuid4())
     nodes = [
         {
             "id": src_id,
-            "type": "textInput",
+            "type": "set",
             "position": {"x": 0, "y": 0},
-            "data": {"label": "Data"},
+            "data": {"label": "data", "mappings": [{"key": "rows", "value": ""}]},
         },
         {
             "id": chart_id,
             "type": "chartOutput",
             "position": {"x": 320, "y": 0},
-            "data": {"label": "Chart", "chartType": chart_type},
+            "data": {"label": "chart", "chartType": chart_type, "dataPath": "rows"},
         },
     ]
     edges = [{"id": str(uuid.uuid4()), "source": src_id, "target": chart_id}]
@@ -97,6 +107,7 @@ def _widget_to_response(widget: DashboardWidget) -> DashboardWidgetResponse:
         id=widget.id,
         workflow_id=widget.workflow_id,
         title=widget.title,
+        description=widget.description,
         chart_type=widget.chart_type,
         layout=widget.layout,
         cache_ttl_seconds=widget.cache_ttl_seconds,
@@ -147,7 +158,8 @@ async def create_widget(
     dashboard = await _get_or_create_dashboard(db, current_user)
     nodes, edges = _seed_widget_nodes(body.chart_type)
     workflow = Workflow(
-        name=f"[widget] {body.title}",
+        name=body.title,
+        description=body.description,
         owner_id=current_user.id,
         kind="dashboard_widget",
         nodes=nodes,
@@ -159,6 +171,7 @@ async def create_widget(
         dashboard_id=dashboard.id,
         workflow_id=workflow.id,
         title=body.title,
+        description=body.description,
         chart_type=body.chart_type,
         layout=body.layout.model_dump(),
         cache_ttl_seconds=body.cache_ttl_seconds,
@@ -177,14 +190,29 @@ async def update_widget(
     db: AsyncSession = Depends(get_db),
 ) -> DashboardWidgetResponse:
     widget = await _load_widget(db, widget_id, current_user)
+    sync_title = body.title is not None and body.title != widget.title
+    sync_description = body.description is not None and body.description != widget.description
     if body.title is not None:
         widget.title = body.title
+    if body.description is not None:
+        widget.description = body.description
     if body.chart_type is not None:
         widget.chart_type = body.chart_type
     if body.layout is not None:
         widget.layout = body.layout.model_dump()
     if body.cache_ttl_seconds is not None:
         widget.cache_ttl_seconds = body.cache_ttl_seconds
+
+    # Propagate title/description onto the widget's hidden workflow so the canvas reflects them.
+    if sync_title or sync_description:
+        wf_result = await db.execute(select(Workflow).where(Workflow.id == widget.workflow_id))
+        workflow = wf_result.scalar_one_or_none()
+        if workflow is not None:
+            if sync_title:
+                workflow.name = widget.title
+            if sync_description:
+                workflow.description = widget.description
+
     await db.commit()
     await db.refresh(widget)
     return _widget_to_response(widget)
@@ -253,8 +281,11 @@ async def ai_generate_widget(
             detail="AI did not produce a chartOutput node",
         )
     chart_type = chart_nodes[-1].get("data", {}).get("chartType", "bar")
+    title = (dsl.get("name") or body.prompt[:60]).strip()[:255]
+    description = dsl.get("description") or None
     workflow = Workflow(
-        name="[widget] AI generated",
+        name=title,
+        description=description,
         owner_id=current_user.id,
         kind="dashboard_widget",
         nodes=nodes,
@@ -265,12 +296,75 @@ async def ai_generate_widget(
     widget = DashboardWidget(
         dashboard_id=dashboard.id,
         workflow_id=workflow.id,
-        title=body.prompt[:60],
+        title=title,
+        description=description,
         chart_type=chart_type,
         layout={"x": 0, "y": 0, "w": 4, "h": 4},
         cache_ttl_seconds=300,
     )
     db.add(widget)
+    await db.commit()
+    await db.refresh(widget)
+    return _widget_to_response(widget)
+
+
+@router.post("/widgets/{widget_id}/ai-refine", response_model=DashboardWidgetResponse)
+async def ai_refine_widget(
+    widget_id: uuid.UUID,
+    body: AiRefineRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> DashboardWidgetResponse:
+    widget = await _load_widget(db, widget_id, current_user)
+    credential = await get_credential_for_user(body.credential_id, current_user, db)
+    if credential is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Credential not found")
+    if credential.type not in (
+        CredentialType.openai,
+        CredentialType.google,
+        CredentialType.custom,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Credential must be an LLM type (OpenAI, Google, or Custom)",
+        )
+
+    wf_result = await db.execute(select(Workflow).where(Workflow.id == widget.workflow_id))
+    workflow = wf_result.scalar_one_or_none()
+    if workflow is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Widget workflow not found"
+        )
+
+    current_workflow = {
+        "name": workflow.name,
+        "description": workflow.description,
+        "nodes": workflow.nodes,
+        "edges": workflow.edges,
+    }
+    dsl = await generate_widget_dsl(
+        body.prompt,
+        credential=credential,
+        model=body.model,
+        user=current_user,
+        current_workflow=current_workflow,
+    )
+    nodes = dsl.get("nodes", [])
+    edges = dsl.get("edges", [])
+    chart_nodes = [n for n in nodes if n.get("type") == "chartOutput"]
+    if not chart_nodes:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="AI did not produce a chartOutput node",
+        )
+
+    workflow.nodes = nodes
+    workflow.edges = edges
+    widget.chart_type = chart_nodes[-1].get("data", {}).get("chartType", widget.chart_type)
+    # Invalidate the widget cache so the next load recomputes with the new workflow.
+    widget.cached_payload = None
+    widget.cached_at = None
+    widget.cached_workflow_version = None
     await db.commit()
     await db.refresh(widget)
     return _widget_to_response(widget)

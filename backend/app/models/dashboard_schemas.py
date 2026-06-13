@@ -16,6 +16,7 @@ class DashboardWidgetResponse(BaseModel):
     id: uuid.UUID
     workflow_id: uuid.UUID
     title: str
+    description: str | None = None
     chart_type: str
     layout: WidgetLayout
     cache_ttl_seconds: int
@@ -31,6 +32,7 @@ class DashboardResponse(BaseModel):
 
 class WidgetCreateRequest(BaseModel):
     title: str = "Untitled"
+    description: str | None = None
     chart_type: str = "bar"
     layout: WidgetLayout = Field(default_factory=WidgetLayout)
     cache_ttl_seconds: int = 300
@@ -38,6 +40,7 @@ class WidgetCreateRequest(BaseModel):
 
 class WidgetUpdateRequest(BaseModel):
     title: str | None = None
+    description: str | None = None
     chart_type: str | None = None
     layout: WidgetLayout | None = None
     cache_ttl_seconds: int | None = None
@@ -52,6 +55,12 @@ class WidgetDataResponse(BaseModel):
 
 
 class AiWidgetRequest(BaseModel):
+    prompt: str = Field(min_length=1, max_length=2000)
+    credential_id: uuid.UUID
+    model: str = Field(min_length=1, max_length=200)
+
+
+class AiRefineRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=2000)
     credential_id: uuid.UUID
     model: str = Field(min_length=1, max_length=200)

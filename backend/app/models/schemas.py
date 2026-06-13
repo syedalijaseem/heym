@@ -206,6 +206,7 @@ class WorkflowResponse(BaseModel):
     id: uuid.UUID
     name: str
     description: str | None
+    kind: str = "workflow"
     nodes: list[dict]
     edges: list[dict]
     auth_type: WorkflowAuthType
