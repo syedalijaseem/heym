@@ -2,8 +2,6 @@
 import { computed, ref, watch } from "vue";
 import { GridItem, GridLayout } from "grid-layout-plus";
 
-import "grid-layout-plus/dist/style.css";
-
 import DashboardWidgetCard from "@/components/Dashboards/DashboardWidgetCard.vue";
 import type { DashboardWidget, WidgetLayout } from "@/types/dashboard";
 
