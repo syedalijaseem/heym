@@ -135,15 +135,24 @@ const barGaugeRows = computed((): BarGaugeRow[] => {
 // pass it as a number instead.
 const containerRef = ref<HTMLElement | null>(null);
 const chartHeight = ref(220);
+const chartWidth = ref(220);
 let resizeObserver: ResizeObserver | null = null;
 
 onMounted(() => {
   if (!containerRef.value) return;
   resizeObserver = new ResizeObserver((entries) => {
-    const h = entries[0]?.contentRect.height ?? 0;
-    if (h > 0) chartHeight.value = Math.round(h);
+    const rect = entries[0]?.contentRect;
+    if (rect && rect.height > 0) chartHeight.value = Math.round(rect.height);
+    if (rect && rect.width > 0) chartWidth.value = Math.round(rect.width);
   });
   resizeObserver.observe(containerRef.value);
+});
+
+// Pie / radial charts derive their radius from the smaller dimension, so in a tall,
+// narrow widget the chart canvas should stay square and be centered vertically —
+// otherwise ApexCharts pins the circle to the top and leaves dead space below.
+const radialHeight = computed((): number => {
+  return Math.max(120, Math.min(chartHeight.value, chartWidth.value));
 });
 
 onBeforeUnmount(() => {
@@ -226,7 +235,7 @@ const apexOptions = computed((): Record<string, unknown> => {
   }
 
   if (p.type === "pie") {
-    const dataLabelOffset = -Math.max(12, Math.min(24, Math.round(chartHeight.value * 0.04)));
+    const dataLabelOffset = -Math.max(12, Math.min(24, Math.round(radialHeight.value * 0.04)));
     return {
       ...base,
       labels: p.labels ?? [],
@@ -258,8 +267,8 @@ const apexOptions = computed((): Record<string, unknown> => {
     const unit = p.unit ?? "";
     // Scale the center value with the chart size so it fits the hollow at any
     // widget size (a fixed size overflows small gauges).
-    const valueFontPx = Math.max(13, Math.min(34, Math.round(chartHeight.value * 0.13)));
-    const nameFontPx = Math.max(9, Math.min(15, Math.round(chartHeight.value * 0.06)));
+    const valueFontPx = Math.max(13, Math.min(34, Math.round(radialHeight.value * 0.13)));
+    const nameFontPx = Math.max(9, Math.min(15, Math.round(radialHeight.value * 0.06)));
     return {
       ...base,
       plotOptions: {
@@ -433,6 +442,20 @@ const apexOptions = computed((): Record<string, unknown> => {
           >{{ chartPayload.unit }}</span>
         </span>
       </div>
+    </div>
+
+    <!-- Pie / gauge: keep the canvas square and centered in tall, narrow widgets. -->
+    <div
+      v-else-if="apexType === 'pie' || apexType === 'radialBar'"
+      class="flex h-full w-full items-center justify-center"
+    >
+      <apexchart
+        :key="apexType"
+        :type="apexType"
+        :height="radialHeight"
+        :options="apexOptions"
+        :series="apexSeries"
+      />
     </div>
 
     <apexchart
