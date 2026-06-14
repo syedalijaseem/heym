@@ -5,7 +5,7 @@ import { useThemeStore } from "@/stores/theme";
 import type { ChartPayload } from "@/types/dashboard";
 
 const props = defineProps<{
-  payload: ChartPayload | null;
+  payload: ChartPayload | Record<string, unknown> | null;
 }>();
 
 const themeStore = useThemeStore();
@@ -26,6 +26,38 @@ const PROPORTION_COLORS = [
   "#ea580c",
 ];
 
+const CHART_TYPES = new Set<ChartPayload["type"]>([
+  "pie",
+  "bar",
+  "line",
+  "area",
+  "table",
+  "numeric",
+  "gauge",
+  "scatter",
+  "proportion",
+  "barGauge",
+]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isChartPayload(value: unknown): value is ChartPayload {
+  if (!isRecord(value) || typeof value.type !== "string") return false;
+  return CHART_TYPES.has(value.type as ChartPayload["type"]);
+}
+
+function normalizeChartPayload(value: ChartPayload | Record<string, unknown> | null): ChartPayload | null {
+  if (isChartPayload(value)) return value;
+  if (!isRecord(value)) return null;
+
+  const nestedPayloads = Object.values(value).filter(isChartPayload);
+  return nestedPayloads.length === 1 ? nestedPayloads[0] : null;
+}
+
+const chartPayload = computed((): ChartPayload | null => normalizeChartPayload(props.payload));
+
 interface ProportionSegment {
   label: string;
   pct: number;
@@ -33,7 +65,7 @@ interface ProportionSegment {
 }
 
 const proportionSegments = computed((): ProportionSegment[] => {
-  const p = props.payload;
+  const p = chartPayload.value;
   if (!p || p.type !== "proportion") return [];
   const data = (p.series?.[0]?.data ?? []) as number[];
   const labels = p.labels ?? [];
@@ -73,7 +105,7 @@ interface BarGaugeRow {
 }
 
 const barGaugeRows = computed((): BarGaugeRow[] => {
-  const p = props.payload;
+  const p = chartPayload.value;
   if (!p || p.type !== "barGauge") return [];
   const data = (p.series?.[0]?.data ?? []) as number[];
   const labels = p.labels ?? [];
@@ -117,7 +149,7 @@ onBeforeUnmount(() => {
 });
 
 const isEmpty = computed((): boolean => {
-  const p = props.payload;
+  const p = chartPayload.value;
   if (!p) return true;
   if (p.type === "table") return !p.rows || p.rows.length === 0;
   if (p.type === "numeric") return p.value === null || p.value === undefined;
@@ -126,7 +158,7 @@ const isEmpty = computed((): boolean => {
 });
 
 const numericValue = computed((): string => {
-  const p = props.payload;
+  const p = chartPayload.value;
   if (!p || p.value === null || p.value === undefined) return "—";
   const raw = p.value;
   if (typeof raw === "number" && typeof p.decimals === "number") {
@@ -136,7 +168,7 @@ const numericValue = computed((): string => {
 });
 
 const apexType = computed((): "pie" | "bar" | "line" | "area" | "scatter" | "radialBar" => {
-  const t = props.payload?.type;
+  const t = chartPayload.value?.type;
   if (t === "pie") return "pie";
   if (t === "line") return "line";
   if (t === "area") return "area";
@@ -147,7 +179,7 @@ const apexType = computed((): "pie" | "bar" | "line" | "area" | "scatter" | "rad
 
 // Gauge value as a 0-100 percentage of [min, max].
 const gaugePercent = computed((): number => {
-  const p = props.payload;
+  const p = chartPayload.value;
   if (!p || typeof p.value !== "number") return 0;
   const min = typeof p.min === "number" ? p.min : 0;
   const max = typeof p.max === "number" ? p.max : 100;
@@ -156,7 +188,7 @@ const gaugePercent = computed((): number => {
 });
 
 const apexSeries = computed(() => {
-  const p = props.payload;
+  const p = chartPayload.value;
   if (!p) return [];
   if (p.type === "pie") return p.series?.[0]?.data ?? [];
   if (p.type === "gauge") return [gaugePercent.value];
@@ -164,7 +196,7 @@ const apexSeries = computed(() => {
 });
 
 const apexOptions = computed((): Record<string, unknown> => {
-  const p = props.payload;
+  const p = chartPayload.value;
   if (!p) return {};
   const base: Record<string, unknown> = {
     chart: {
@@ -262,29 +294,29 @@ const apexOptions = computed((): Record<string, unknown> => {
     </div>
 
     <div
-      v-else-if="payload && payload.type === 'numeric'"
+      v-else-if="chartPayload && chartPayload.type === 'numeric'"
       class="flex h-full min-h-[120px] flex-col items-center justify-center"
     >
       <div class="text-4xl font-semibold tabular-nums text-foreground">
         {{ numericValue }}
       </div>
       <div
-        v-if="payload.unit"
+        v-if="chartPayload.unit"
         class="mt-1 text-sm text-muted-foreground"
       >
-        {{ payload.unit }}
+        {{ chartPayload.unit }}
       </div>
     </div>
 
     <div
-      v-else-if="payload && payload.type === 'table'"
+      v-else-if="chartPayload && chartPayload.type === 'table'"
       class="h-full overflow-auto pb-3"
     >
       <table class="w-full text-sm text-foreground">
         <thead class="sticky top-0 bg-card">
           <tr class="border-b border-border">
             <th
-              v-for="col in payload.columns"
+              v-for="col in chartPayload.columns"
               :key="col"
               class="px-2 py-1 text-left font-medium text-muted-foreground"
             >
@@ -294,7 +326,7 @@ const apexOptions = computed((): Record<string, unknown> => {
         </thead>
         <tbody>
           <tr
-            v-for="(row, rowIndex) in payload.rows"
+            v-for="(row, rowIndex) in chartPayload.rows"
             :key="rowIndex"
             class="border-b border-border/50"
           >
@@ -311,7 +343,7 @@ const apexOptions = computed((): Record<string, unknown> => {
     </div>
 
     <div
-      v-else-if="payload && payload.type === 'proportion'"
+      v-else-if="chartPayload && chartPayload.type === 'proportion'"
       class="flex h-full flex-col justify-center gap-4 px-1"
     >
       <div class="flex h-3 w-full overflow-hidden rounded-full bg-muted">
@@ -339,7 +371,7 @@ const apexOptions = computed((): Record<string, unknown> => {
     </div>
 
     <div
-      v-else-if="payload && payload.type === 'barGauge'"
+      v-else-if="chartPayload && chartPayload.type === 'barGauge'"
       class="flex h-full flex-col justify-center gap-2 overflow-auto px-1 py-1"
     >
       <div
@@ -364,9 +396,9 @@ const apexOptions = computed((): Record<string, unknown> => {
           :style="{ color: row.valueColor }"
         >
           {{ row.value }}<span
-            v-if="payload.unit"
+            v-if="chartPayload.unit"
             class="ml-1 text-xs font-normal text-muted-foreground"
-          >{{ payload.unit }}</span>
+          >{{ chartPayload.unit }}</span>
         </span>
       </div>
     </div>
