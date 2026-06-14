@@ -1,0 +1,207 @@
+import unittest
+import uuid
+from unittest.mock import AsyncMock, MagicMock, patch
+
+from fastapi import HTTPException
+
+from app.api.data_tables import (
+    _extract_schema_payload,
+    _normalize_generated_columns,
+    generate_data_table_schema,
+)
+from app.db.models import CredentialType
+from app.models.schemas import DataTableColumnDef, DataTableSchemaGenerateRequest
+
+
+class NormalizeGeneratedColumnsTests(unittest.TestCase):
+    def test_assigns_ids_and_sequential_order(self) -> None:
+        cols = _normalize_generated_columns(
+            [
+                {"name": "title", "type": "string"},
+                {"name": "count", "type": "number", "required": True, "unique": True},
+            ],
+            existing_names=set(),
+        )
+        self.assertEqual([c.name for c in cols], ["title", "count"])
+        self.assertEqual([c.order for c in cols], [0, 1])
+        self.assertTrue(all(isinstance(c.id, uuid.UUID) for c in cols))
+        self.assertEqual(cols[1].type, "number")
+        self.assertTrue(cols[1].required)
+        self.assertTrue(cols[1].unique)
+
+    def test_coerces_unknown_type_to_string_and_drops_blank_names(self) -> None:
+        cols = _normalize_generated_columns(
+            [
+                {"name": "weird", "type": "timestamp"},
+                {"name": "  ", "type": "string"},
+                {"name": "ok", "type": "DATE"},
+            ],
+            existing_names=set(),
+        )
+        self.assertEqual([c.name for c in cols], ["weird", "ok"])
+        self.assertEqual(cols[0].type, "string")
+        self.assertEqual(cols[1].type, "date")
+
+    def test_dedupes_against_existing_and_within_batch_case_insensitive(self) -> None:
+        cols = _normalize_generated_columns(
+            [
+                {"name": "Email", "type": "string"},
+                {"name": "email", "type": "string"},
+                {"name": "phone", "type": "string"},
+            ],
+            existing_names={"EMAIL"},
+        )
+        self.assertEqual([c.name for c in cols], ["phone"])
+
+    def test_non_list_input_returns_empty(self) -> None:
+        self.assertEqual(_normalize_generated_columns(None, set()), [])
+        self.assertEqual(_normalize_generated_columns("oops", set()), [])
+
+
+class ExtractSchemaPayloadTests(unittest.TestCase):
+    def test_extracts_from_fenced_block(self) -> None:
+        content = 'Here you go:\n```json\n{"name": "T", "columns": []}\n```\nDone.'
+        self.assertEqual(_extract_schema_payload(content), {"name": "T", "columns": []})
+
+    def test_extracts_bare_json(self) -> None:
+        self.assertEqual(_extract_schema_payload('{"name": "T"}'), {"name": "T"})
+
+    def test_returns_none_for_unparseable(self) -> None:
+        self.assertIsNone(_extract_schema_payload("no json here at all"))
+
+
+def _make_request(existing=None) -> DataTableSchemaGenerateRequest:
+    return DataTableSchemaGenerateRequest(
+        credential_id=uuid.uuid4(),
+        model="gpt-4o-mini",
+        prompt="A table of books with title and page count",
+        existing_columns=existing,
+    )
+
+
+def _llm_client_returning(content: str) -> MagicMock:
+    message = MagicMock()
+    message.content = content
+    choice = MagicMock()
+    choice.message = message
+    completion = MagicMock()
+    completion.choices = [choice]
+    client = MagicMock()
+    client.chat.completions.create.return_value = completion
+    return client
+
+
+class GenerateDataTableSchemaEndpointTests(unittest.IsolatedAsyncioTestCase):
+    def _credential(self) -> MagicMock:
+        credential = MagicMock()
+        credential.id = uuid.uuid4()
+        credential.type = CredentialType.openai
+        credential.encrypted_config = "enc"
+        return credential
+
+    async def test_returns_normalized_suggestion(self) -> None:
+        content = (
+            '```json\n{"name": "Books", "description": "My books", "columns": ['
+            '{"name": "title", "type": "string", "required": true}, '
+            '{"name": "pages", "type": "number"}]}\n```'
+        )
+        with (
+            patch(
+                "app.api.ai_assistant.get_credential_for_user",
+                AsyncMock(return_value=self._credential()),
+            ),
+            patch("app.api.data_tables.decrypt_config", return_value={"api_key": "x"}),
+            patch(
+                "app.api.ai_assistant.get_openai_client",
+                return_value=(_llm_client_returning(content), "openai"),
+            ),
+        ):
+            result = await generate_data_table_schema(
+                request=_make_request(),
+                current_user=MagicMock(id=uuid.uuid4()),
+                db=AsyncMock(),
+            )
+        self.assertEqual(result.name, "Books")
+        self.assertEqual(result.description, "My books")
+        self.assertEqual([c.name for c in result.columns], ["title", "pages"])
+        self.assertTrue(result.columns[0].required)
+        self.assertEqual(result.columns[1].type, "number")
+
+    async def test_dedupes_against_existing_columns_in_extend_mode(self) -> None:
+        existing = [DataTableColumnDef(name="title", type="string", order=0)]
+        content = (
+            '```json\n{"name": "X", "columns": ['
+            '{"name": "Title", "type": "string"}, '
+            '{"name": "isbn", "type": "string"}]}\n```'
+        )
+        with (
+            patch(
+                "app.api.ai_assistant.get_credential_for_user",
+                AsyncMock(return_value=self._credential()),
+            ),
+            patch("app.api.data_tables.decrypt_config", return_value={"api_key": "x"}),
+            patch(
+                "app.api.ai_assistant.get_openai_client",
+                return_value=(_llm_client_returning(content), "openai"),
+            ),
+        ):
+            result = await generate_data_table_schema(
+                request=_make_request(existing=existing),
+                current_user=MagicMock(id=uuid.uuid4()),
+                db=AsyncMock(),
+            )
+        self.assertEqual([c.name for c in result.columns], ["isbn"])
+
+    async def test_missing_credential_returns_400(self) -> None:
+        with patch(
+            "app.api.ai_assistant.get_credential_for_user",
+            AsyncMock(return_value=None),
+        ):
+            with self.assertRaises(HTTPException) as ctx:
+                await generate_data_table_schema(
+                    request=_make_request(),
+                    current_user=MagicMock(id=uuid.uuid4()),
+                    db=AsyncMock(),
+                )
+        self.assertEqual(ctx.exception.status_code, 400)
+
+    async def test_unparseable_output_returns_422(self) -> None:
+        with (
+            patch(
+                "app.api.ai_assistant.get_credential_for_user",
+                AsyncMock(return_value=self._credential()),
+            ),
+            patch("app.api.data_tables.decrypt_config", return_value={"api_key": "x"}),
+            patch(
+                "app.api.ai_assistant.get_openai_client",
+                return_value=(_llm_client_returning("no json here"), "openai"),
+            ),
+        ):
+            with self.assertRaises(HTTPException) as ctx:
+                await generate_data_table_schema(
+                    request=_make_request(),
+                    current_user=MagicMock(id=uuid.uuid4()),
+                    db=AsyncMock(),
+                )
+        self.assertEqual(ctx.exception.status_code, 422)
+
+    async def test_no_usable_columns_returns_422(self) -> None:
+        content = '```json\n{"name": "Empty", "columns": []}\n```'
+        with (
+            patch(
+                "app.api.ai_assistant.get_credential_for_user",
+                AsyncMock(return_value=self._credential()),
+            ),
+            patch("app.api.data_tables.decrypt_config", return_value={"api_key": "x"}),
+            patch(
+                "app.api.ai_assistant.get_openai_client",
+                return_value=(_llm_client_returning(content), "openai"),
+            ),
+        ):
+            with self.assertRaises(HTTPException) as ctx:
+                await generate_data_table_schema(
+                    request=_make_request(),
+                    current_user=MagicMock(id=uuid.uuid4()),
+                    db=AsyncMock(),
+                )
+        self.assertEqual(ctx.exception.status_code, 422)

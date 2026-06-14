@@ -1,5 +1,7 @@
 import csv
 import io
+import json
+import re
 import uuid
 from typing import Any
 
@@ -11,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.db.models import (
+    CredentialType,
     DataTable,
     DataTableRow,
     DataTableShare,
@@ -21,6 +24,7 @@ from app.db.models import (
 )
 from app.db.session import get_db
 from app.models.schemas import (
+    DataTableColumnDef,
     DataTableCreate,
     DataTableImportResponse,
     DataTableListResponse,
@@ -28,18 +32,109 @@ from app.models.schemas import (
     DataTableRowCreate,
     DataTableRowResponse,
     DataTableRowUpdate,
+    DataTableSchemaGenerateRequest,
+    DataTableSchemaSuggestionResponse,
     DataTableShareRequest,
     DataTableShareResponse,
     DataTableTeamShareRequest,
     DataTableTeamShareResponse,
     DataTableUpdate,
 )
+from app.services.encryption import decrypt_config
+from app.services.llm_provider import is_reasoning_model
 from app.services.upload_limits import read_upload_file_limited
 
 router = APIRouter()
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
+_ALLOWED_COLUMN_TYPES = {"string", "number", "boolean", "date", "json"}
+_SCHEMA_JSON_BLOCK_PATTERN = re.compile(r"```(?:json)?\s*([\s\S]*?)```", re.IGNORECASE)
+
+
+def _normalize_generated_columns(
+    raw_columns: Any, existing_names: set[str]
+) -> list[DataTableColumnDef]:
+    """Coerce LLM-proposed columns into a valid DataTableColumnDef list.
+
+    Drops blank names, dedupes (case-insensitive) against existing_names and within
+    the batch, coerces unknown types to "string", and assigns sequential order.
+    """
+    if not isinstance(raw_columns, list):
+        return []
+    seen = {name.lower() for name in existing_names}
+    result: list[DataTableColumnDef] = []
+    for raw in raw_columns:
+        if not isinstance(raw, dict):
+            continue
+        name = str(raw.get("name") or "").strip()
+        if not name or name.lower() in seen:
+            continue
+        seen.add(name.lower())
+        col_type = str(raw.get("type") or "string").strip().lower()
+        if col_type not in _ALLOWED_COLUMN_TYPES:
+            col_type = "string"
+        result.append(
+            DataTableColumnDef(
+                name=name,
+                type=col_type,
+                required=bool(raw.get("required", False)),
+                unique=bool(raw.get("unique", False)),
+                defaultValue=raw.get("defaultValue"),
+                order=len(result),
+            )
+        )
+    return result
+
+
+def _parse_json_object(raw: str) -> dict[str, Any] | None:
+    """Parse a JSON object, accepting one common LLM error: trailing commas."""
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        try:
+            parsed = json.loads(re.sub(r",(\s*[}\]])", r"\1", raw))
+        except json.JSONDecodeError:
+            return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _extract_schema_payload(content: str) -> dict[str, Any] | None:
+    """Pull a JSON object out of a model response (fenced block or bare JSON)."""
+    candidates = [m.group(1).strip() for m in _SCHEMA_JSON_BLOCK_PATTERN.finditer(content)]
+    candidates.append(content.strip())
+    for candidate in candidates:
+        parsed = _parse_json_object(candidate)
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _build_schema_system_prompt(extending: bool) -> str:
+    base = (
+        "You design schemas for a no-code data table. Given a user's description or "
+        "pasted JSON, infer the columns. Reply with exactly one fenced ```json code "
+        "block containing an object: "
+        '{"name": string, "description": string, "columns": '
+        '[{"name": string, "type": one of "string"|"number"|"boolean"|"date"|"json", '
+        '"required": boolean, "unique": boolean, "defaultValue": value or null}]}. '
+        "Use simple lower_snake_case column names. Do not add an id column. "
+        "Return only the JSON block, no prose."
+    )
+    if extending:
+        base += (
+            " The table already exists; propose ONLY new columns that are not already "
+            "present. The name and description fields will be ignored."
+        )
+    return base
+
+
+def _build_schema_user_prompt(prompt: str, existing_cols: list[DataTableColumnDef]) -> str:
+    if existing_cols:
+        existing_desc = ", ".join(f"{c.name} ({c.type})" for c in existing_cols)
+        return f"Existing columns: {existing_desc}\n\nRequest:\n{prompt}"
+    return prompt
 
 
 async def _get_data_table_with_access(
@@ -956,3 +1051,75 @@ async def delete_team_share(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team share not found")
     await db.delete(share)
     await db.commit()
+
+
+@router.post("/generate-schema", response_model=DataTableSchemaSuggestionResponse)
+async def generate_data_table_schema(
+    request: DataTableSchemaGenerateRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> DataTableSchemaSuggestionResponse:
+    """Generate column suggestions for a data table from a description or JSON."""
+    # Imported lazily to avoid a circular import (ai_assistant -> workflow_executor
+    # -> data_tables). Tests patch these at app.api.ai_assistant.<name>.
+    from app.api.ai_assistant import get_credential_for_user, get_openai_client
+
+    credential = await get_credential_for_user(request.credential_id, current_user, db)
+    if not credential:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="LLM credential not found",
+        )
+    if credential.type not in (
+        CredentialType.openai,
+        CredentialType.google,
+        CredentialType.custom,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Credential must be an LLM type (OpenAI, Google, or Custom)",
+        )
+
+    existing_cols = request.existing_columns or []
+    existing_names = {col.name for col in existing_cols}
+
+    config = decrypt_config(credential.encrypted_config)
+    client, _ = get_openai_client(credential.type, config)
+
+    kwargs: dict[str, Any] = {
+        "model": request.model,
+        "messages": [
+            {"role": "system", "content": _build_schema_system_prompt(bool(existing_cols))},
+            {"role": "user", "content": _build_schema_user_prompt(request.prompt, existing_cols)},
+        ],
+        "extra_body": {"disable_reasoning": True},
+    }
+    if not is_reasoning_model(request.model):
+        kwargs["temperature"] = 0.2
+
+    response = client.chat.completions.create(**kwargs)
+    content = response.choices[0].message.content or ""
+
+    payload = _extract_schema_payload(content)
+    if payload is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Could not parse a table schema from the model response",
+        )
+
+    columns = _normalize_generated_columns(payload.get("columns"), existing_names)
+    if not columns:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="The model did not return any usable columns",
+        )
+
+    name = str(payload.get("name") or "").strip() or "New Table"
+    description_raw = payload.get("description")
+    description = str(description_raw).strip() if description_raw else None
+
+    return DataTableSchemaSuggestionResponse(
+        name=name,
+        description=description,
+        columns=columns,
+    )
