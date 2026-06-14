@@ -213,6 +213,13 @@ const DASHBOARD_HIDDEN_NODE_TYPES = new Set<NodeType>([
 const isDashboardWidget = computed(
   () => workflowStore.currentWorkflow?.kind === "dashboard_widget",
 );
+const showNodeTemplates = computed(() => !isDashboardWidget.value && !isRunbookPlaying.value);
+
+watch(showNodeTemplates, (visible) => {
+  if (!visible) {
+    showTemplatesBrowse.value = false;
+  }
+});
 
 const paletteNodeTypes = computed(() =>
   isDashboardWidget.value
@@ -234,6 +241,7 @@ const nodeTypes = computed(() => {
 });
 
 const filteredNodeTemplates = computed(() => {
+  if (!showNodeTemplates.value) return [];
   const query = searchQuery.value.toLowerCase().trim();
   const uid = authStore.user?.id;
   const list = [...nodeTemplates.value];
@@ -586,7 +594,7 @@ function handleDoubleClick(type: NodeType): void {
             </div>
           </div>
         </div>
-        <template v-if="!isRunbookPlaying && (filteredNodeTemplates.length > 0 || templatesLoadError)">
+        <template v-if="showNodeTemplates && (filteredNodeTemplates.length > 0 || templatesLoadError)">
           <div class="pt-4 pb-1">
             <h3 class="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-2">
               <LayoutTemplate class="w-3.5 h-3.5" />
@@ -655,6 +663,7 @@ function handleDoubleClick(type: NodeType): void {
             </p>
           </div>
           <button
+            v-if="showNodeTemplates"
             type="button"
             class="node-item w-full flex items-center gap-3 p-3 rounded-xl border border-border/40 cursor-pointer transition-all duration-200 min-h-[44px] text-left hover:border-primary/40 hover:bg-accent/50 hover:shadow-sm"
             @click="openTemplatesBrowse"
@@ -685,6 +694,7 @@ function handleDoubleClick(type: NodeType): void {
     </div>
 
     <TemplatesBrowseDialog
+      v-if="showNodeTemplates"
       :open="showTemplatesBrowse"
       :query="templatesBrowseQuery"
       @close="showTemplatesBrowse = false"

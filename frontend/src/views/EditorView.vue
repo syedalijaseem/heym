@@ -117,6 +117,9 @@ const workflowDescription = computed(() => workflowStore.currentWorkflow?.descri
 const isDashboardWidget = computed(
   () => workflowStore.currentWorkflow?.kind === "dashboard_widget",
 );
+const isStandardWorkflow = computed(
+  () => Boolean(workflowStore.currentWorkflow) && !isDashboardWidget.value,
+);
 const hasUnsavedChanges = computed(() => workflowStore.hasUnsavedChanges);
 const isSaving = computed(() => workflowStore.isSaving);
 const isEditing = computed(() => isTitleEditing.value || isDescriptionEditing.value);
@@ -665,6 +668,10 @@ watch(webhookBodyMode, async (value) => {
 
 watch(shareOpen, async (open) => {
   if (!open) return;
+  if (!isStandardWorkflow.value) {
+    shareOpen.value = false;
+    return;
+  }
   shareError.value = "";
   await loadShares();
 });
@@ -1291,7 +1298,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
           Download
         </Button>
         <Button
-          v-if="!isDashboardWidget"
+          v-if="isStandardWorkflow"
           variant="ghost"
           size="sm"
           class="hidden lg:inline-flex gap-2 text-foreground"
@@ -1301,7 +1308,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
           Portal
         </Button>
         <Button
-          v-if="!isDashboardWidget"
+          v-if="isStandardWorkflow"
           variant="ghost"
           size="sm"
           class="hidden lg:inline-flex gap-2 text-foreground"
@@ -1311,7 +1318,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
           Share
         </Button>
         <Button
-          v-if="!isDashboardWidget"
+          v-if="isStandardWorkflow"
           variant="ghost"
           size="sm"
           class="hidden xl:inline-flex gap-2 text-foreground"
@@ -1322,7 +1329,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
           Template
         </Button>
         <Button
-          v-if="!isDashboardWidget"
+          v-if="isStandardWorkflow"
           variant="ghost"
           size="sm"
           class="hidden xl:inline-flex gap-2 text-foreground"
@@ -2118,6 +2125,8 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
       :open="showCommandPalette"
       :workflows="paletteWorkflows"
       context="editor"
+      :hide-templates="isDashboardWidget"
+      :hide-runbook="isDashboardWidget"
       @select="openWorkflowFromPalette"
       @tab-select="handleTabSelectFromPalette"
       @doc-select="onDocSelectFromPalette"
@@ -2127,7 +2136,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
 
     <!-- Share as Template modal -->
     <ShareTemplateModal
-      v-if="shareTemplateOpen"
+      v-if="shareTemplateOpen && isStandardWorkflow"
       kind="workflow"
       :nodes="(workflowStore.currentWorkflow?.nodes ?? []) as Record<string, unknown>[]"
       :edges="(workflowStore.currentWorkflow?.edges ?? []) as Record<string, unknown>[]"

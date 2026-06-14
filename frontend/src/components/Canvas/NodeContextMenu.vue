@@ -15,9 +15,12 @@ interface Props {
   hasDisabledNodes: boolean;
   allDisabled: boolean;
   evalNode: { id: string; type: string; data: EvalNodeData } | null;
+  allowShareAsTemplate?: boolean;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+  allowShareAsTemplate: true,
+});
 
 const emit = defineEmits<{
   (e: "extract"): void;
@@ -61,7 +64,7 @@ const menuItems = computed(() => [
     label: "Share as Template",
     icon: LayoutTemplate,
     action: () => { emit("shareAsTemplate"); emit("close"); },
-    show: props.selectedCount === 1,
+    show: props.allowShareAsTemplate && props.selectedCount === 1,
   },
   {
     type: "separator",

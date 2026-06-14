@@ -79,16 +79,8 @@ def _make_request(existing=None) -> DataTableSchemaGenerateRequest:
     )
 
 
-def _llm_client_returning(content: str) -> MagicMock:
-    message = MagicMock()
-    message.content = content
-    choice = MagicMock()
-    choice.message = message
-    completion = MagicMock()
-    completion.choices = [choice]
-    client = MagicMock()
-    client.chat.completions.create.return_value = completion
-    return client
+def _execute_llm_returning(content: str) -> AsyncMock:
+    return AsyncMock(return_value={"text": content})
 
 
 class GenerateDataTableSchemaEndpointTests(unittest.IsolatedAsyncioTestCase):
@@ -112,8 +104,8 @@ class GenerateDataTableSchemaEndpointTests(unittest.IsolatedAsyncioTestCase):
             ),
             patch("app.api.data_tables.decrypt_config", return_value={"api_key": "x"}),
             patch(
-                "app.api.ai_assistant.get_openai_client",
-                return_value=(_llm_client_returning(content), "openai"),
+                "app.api.data_tables.execute_llm",
+                _execute_llm_returning(content),
             ),
         ):
             result = await generate_data_table_schema(
@@ -127,6 +119,34 @@ class GenerateDataTableSchemaEndpointTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result.columns[0].required)
         self.assertEqual(result.columns[1].type, "number")
 
+    async def test_generate_schema_passes_trace_context_to_llm(self) -> None:
+        content = '```json\n{"name": "Books", "columns": [{"name": "title"}]}\n```'
+        credential = self._credential()
+        user = MagicMock(id=uuid.uuid4())
+        execute_llm = _execute_llm_returning(content)
+        with (
+            patch(
+                "app.api.ai_assistant.get_credential_for_user",
+                AsyncMock(return_value=credential),
+            ),
+            patch("app.api.data_tables.decrypt_config", return_value={"api_key": "x"}),
+            patch("app.api.data_tables.execute_llm", execute_llm),
+        ):
+            await generate_data_table_schema(
+                request=_make_request(),
+                current_user=user,
+                db=AsyncMock(),
+            )
+
+        execute_llm.assert_awaited_once()
+        kwargs = execute_llm.await_args.kwargs
+        trace_context = kwargs["trace_context"]
+        self.assertEqual(kwargs["model"], "gpt-4o-mini")
+        self.assertEqual(trace_context.user_id, user.id)
+        self.assertEqual(trace_context.credential_id, credential.id)
+        self.assertEqual(trace_context.source, "data_table_ai")
+        self.assertEqual(trace_context.node_label, "AI DataTable Create")
+
     async def test_dedupes_against_existing_columns_in_extend_mode(self) -> None:
         existing = [DataTableColumnDef(name="title", type="string", order=0)]
         content = (
@@ -134,16 +154,14 @@ class GenerateDataTableSchemaEndpointTests(unittest.IsolatedAsyncioTestCase):
             '{"name": "Title", "type": "string"}, '
             '{"name": "isbn", "type": "string"}]}\n```'
         )
+        execute_llm = _execute_llm_returning(content)
         with (
             patch(
                 "app.api.ai_assistant.get_credential_for_user",
                 AsyncMock(return_value=self._credential()),
             ),
             patch("app.api.data_tables.decrypt_config", return_value={"api_key": "x"}),
-            patch(
-                "app.api.ai_assistant.get_openai_client",
-                return_value=(_llm_client_returning(content), "openai"),
-            ),
+            patch("app.api.data_tables.execute_llm", execute_llm),
         ):
             result = await generate_data_table_schema(
                 request=_make_request(existing=existing),
@@ -151,6 +169,10 @@ class GenerateDataTableSchemaEndpointTests(unittest.IsolatedAsyncioTestCase):
                 db=AsyncMock(),
             )
         self.assertEqual([c.name for c in result.columns], ["isbn"])
+        self.assertEqual(
+            execute_llm.await_args.kwargs["trace_context"].node_label,
+            "AI DataTable Extend",
+        )
 
     async def test_missing_credential_returns_400(self) -> None:
         with patch(
@@ -173,8 +195,8 @@ class GenerateDataTableSchemaEndpointTests(unittest.IsolatedAsyncioTestCase):
             ),
             patch("app.api.data_tables.decrypt_config", return_value={"api_key": "x"}),
             patch(
-                "app.api.ai_assistant.get_openai_client",
-                return_value=(_llm_client_returning("no json here"), "openai"),
+                "app.api.data_tables.execute_llm",
+                _execute_llm_returning("no json here"),
             ),
         ):
             with self.assertRaises(HTTPException) as ctx:
@@ -194,8 +216,8 @@ class GenerateDataTableSchemaEndpointTests(unittest.IsolatedAsyncioTestCase):
             ),
             patch("app.api.data_tables.decrypt_config", return_value={"api_key": "x"}),
             patch(
-                "app.api.ai_assistant.get_openai_client",
-                return_value=(_llm_client_returning(content), "openai"),
+                "app.api.data_tables.execute_llm",
+                _execute_llm_returning(content),
             ),
         ):
             with self.assertRaises(HTTPException) as ctx:

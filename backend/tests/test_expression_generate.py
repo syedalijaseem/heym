@@ -101,6 +101,7 @@ class GenerateExpressionTests(unittest.IsolatedAsyncioTestCase):
             workflow_id=uuid.uuid4(),
             credential_id=uuid.uuid4(),
             model="gpt-4o",
+            current_node_id="node-1",
             node_results=[
                 NodeResultItem(
                     node_id="n1", label="API Call", output={"customer": {"name": "John"}}
@@ -134,6 +135,13 @@ class GenerateExpressionTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Evaluator input value: customer name from the API response", user_message)
         self.assertIn("### Workflow `$vars` namespace", user_message)
         self.assertIn("### Global variables", user_message)
+        trace_context = execute_mock.await_args.kwargs["trace_context"]
+        self.assertEqual(trace_context.user_id, user.id)
+        self.assertEqual(trace_context.credential_id, request.credential_id)
+        self.assertEqual(trace_context.workflow_id, request.workflow_id)
+        self.assertEqual(trace_context.node_id, "node-1")
+        self.assertEqual(trace_context.source, "assistant")
+        self.assertEqual(trace_context.node_label, "Expression Builder")
 
     async def test_regenerate_prior_attempt_and_temperature(self) -> None:
         db = AsyncMock()

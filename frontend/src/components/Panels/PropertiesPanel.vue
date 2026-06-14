@@ -490,6 +490,27 @@ const playwrightExprRefsBySlotKey = ref<Record<string, InstanceType<typeof Expre
 const mcpCallArgumentInputRefs = ref<Map<string, InstanceType<typeof ExpressionInput>>>(new Map());
 const mcpCallConnectionEnvInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const currentMCPCallExpressionFieldIndex = ref(0);
+type ChartOutputExpressionFieldKey =
+  | "text"
+  | "valueField"
+  | "dataPath"
+  | "labelField"
+  | "xField"
+  | "yField"
+  | "min"
+  | "max"
+  | "unit"
+  | "title";
+
+interface ChartOutputExpressionField {
+  key: ChartOutputExpressionFieldKey;
+  label: string;
+}
+
+const chartOutputExpressionInputRefs = ref<
+  Map<ChartOutputExpressionFieldKey, InstanceType<typeof ExpressionInput>>
+>(new Map());
+const currentChartOutputExpressionFieldIndex = ref(0);
 const validationErrors = ref<ValidationError[]>([]);
 const showValidationDialog = ref(false);
 
@@ -1470,6 +1491,7 @@ function closeAllExpressionExpandDialogs(): void {
   closeBigQueryExpressionDialogs();
   closeS3ExpressionDialogs();
   closeMCPCallExpressionDialogs();
+  closeChartOutputExpressionDialogs();
 }
 
 /** Opens the primary expression evaluate dialog for whichever node is currently selected. */
@@ -1495,6 +1517,20 @@ function openPrimaryExpandDialogForSelectedNode(): void {
         }
       } else if (outputMessageInputRef.value) {
         nextTick(() => openOutputExpressionFieldAtIndex(0));
+      } else {
+        setTimeout(() => tryOpenDialog(attempts + 1), 100);
+      }
+    };
+    nextTick(() => tryOpenDialog());
+  } else if (nodeType === "chartOutput") {
+    currentChartOutputExpressionFieldIndex.value = 0;
+    const tryOpenDialog = (attempts = 0): void => {
+      if (attempts > 20) {
+        return;
+      }
+      const firstField = chartOutputExpressionFields.value[0];
+      if (firstField && chartOutputExpressionInputRefs.value.get(firstField.key)) {
+        nextTick(() => openChartOutputExpressionFieldAtIndex(0));
       } else {
         setTimeout(() => tryOpenDialog(attempts + 1), 100);
       }
@@ -1904,6 +1940,7 @@ function selectedNodeHasPrimaryEvaluateExpandTarget(): boolean {
     case "jsonOutputMapper":
       return true;
     case "output":
+    case "chartOutput":
     case "http":
     case "websocketSend":
     case "llm":
@@ -2990,6 +3027,116 @@ function handleDriveExpressionFieldNavigate(direction: "prev" | "next"): void {
 
 function onDriveRegisterExpressionFieldIndex(index: number): void {
   currentDriveExpressionFieldIndex.value = index;
+}
+
+const chartOutputExpressionFields = computed<ChartOutputExpressionField[]>(() => {
+  const n = workflowStore.selectedNode;
+  if (!n || n.type !== "chartOutput") {
+    return [];
+  }
+  const chartType = n.data.chartType || "bar";
+  const fields: ChartOutputExpressionField[] = [];
+
+  if (chartType === "text") {
+    fields.push(
+      { key: "text", label: "Text (markdown)" },
+      { key: "valueField", label: "Value field" },
+    );
+  }
+
+  fields.push({ key: "dataPath", label: "Data path" });
+
+  if (["bar", "line", "area", "pie", "proportion", "barGauge"].includes(chartType)) {
+    fields.push({ key: "labelField", label: "Label field" });
+  }
+
+  if (["bar", "line", "area", "pie", "numeric", "gauge", "proportion", "barGauge"].includes(chartType)) {
+    fields.push({ key: "valueField", label: "Value field" });
+  }
+
+  if (chartType === "scatter") {
+    fields.push(
+      { key: "xField", label: "X field" },
+      { key: "yField", label: "Y field" },
+    );
+  }
+
+  if (chartType === "gauge") {
+    fields.push(
+      { key: "min", label: "Min" },
+      { key: "max", label: "Max" },
+    );
+  }
+
+  if (chartType === "barGauge") {
+    fields.push({ key: "max", label: "Max" });
+  }
+
+  if (["numeric", "gauge", "barGauge"].includes(chartType)) {
+    fields.push({ key: "unit", label: "Unit" });
+  }
+
+  fields.push({ key: "title", label: "Title" });
+  return fields;
+});
+
+const chartOutputExpressionFieldCount = computed((): number => {
+  return chartOutputExpressionFields.value.length;
+});
+
+function chartOutputExpressionFieldIndex(key: ChartOutputExpressionFieldKey): number {
+  const index = chartOutputExpressionFields.value.findIndex((field) => field.key === key);
+  return index >= 0 ? index : 0;
+}
+
+function setChartOutputExpressionInputRef(
+  key: ChartOutputExpressionFieldKey,
+  el: unknown,
+): void {
+  if (el) {
+    chartOutputExpressionInputRefs.value.set(key, el as InstanceType<typeof ExpressionInput>);
+  } else {
+    chartOutputExpressionInputRefs.value.delete(key);
+  }
+}
+
+function openChartOutputExpressionFieldAtIndex(index: number): void {
+  const n = selectedNode.value;
+  if (!n || n.type !== "chartOutput") {
+    return;
+  }
+  const field = chartOutputExpressionFields.value[index];
+  if (!field) {
+    return;
+  }
+  currentChartOutputExpressionFieldIndex.value = index;
+  chartOutputExpressionInputRefs.value.get(field.key)?.openExpandDialog();
+}
+
+function closeChartOutputExpressionDialogs(): void {
+  for (const input of chartOutputExpressionInputRefs.value.values()) {
+    input.closeExpandDialog();
+  }
+}
+
+function handleChartOutputExpressionFieldNavigate(direction: "prev" | "next"): void {
+  const total = chartOutputExpressionFieldCount.value;
+  const newIndex =
+    direction === "prev"
+      ? currentChartOutputExpressionFieldIndex.value - 1
+      : currentChartOutputExpressionFieldIndex.value + 1;
+  if (newIndex < 0 || newIndex >= total) {
+    return;
+  }
+  closeChartOutputExpressionDialogs();
+  currentChartOutputExpressionFieldIndex.value = newIndex;
+  nextTick(() => {
+    openChartOutputExpressionFieldAtIndex(newIndex);
+  });
+}
+
+function onChartOutputRegisterExpressionFieldIndex(index: number): void {
+  currentChartOutputExpressionFieldIndex.value = index;
 }
 
 function onSetMappingRegisterFieldIndex(index: number): void {
@@ -8226,10 +8373,23 @@ onUnmounted(() => {
               class="space-y-2"
             >
               <Label>Text (markdown)</Label>
-              <Textarea
+              <ExpressionInput
+                :ref="(el: unknown) => setChartOutputExpressionInputRef('text', el)"
                 :model-value="selectedNode.data.text || ''"
                 :rows="5"
                 placeholder="e.g. **Last execution** at `19:47`"
+                :nodes="workflowStore.nodes"
+                :node-results="workflowStore.nodeResults"
+                :edges="workflowStore.edges"
+                :current-node-id="selectedNode.id"
+                :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                dialog-key-label="Text (markdown)"
+                field-key="text"
+                :navigation-enabled="chartOutputExpressionFieldCount > 1"
+                :navigation-index="chartOutputExpressionFieldIndex('text')"
+                :navigation-total="chartOutputExpressionFieldCount"
+                @navigate="handleChartOutputExpressionFieldNavigate"
+                @register-field-index="onChartOutputRegisterExpressionFieldIndex"
                 @update:model-value="updateNodeData('text', $event)"
               />
               <p class="text-xs text-muted-foreground">
@@ -8243,9 +8403,23 @@ onUnmounted(() => {
               class="space-y-2"
             >
               <Label>Value field (optional)</Label>
-              <Input
+              <ExpressionInput
+                :ref="(el: unknown) => setChartOutputExpressionInputRef('valueField', el)"
                 :model-value="selectedNode.data.valueField || ''"
                 placeholder="row key holding the markdown string"
+                single-line
+                :nodes="workflowStore.nodes"
+                :node-results="workflowStore.nodeResults"
+                :edges="workflowStore.edges"
+                :current-node-id="selectedNode.id"
+                :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                dialog-key-label="Value field"
+                field-key="valueField"
+                :navigation-enabled="chartOutputExpressionFieldCount > 1"
+                :navigation-index="chartOutputExpressionFieldIndex('valueField')"
+                :navigation-total="chartOutputExpressionFieldCount"
+                @navigate="handleChartOutputExpressionFieldNavigate"
+                @register-field-index="onChartOutputRegisterExpressionFieldIndex"
                 @update:model-value="updateNodeData('valueField', $event)"
               />
             </div>
@@ -8267,9 +8441,23 @@ onUnmounted(() => {
 
             <div class="space-y-2">
               <Label>Data path</Label>
-              <Input
+              <ExpressionInput
+                :ref="(el: unknown) => setChartOutputExpressionInputRef('dataPath', el)"
                 :model-value="selectedNode.data.dataPath || ''"
                 placeholder="e.g. data or result.items"
+                single-line
+                :nodes="workflowStore.nodes"
+                :node-results="workflowStore.nodeResults"
+                :edges="workflowStore.edges"
+                :current-node-id="selectedNode.id"
+                :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                dialog-key-label="Data path"
+                field-key="dataPath"
+                :navigation-enabled="chartOutputExpressionFieldCount > 1"
+                :navigation-index="chartOutputExpressionFieldIndex('dataPath')"
+                :navigation-total="chartOutputExpressionFieldCount"
+                @navigate="handleChartOutputExpressionFieldNavigate"
+                @register-field-index="onChartOutputRegisterExpressionFieldIndex"
                 @update:model-value="updateNodeData('dataPath', $event)"
               />
               <p class="text-xs text-muted-foreground">
@@ -8285,18 +8473,46 @@ onUnmounted(() => {
                 class="space-y-2"
               >
                 <Label>Label field</Label>
-                <Input
+                <ExpressionInput
+                  :ref="(el: unknown) => setChartOutputExpressionInputRef('labelField', el)"
                   :model-value="selectedNode.data.labelField || ''"
                   placeholder="row key used as category label"
+                  single-line
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                  dialog-key-label="Label field"
+                  field-key="labelField"
+                  :navigation-enabled="chartOutputExpressionFieldCount > 1"
+                  :navigation-index="chartOutputExpressionFieldIndex('labelField')"
+                  :navigation-total="chartOutputExpressionFieldCount"
+                  @navigate="handleChartOutputExpressionFieldNavigate"
+                  @register-field-index="onChartOutputRegisterExpressionFieldIndex"
                   @update:model-value="updateNodeData('labelField', $event)"
                 />
               </div>
 
               <div class="space-y-2">
                 <Label>Value field</Label>
-                <Input
+                <ExpressionInput
+                  :ref="(el: unknown) => setChartOutputExpressionInputRef('valueField', el)"
                   :model-value="selectedNode.data.valueField || ''"
                   placeholder="row key used as numeric value"
+                  single-line
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                  dialog-key-label="Value field"
+                  field-key="valueField"
+                  :navigation-enabled="chartOutputExpressionFieldCount > 1"
+                  :navigation-index="chartOutputExpressionFieldIndex('valueField')"
+                  :navigation-total="chartOutputExpressionFieldCount"
+                  @navigate="handleChartOutputExpressionFieldNavigate"
+                  @register-field-index="onChartOutputRegisterExpressionFieldIndex"
                   @update:model-value="updateNodeData('valueField', $event)"
                 />
               </div>
@@ -8305,17 +8521,45 @@ onUnmounted(() => {
             <template v-if="selectedNode.data.chartType === 'scatter'">
               <div class="space-y-2">
                 <Label>X field</Label>
-                <Input
+                <ExpressionInput
+                  :ref="(el: unknown) => setChartOutputExpressionInputRef('xField', el)"
                   :model-value="selectedNode.data.xField || ''"
                   placeholder="row key for the X axis (numeric)"
+                  single-line
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                  dialog-key-label="X field"
+                  field-key="xField"
+                  :navigation-enabled="chartOutputExpressionFieldCount > 1"
+                  :navigation-index="chartOutputExpressionFieldIndex('xField')"
+                  :navigation-total="chartOutputExpressionFieldCount"
+                  @navigate="handleChartOutputExpressionFieldNavigate"
+                  @register-field-index="onChartOutputRegisterExpressionFieldIndex"
                   @update:model-value="updateNodeData('xField', $event)"
                 />
               </div>
               <div class="space-y-2">
                 <Label>Y field</Label>
-                <Input
+                <ExpressionInput
+                  :ref="(el: unknown) => setChartOutputExpressionInputRef('yField', el)"
                   :model-value="selectedNode.data.yField || ''"
                   placeholder="row key for the Y axis (numeric)"
+                  single-line
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                  dialog-key-label="Y field"
+                  field-key="yField"
+                  :navigation-enabled="chartOutputExpressionFieldCount > 1"
+                  :navigation-index="chartOutputExpressionFieldIndex('yField')"
+                  :navigation-total="chartOutputExpressionFieldCount"
+                  @navigate="handleChartOutputExpressionFieldNavigate"
+                  @register-field-index="onChartOutputRegisterExpressionFieldIndex"
                   @update:model-value="updateNodeData('yField', $event)"
                 />
               </div>
@@ -8327,17 +8571,45 @@ onUnmounted(() => {
             >
               <div class="space-y-2">
                 <Label>Min</Label>
-                <Input
-                  type="number"
-                  :model-value="selectedNode.data.min ?? 0"
+                <ExpressionInput
+                  :ref="(el: unknown) => setChartOutputExpressionInputRef('min', el)"
+                  :model-value="String(selectedNode.data.min ?? 0)"
+                  placeholder="0"
+                  single-line
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                  dialog-key-label="Min"
+                  field-key="min"
+                  :navigation-enabled="chartOutputExpressionFieldCount > 1"
+                  :navigation-index="chartOutputExpressionFieldIndex('min')"
+                  :navigation-total="chartOutputExpressionFieldCount"
+                  @navigate="handleChartOutputExpressionFieldNavigate"
+                  @register-field-index="onChartOutputRegisterExpressionFieldIndex"
                   @update:model-value="updateNodeData('min', $event)"
                 />
               </div>
               <div class="space-y-2">
                 <Label>Max</Label>
-                <Input
-                  type="number"
-                  :model-value="selectedNode.data.max ?? 100"
+                <ExpressionInput
+                  :ref="(el: unknown) => setChartOutputExpressionInputRef('max', el)"
+                  :model-value="String(selectedNode.data.max ?? 100)"
+                  placeholder="100"
+                  single-line
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                  dialog-key-label="Max"
+                  field-key="max"
+                  :navigation-enabled="chartOutputExpressionFieldCount > 1"
+                  :navigation-index="chartOutputExpressionFieldIndex('max')"
+                  :navigation-total="chartOutputExpressionFieldCount"
+                  @navigate="handleChartOutputExpressionFieldNavigate"
+                  @register-field-index="onChartOutputRegisterExpressionFieldIndex"
                   @update:model-value="updateNodeData('max', $event)"
                 />
               </div>
@@ -8348,10 +8620,23 @@ onUnmounted(() => {
               class="space-y-2"
             >
               <Label>Max (optional)</Label>
-              <Input
-                type="number"
-                :model-value="selectedNode.data.max ?? ''"
+              <ExpressionInput
+                :ref="(el: unknown) => setChartOutputExpressionInputRef('max', el)"
+                :model-value="selectedNode.data.max === undefined || selectedNode.data.max === null ? '' : String(selectedNode.data.max)"
                 placeholder="defaults to the largest row value"
+                single-line
+                :nodes="workflowStore.nodes"
+                :node-results="workflowStore.nodeResults"
+                :edges="workflowStore.edges"
+                :current-node-id="selectedNode.id"
+                :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                dialog-key-label="Max"
+                field-key="max"
+                :navigation-enabled="chartOutputExpressionFieldCount > 1"
+                :navigation-index="chartOutputExpressionFieldIndex('max')"
+                :navigation-total="chartOutputExpressionFieldCount"
+                @navigate="handleChartOutputExpressionFieldNavigate"
+                @register-field-index="onChartOutputRegisterExpressionFieldIndex"
                 @update:model-value="updateNodeData('max', $event)"
               />
             </div>
@@ -8361,18 +8646,46 @@ onUnmounted(() => {
               class="space-y-2"
             >
               <Label>Unit</Label>
-              <Input
+              <ExpressionInput
+                :ref="(el: unknown) => setChartOutputExpressionInputRef('unit', el)"
                 :model-value="selectedNode.data.unit || ''"
                 placeholder="e.g. USD, %, ms"
+                single-line
+                :nodes="workflowStore.nodes"
+                :node-results="workflowStore.nodeResults"
+                :edges="workflowStore.edges"
+                :current-node-id="selectedNode.id"
+                :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                dialog-key-label="Unit"
+                field-key="unit"
+                :navigation-enabled="chartOutputExpressionFieldCount > 1"
+                :navigation-index="chartOutputExpressionFieldIndex('unit')"
+                :navigation-total="chartOutputExpressionFieldCount"
+                @navigate="handleChartOutputExpressionFieldNavigate"
+                @register-field-index="onChartOutputRegisterExpressionFieldIndex"
                 @update:model-value="updateNodeData('unit', $event)"
               />
             </div>
 
             <div class="space-y-2">
               <Label>Title</Label>
-              <Input
+              <ExpressionInput
+                :ref="(el: unknown) => setChartOutputExpressionInputRef('title', el)"
                 :model-value="selectedNode.data.title || ''"
                 placeholder="optional chart title"
+                single-line
+                :nodes="workflowStore.nodes"
+                :node-results="workflowStore.nodeResults"
+                :edges="workflowStore.edges"
+                :current-node-id="selectedNode.id"
+                :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                dialog-key-label="Title"
+                field-key="title"
+                :navigation-enabled="chartOutputExpressionFieldCount > 1"
+                :navigation-index="chartOutputExpressionFieldIndex('title')"
+                :navigation-total="chartOutputExpressionFieldCount"
+                @navigate="handleChartOutputExpressionFieldNavigate"
+                @register-field-index="onChartOutputRegisterExpressionFieldIndex"
                 @update:model-value="updateNodeData('title', $event)"
               />
             </div>
