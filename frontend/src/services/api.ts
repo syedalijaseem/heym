@@ -2474,9 +2474,11 @@ export const filesApi = {
 
 import type {
   DataTable,
+  DataTableColumn,
   DataTableImportResult,
   DataTableListItem,
   DataTableRow,
+  DataTableSchemaSuggestion,
   DataTableShare,
   DataTableTeamShare,
 } from "@/types/dataTable";
@@ -2499,6 +2501,19 @@ export const dataTablesApi = {
 
   update: async (id: string, data: { name?: string; description?: string; columns?: unknown[] }): Promise<DataTable> => {
     const response = await api.put<DataTable>(`/data-tables/${id}`, data);
+    return response.data;
+  },
+
+  generateSchema: async (payload: {
+    credential_id: string;
+    model: string;
+    prompt: string;
+    existing_columns?: DataTableColumn[];
+  }): Promise<DataTableSchemaSuggestion> => {
+    const response = await api.post<DataTableSchemaSuggestion>(
+      "/data-tables/generate-schema",
+      payload,
+    );
     return response.data;
   },
 

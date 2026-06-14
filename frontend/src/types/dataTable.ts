@@ -66,3 +66,9 @@ export interface DataTableImportResult {
   errors: Array<{ row: number; errors: string[] }>;
   total: number;
 }
+
+export interface DataTableSchemaSuggestion {
+  name: string;
+  description: string | null;
+  columns: DataTableColumn[];
+}
