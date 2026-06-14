@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import {
   ArrowLeft,
@@ -598,6 +598,16 @@ onMounted(async () => {
   }
   await tablesPromise;
 });
+
+// Close the inline "New DataTable" dialog on Esc.
+function handleCreateDialogEscape(event: KeyboardEvent): void {
+  if (event.key === "Escape" && showCreateDialog.value) {
+    event.stopPropagation();
+    showCreateDialog.value = false;
+  }
+}
+onMounted(() => window.addEventListener("keydown", handleCreateDialogEscape, true));
+onUnmounted(() => window.removeEventListener("keydown", handleCreateDialogEscape, true));
 </script>
 
 <template>

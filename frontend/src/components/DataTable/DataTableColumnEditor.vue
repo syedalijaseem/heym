@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { onBeforeUnmount, onMounted, ref } from "vue";
 import { ChevronDown } from "lucide-vue-next";
 
 import type { DataTableColumn } from "@/types/dataTable";
@@ -16,6 +16,15 @@ const type = ref(props.column?.type ?? "string");
 const required = ref(props.column?.required ?? false);
 const defaultValue = ref(props.column?.defaultValue != null ? String(props.column.defaultValue) : "");
 const unique = ref(props.column?.unique ?? false);
+
+function handleEscape(event: KeyboardEvent): void {
+  if (event.key === "Escape") {
+    event.stopPropagation();
+    emit("close");
+  }
+}
+onMounted(() => window.addEventListener("keydown", handleEscape, true));
+onBeforeUnmount(() => window.removeEventListener("keydown", handleEscape, true));
 
 function handleSave() {
   if (!name.value.trim()) return;
