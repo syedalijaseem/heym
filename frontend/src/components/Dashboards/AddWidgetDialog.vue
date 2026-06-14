@@ -39,6 +39,7 @@ const chartTypeOptions = [
   { value: "scatter", label: "Scatter" },
   { value: "proportion", label: "Proportion" },
   { value: "barGauge", label: "Bar gauge" },
+  { value: "text", label: "Text" },
 ];
 
 function submit(): void {

@@ -3039,7 +3039,7 @@ Access the converted file downstream: `$convertDoc.id`, `$convertDoc.download_ur
   `[{"month": "Jan", "revenue": 120}, ...]`).
 - **Data fields**:
   - `label`: Node identifier (camelCase)
-  - `chartType`: `"pie"` | `"bar"` | `"line"` | `"area"` | `"table"` | `"numeric"` | `"gauge"` | `"scatter"` | `"proportion"` | `"barGauge"` (required)
+  - `chartType`: `"pie"` | `"bar"` | `"line"` | `"area"` | `"table"` | `"numeric"` | `"gauge"` | `"scatter"` | `"proportion"` | `"barGauge"` | `"text"` (required)
   - `orientation`: `"horizontal"` | `"vertical"` (bar only, default `"vertical"`)
   - `dataPath`: optional dot path to the rows array inside the upstream output (e.g. `"data"` or `"result.items"`)
   - `labelField`: row key used as the category label (pie/bar/line)
@@ -3049,6 +3049,8 @@ Access the converted file downstream: `$convertDoc.id`, `$convertDoc.download_ur
   - `xField` / `yField`: row keys for the X and Y numeric axes (scatter)
   - `min` / `max`: numeric range for `gauge` (default `0` / `100`)
   - `unit`: optional unit string for `numeric`/`gauge`
+  - `text`: markdown string for the `text` chart type (a static message; supports markdown). For a
+    dynamic message, leave `text` empty and set `valueField` to a row key holding the string.
   - `title`: optional chart title
 - **Output**: a standardized chart payload (consumed by the dashboard renderer).
 
@@ -3128,6 +3130,13 @@ Proportion (one stacked bar split by share + a legend with percentages, e.g. a l
 Bar gauge (one horizontal gauge per row with a red→green gradient and a value, e.g. free disk space; upstream rows `[{name, value}]`; e.g. `$array(dict(name="sda1", value=73.1), dict(name="sda2", value=71.8))`; optional `max`, defaults to the largest value):
 ```json
 {"type": "chartOutput", "data": {"label": "freeDisk", "chartType": "barGauge", "dataPath": "rows", "labelField": "name", "valueField": "value", "unit": "GB", "title": "Free disk space"}}
+```
+
+Text (a markdown message, e.g. a status note or "last execution at 19:47"; no upstream rows are
+needed — put the markdown straight in `text`. For a DYNAMIC message build the string upstream and
+set `valueField` to its row key instead):
+```json
+{"type": "chartOutput", "data": {"label": "statusNote", "chartType": "text", "text": "**Last execution** at `19:47` — all checks passed ✅", "title": "Status"}}
 ```
 
 ## Expression Syntax

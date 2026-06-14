@@ -56,6 +56,26 @@ def build_chart_payload(config: dict, data: Any) -> dict:
     if title:
         payload["title"] = title
 
+    if chart_type == "text":
+        # A markdown message. Prefer a value pulled from upstream data (so the text can
+        # be dynamic, e.g. "Last execution at 19:47"), then a static `text` config, then
+        # the first string field of the first row.
+        text_val: Any = None
+        value_field = config.get("valueField")
+        if rows and isinstance(rows[0], dict) and value_field:
+            text_val = rows[0].get(value_field)
+        if text_val is None and isinstance(data, str):
+            text_val = data
+        if text_val is None:
+            text_val = config.get("text")
+        if text_val is None and rows and isinstance(rows[0], dict):
+            for candidate in rows[0].values():
+                if isinstance(candidate, str):
+                    text_val = candidate
+                    break
+        payload["text"] = "" if text_val is None else str(text_val)
+        return payload
+
     if chart_type == "table":
         columns = config.get("columns")
         if not columns:

@@ -178,3 +178,40 @@ class TestBuildChartPayload(unittest.TestCase):
         self.assertEqual(payload["type"], "proportion")
         self.assertEqual(payload["labels"], ["Kotlin", "JavaScript"])
         self.assertEqual(payload["series"], [{"name": "value", "data": [49.64, 23.73]}])
+
+    def test_text_static_config(self):
+        config = {"chartType": "text", "text": "**Last execution** at `19:47`"}
+        payload = build_chart_payload(config, {})
+        self.assertEqual(payload["type"], "text")
+        self.assertEqual(payload["text"], "**Last execution** at `19:47`")
+        self.assertNotIn("series", payload)
+
+    def test_text_pulls_from_value_field(self):
+        config = {"chartType": "text", "valueField": "message"}
+        data = {"data": [{"message": "Last run at 19:47", "other": 1}]}
+        payload = build_chart_payload(config, data)
+        self.assertEqual(payload["type"], "text")
+        self.assertEqual(payload["text"], "Last run at 19:47")
+
+    def test_text_value_field_takes_precedence_over_static(self):
+        config = {"chartType": "text", "valueField": "message", "text": "static fallback"}
+        data = [{"message": "dynamic wins"}]
+        payload = build_chart_payload(config, data)
+        self.assertEqual(payload["text"], "dynamic wins")
+
+    def test_text_falls_back_to_first_string_field(self):
+        config = {"chartType": "text"}
+        data = [{"count": 5, "note": "hello world"}]
+        payload = build_chart_payload(config, data)
+        self.assertEqual(payload["text"], "hello world")
+
+    def test_text_empty_when_nothing_available(self):
+        config = {"chartType": "text"}
+        payload = build_chart_payload(config, {})
+        self.assertEqual(payload["type"], "text")
+        self.assertEqual(payload["text"], "")
+
+    def test_text_scalar_string_input(self):
+        config = {"chartType": "text"}
+        payload = build_chart_payload(config, "just a string")
+        self.assertEqual(payload["text"], "just a string")

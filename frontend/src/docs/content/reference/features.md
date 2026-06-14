@@ -296,7 +296,7 @@ Pairs with [Set](../nodes/set-node.md), [Output](../nodes/output-node.md), [Work
 
 #### [Chart Output](../nodes/chart-output-node.md)
 
-The Chart Output node is the terminal node of a [Dashboard](../tabs/dashboard-tab.md) widget workflow. It turns the rows produced by upstream nodes into a standardized chart payload that the dashboard renders. Choose a `chartType` (bar, line, area, pie, table, numeric, gauge, scatter, proportion, or bar gauge), map `labelField`/`valueField` (or `series` for multi-series), and place it last; it has no output edge.
+The Chart Output node is the terminal node of a [Dashboard](../tabs/dashboard-tab.md) widget workflow. It turns the rows produced by upstream nodes into a standardized chart payload that the dashboard renders. Choose a `chartType` (bar, line, area, pie, table, numeric, gauge, scatter, proportion, bar gauge, or text), map `labelField`/`valueField` (or `series` for multi-series, or `text` for a markdown message), and place it last; it has no output edge.
 
 See also [Dashboard](../tabs/dashboard-tab.md), [Set](../nodes/set-node.md), and [Output](../nodes/output-node.md).
 
@@ -642,7 +642,7 @@ See also [Execution History](./execution-history.md), [Scheduled](../tabs/schedu
 
 ### [Dashboard](../tabs/dashboard-tab.md)
 
-The Dashboard tab is a Grafana-style space where you build a grid of chart widgets, each rendered from its own hidden Heym workflow. Describe a metric in plain language and the AI generates the widget, or add one manually and pick a chart type: bar, line, area, pie, table, numeric, gauge, scatter, proportion, or bar gauge. Widgets cache their results, can be fine-tuned with AI (each change is saved to [Edit History](./edit-history.md)), rearranged with Tidy up, and dragged or resized in edit mode. Because each widget is a workflow, any data you can fetch — an [HTTP](../nodes/http-node.md) call, a [BigQuery](../nodes/bigquery-node.md) query, a [RAG](../nodes/rag-node.md) lookup, or [LLM](../nodes/llm-node.md) output — can become a chart.
+The Dashboard tab is a Grafana-style space where you build a grid of chart widgets, each rendered from its own hidden Heym workflow. Describe a metric in plain language and the AI generates the widget, or add one manually and pick a chart type: bar, line, area, pie, table, numeric, gauge, scatter, proportion, bar gauge, or text. Widgets cache their results, can be fine-tuned with AI (each change is saved to [Edit History](./edit-history.md)), rearranged with Tidy up, and dragged or resized in edit mode. Because each widget is a workflow, any data you can fetch — an [HTTP](../nodes/http-node.md) call, a [BigQuery](../nodes/bigquery-node.md) query, a [RAG](../nodes/rag-node.md) lookup, or [LLM](../nodes/llm-node.md) output — can become a chart.
 
 See also [Chart Output node](../nodes/chart-output-node.md), [Analytics](../tabs/analytics-tab.md), and [Execution History](./execution-history.md).
 

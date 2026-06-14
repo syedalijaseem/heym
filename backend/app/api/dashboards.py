@@ -34,9 +34,9 @@ router = APIRouter()
 _AI_WIDGET_SUFFIX = (
     " The workflow MUST end with a single chartOutput node that produces the chart. "
     "Choose an appropriate chartType (pie, bar, line, area, table, numeric, gauge, scatter, "
-    "proportion, or barGauge) and set "
+    "proportion, barGauge, or text) and set "
     "labelField/valueField (or series for multi-series line/area, or xField/yField for scatter, "
-    "or min/max for gauge) on the "
+    "or min/max for gauge, or text for a markdown message) on the "
     "chartOutput node so it renders the requested metric. When the user only describes example or "
     "sample data, produce the upstream rows with a set node using "
     "$array(dict(key=value, ...), ...) — never use ${...} or bare {...} object literals."
@@ -91,7 +91,9 @@ def _seed_widget_nodes(chart_type: str) -> tuple[list, list]:
     src_id = str(uuid.uuid4())
     chart_id = str(uuid.uuid4())
     chart_data: dict = {"label": "chart", "chartType": chart_type, "dataPath": "rows"}
-    if chart_type == "scatter":
+    if chart_type == "text":
+        chart_data["valueField"] = "text"
+    elif chart_type == "scatter":
         chart_data["xField"] = "x"
         chart_data["yField"] = "y"
     elif chart_type == "gauge":
