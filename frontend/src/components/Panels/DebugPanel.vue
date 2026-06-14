@@ -3661,9 +3661,15 @@ function renderContent(content: string): string {
   gap: 6px;
   margin-top: 8px;
   padding: 6px 10px;
-  background: hsl(var(--primary) / 0.15);
+  background: hsl(var(--primary) / 0.12);
+  border: 1px solid hsl(var(--primary) / 0.24);
   border-radius: 6px;
   font-size: 12px;
+  font-weight: 500;
+  color: hsl(var(--foreground));
+}
+
+.workflow-detected svg {
   color: hsl(var(--primary));
 }
 
