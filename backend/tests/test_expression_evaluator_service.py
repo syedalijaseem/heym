@@ -821,6 +821,40 @@ class TestExpressionEvaluatorServiceEvaluate(unittest.TestCase):
         self.assertTrue(response.preserved_type)
         self.assertIsNone(response.error)
 
+    def test_array_map_string_method_call_matches_executor(self) -> None:
+        expr = '$set.dates.map("item.substring(0, 5)")'
+        ctx = {"set": {"dates": ["2026-06-13 00:20:33.463147+00:00"]}}
+
+        executor_result = WorkflowExecutor(nodes=[], edges=[]).resolve_expression(
+            expr,
+            ctx,
+            preserve_type=True,
+        )
+        self.assertEqual(list(executor_result), ["2026-"])
+
+        response = self._service().evaluate(expr, ctx)
+        self.assertEqual(response.result, ["2026-"])
+        self.assertEqual(response.result_type, "array")
+        self.assertTrue(response.preserved_type)
+        self.assertIsNone(response.error)
+
+    def test_array_map_template_item_refs_still_match_executor(self) -> None:
+        expr = '$items.map("- item.source (Page: item.page): item.snippet")'
+        ctx = {"items": [{"source": "docs", "page": 2, "snippet": "hello"}]}
+
+        executor_result = WorkflowExecutor(nodes=[], edges=[]).resolve_expression(
+            expr,
+            ctx,
+            preserve_type=True,
+        )
+        self.assertEqual(list(executor_result), ["- docs (Page: 2): hello"])
+
+        response = self._service().evaluate(expr, ctx)
+        self.assertEqual(response.result, ["- docs (Page: 2): hello"])
+        self.assertEqual(response.result_type, "array")
+        self.assertTrue(response.preserved_type)
+        self.assertIsNone(response.error)
+
     def test_template_string_concatenation(self) -> None:
         response = self._service().evaluate("Hello $user.name", {"user": {"name": "John"}})
         self.assertEqual(response.result, "Hello John")
