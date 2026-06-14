@@ -46,12 +46,17 @@ const workflowStore = useWorkflowStore();
 const router = useRouter();
 const { isRunbookPlaying, playRunbookInPlace } = useRunbookPlayer();
 const showTemplatesBrowse = ref(false);
+const isDashboardWidget = computed(
+  () => workflowStore.currentWorkflow?.kind === "dashboard_widget",
+);
 
 function handleRunRunbook(): void {
+  if (isDashboardWidget.value) return;
   void playRunbookInPlace();
 }
 
 function handleBrowseTemplates(): void {
+  if (isDashboardWidget.value) return;
   showTemplatesBrowse.value = true;
 }
 const { showToast } = useToast();
@@ -595,7 +600,15 @@ const contextMenuAllDisabled = computed(() => {
 const shareNodeTemplateOpen = ref(false);
 const shareNodeTemplateData = ref<{ type: string; data: Record<string, unknown> } | null>(null);
 
+watch(isDashboardWidget, (dashboardWidget) => {
+  if (dashboardWidget) {
+    showTemplatesBrowse.value = false;
+    shareNodeTemplateOpen.value = false;
+  }
+});
+
 function handleContextMenuShareAsTemplate(): void {
+  if (isDashboardWidget.value) return;
   if (workflowStore.selectedNodeIds.size !== 1) return;
   const node = workflowStore.selectedNodes[0];
   if (!node) return;
@@ -1624,7 +1637,7 @@ watch(
     @dragleave="handleDragLeave"
   >
     <CanvasEmptyState
-      v-if="workflowStore.nodes.length === 0 && !isRunbookPlaying"
+      v-if="workflowStore.nodes.length === 0 && !isRunbookPlaying && !isDashboardWidget"
       @run-runbook="handleRunRunbook"
       @browse-templates="handleBrowseTemplates"
     />
@@ -1727,6 +1740,7 @@ watch(
       :has-disabled-nodes="contextMenuHasDisabledNodes"
       :all-disabled="contextMenuAllDisabled"
       :eval-node="contextMenuEvalNode"
+      :allow-share-as-template="!isDashboardWidget"
       @extract="handleContextMenuExtract"
       @eval-agent="handleContextMenuEvalAgent"
       @disable="handleContextMenuDisable"
@@ -1737,7 +1751,7 @@ watch(
     />
 
     <ShareTemplateModal
-      v-if="shareNodeTemplateOpen && shareNodeTemplateData"
+      v-if="shareNodeTemplateOpen && shareNodeTemplateData && !isDashboardWidget"
       kind="node"
       :node-type="shareNodeTemplateData.type"
       :node-data="shareNodeTemplateData.data"
@@ -1752,6 +1766,7 @@ watch(
     />
 
     <TemplatesBrowseDialog
+      v-if="!isDashboardWidget"
       :open="showTemplatesBrowse"
       @close="showTemplatesBrowse = false"
     />
