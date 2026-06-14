@@ -1,6 +1,7 @@
 import unittest
 import uuid
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.services import dashboard_data
@@ -28,6 +29,39 @@ def _db_returning_workflow(wf):
     db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=wf)))
     db.commit = AsyncMock()
     return db
+
+
+class TestExtractChartPayload(unittest.TestCase):
+    def test_unwraps_single_chart_payload_from_final_outputs(self):
+        chart = {
+            "type": "bar",
+            "labels": ["2026-06-10"],
+            "series": [{"name": "n8n", "data": [1]}],
+        }
+        result = SimpleNamespace(node_results=[], outputs={"commitChart": chart})
+
+        self.assertEqual(dashboard_data._extract_chart_payload(result), chart)
+
+    def test_empty_chart_node_output_falls_back_to_final_outputs(self):
+        chart = {
+            "type": "bar",
+            "labels": ["2026-06-10"],
+            "series": [{"name": "dify", "data": [2]}],
+        }
+        result = SimpleNamespace(
+            node_results=[{"node_type": "chartOutput", "output": {}}],
+            outputs={"commitChart": chart},
+        )
+
+        self.assertEqual(dashboard_data._extract_chart_payload(result), chart)
+
+    def test_empty_chart_node_output_without_valid_final_output_is_none(self):
+        result = SimpleNamespace(
+            node_results=[{"node_type": "chartOutput", "output": {}}],
+            outputs={},
+        )
+
+        self.assertIsNone(dashboard_data._extract_chart_payload(result))
 
 
 class TestComputeWidgetData(unittest.IsolatedAsyncioTestCase):
@@ -72,6 +106,42 @@ class TestComputeWidgetData(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(resp.cached)
         self.assertEqual(resp.payload, {"type": "bar", "labels": ["new"]})
         self.assertEqual(widget.cached_payload, {"type": "bar", "labels": ["new"]})
+
+    async def test_recomputes_from_final_outputs_when_chart_node_result_is_empty(self):
+        widget = _widget(cached_payload=None, cached_at=None, version="v")
+        wf = MagicMock()
+        wf.id = uuid.uuid4()
+        wf.owner_id = uuid.uuid4()
+        wf.name = "widget"
+        wf.updated_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        wf.nodes = [{"id": "c", "type": "chartOutput", "data": {}}]
+        wf.edges = []
+        db = _db_returning_workflow(wf)
+
+        chart = {
+            "type": "bar",
+            "labels": ["2026-06-10"],
+            "series": [{"name": "dify", "data": [2]}],
+        }
+        fake_result = MagicMock()
+        fake_result.node_results = [{"node_type": "chartOutput", "output": {}}]
+        fake_result.outputs = {"commitChart": chart}
+        fake_result.status = "success"
+        fake_result.execution_time_ms = 12.0
+
+        with (
+            patch.object(dashboard_data, "execute_workflow", return_value=fake_result),
+            patch(
+                "app.api.analytics.upsert_workflow_analytics_snapshot",
+                new=AsyncMock(),
+            ),
+        ):
+            resp = await dashboard_data.compute_widget_data(db, widget, _User(), force=True)
+
+        self.assertFalse(resp.cached)
+        self.assertIsNone(resp.error)
+        self.assertEqual(resp.payload, chart)
+        self.assertEqual(widget.cached_payload, chart)
 
     async def test_recomputes_when_version_changed(self):
         now = datetime.now(timezone.utc)

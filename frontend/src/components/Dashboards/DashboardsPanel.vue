@@ -15,6 +15,7 @@ import type {
   WidgetLayout,
   WidgetUpdateRequest,
 } from "@/types/dashboard";
+import { playSuccessSound } from "@/utils/audio";
 
 const router = useRouter();
 
@@ -61,6 +62,7 @@ async function handleGenerate(payload: {
     );
     widgets.value = [...widgets.value, widget];
     showAi.value = false;
+    playSuccessSound();
   } catch {
     // keep the dialog open on failure so the user can retry
   }
@@ -87,6 +89,7 @@ async function handleRefine(payload: {
     );
     widgets.value = widgets.value.map((w) => (w.id === updated.id ? updated : w));
     refineWidget.value = null;
+    playSuccessSound();
   } catch {
     // keep the dialog open on failure so the user can retry
   }

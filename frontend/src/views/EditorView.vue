@@ -128,6 +128,10 @@ const editingDescriptionValue = ref("");
 const titleInputRef = ref<HTMLInputElement | null>(null);
 const descriptionInputRef = ref<HTMLInputElement | null>(null);
 let skipNextTitleCommit = false;
+
+function returnToDashboard(): void {
+  void router.push({ name: "dashboard", query: { tab: "dashboard" } });
+}
 let skipNextDescriptionCommit = false;
 
 function startTitleEdit(): void {
@@ -1221,6 +1225,27 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
         >
           <Trash2 class="w-4 h-4" />
           <span class="hidden lg:inline">Clear</span>
+        </Button>
+        <Button
+          v-if="isDashboardWidget"
+          variant="ghost"
+          size="icon"
+          class="h-11 w-11 min-h-[44px] min-w-[44px] md:hidden text-foreground"
+          title="Back to Dashboard"
+          @click="returnToDashboard"
+        >
+          <ChevronLeft class="w-4 h-4" />
+        </Button>
+        <Button
+          v-if="isDashboardWidget"
+          variant="ghost"
+          size="sm"
+          class="hidden md:inline-flex gap-2 text-foreground"
+          title="Back to Dashboard"
+          @click="returnToDashboard"
+        >
+          <ChevronLeft class="w-4 h-4" />
+          <span class="hidden lg:inline">Dashboard</span>
         </Button>
         <Button
           variant="ghost"

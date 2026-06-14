@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from datetime import datetime, timezone
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +11,10 @@ from app.models.dashboard_schemas import WidgetDataResponse
 from app.services.workflow_executor import execute_workflow
 
 logger = logging.getLogger(__name__)
+
+_CHART_PAYLOAD_TYPES = frozenset(
+    ("pie", "bar", "line", "area", "table", "numeric", "gauge", "scatter", "proportion", "barGauge")
+)
 
 
 async def _record_widget_execution(db: AsyncSession, workflow: Workflow, result) -> None:
@@ -48,12 +53,33 @@ def _version_token(workflow: Workflow) -> str:
     return workflow.updated_at.isoformat() if workflow.updated_at else ""
 
 
-def _extract_chart_payload(result) -> dict | None:
-    for nr in result.node_results:
-        node_type = nr["node_type"] if isinstance(nr, dict) else nr.node_type
+def _field(value: Any, name: str) -> Any:
+    if isinstance(value, dict):
+        return value.get(name)
+    return getattr(value, name, None)
+
+
+def _is_chart_payload(value: Any) -> bool:
+    return isinstance(value, dict) and value.get("type") in _CHART_PAYLOAD_TYPES
+
+
+def _unwrap_chart_payload(value: Any) -> dict | None:
+    if _is_chart_payload(value):
+        return value
+    if not isinstance(value, dict):
+        return None
+
+    nested_payloads = [nested for nested in value.values() if _is_chart_payload(nested)]
+    return nested_payloads[0] if len(nested_payloads) == 1 else None
+
+
+def _extract_chart_payload(result: Any) -> dict | None:
+    final_payload = _unwrap_chart_payload(getattr(result, "outputs", None))
+    for nr in getattr(result, "node_results", []) or []:
+        node_type = _field(nr, "node_type")
         if node_type == "chartOutput":
-            return nr["output"] if isinstance(nr, dict) else nr.output
-    return None
+            return _unwrap_chart_payload(_field(nr, "output")) or final_payload
+    return final_payload
 
 
 async def compute_widget_data(

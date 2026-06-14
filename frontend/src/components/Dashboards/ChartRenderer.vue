@@ -214,17 +214,29 @@ const apexOptions = computed((): Record<string, unknown> => {
   }
 
   if (p.type === "pie") {
+    const dataLabelOffset = -Math.max(12, Math.min(24, Math.round(chartHeight.value * 0.04)));
     return {
       ...base,
       labels: p.labels ?? [],
       colors: PROPORTION_COLORS,
+      plotOptions: {
+        pie: {
+          dataLabels: {
+            offset: dataLabelOffset,
+            minAngleToShowLabel: 8,
+          },
+        },
+      },
       legend: {
         position: "bottom",
         labels: { colors: themeStore.isDark ? "#e2e8f0" : "#0f172a" },
       },
       // Slice gaps match the card background so slices read cleanly in dark mode.
       stroke: { colors: [themeStore.isDark ? "#0b1220" : "#ffffff"], width: 2 },
-      dataLabels: { style: { colors: ["#ffffff"] }, dropShadow: { enabled: false } },
+      dataLabels: {
+        style: { colors: ["#ffffff"], fontSize: "13px", fontWeight: 700 },
+        dropShadow: { enabled: false },
+      },
       tooltip: { theme: themeStore.isDark ? "dark" : "light", fillSeriesColor: false },
     };
   }

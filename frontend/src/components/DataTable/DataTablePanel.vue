@@ -32,6 +32,7 @@ import Label from "@/components/ui/Label.vue";
 import Textarea from "@/components/ui/Textarea.vue";
 import { formatDate } from "@/lib/utils";
 import { dataTablesApi } from "@/services/api";
+import { playSuccessSound } from "@/utils/audio";
 
 import DataTableShareDialog from "./DataTableShareDialog.vue";
 import DataTableColumnEditor from "./DataTableColumnEditor.vue";
@@ -327,12 +328,14 @@ function openAIExtend() {
 async function handleAICreated(table: DataTable) {
   showAIDialog.value = false;
   await loadTables();
-  openTable(table.id);
+  await openTable(table.id);
+  playSuccessSound();
 }
 
 function handleAIUpdated(table: DataTable) {
   showAIDialog.value = false;
   selectedTable.value = table;
+  playSuccessSound();
 }
 
 // ── Row management ──
@@ -369,6 +372,7 @@ async function handleAddRow() {
     newRowData.value = {};
     selectedTable.value = await dataTablesApi.get(selectedTable.value.id);
     await loadRows();
+    playSuccessSound();
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Failed to add row";
     error.value = msg;
