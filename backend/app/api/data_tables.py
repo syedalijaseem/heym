@@ -42,6 +42,8 @@ from app.models.schemas import (
 )
 from app.services.encryption import decrypt_config
 from app.services.llm_provider import is_reasoning_model
+from app.services.llm_service import execute_llm
+from app.services.llm_trace import LLMTraceContext
 from app.services.upload_limits import read_upload_file_limited
 
 router = APIRouter()
@@ -1062,7 +1064,7 @@ async def generate_data_table_schema(
     """Generate column suggestions for a data table from a description or JSON."""
     # Imported lazily to avoid a circular import (ai_assistant -> workflow_executor
     # -> data_tables). Tests patch these at app.api.ai_assistant.<name>.
-    from app.api.ai_assistant import get_credential_for_user, get_openai_client
+    from app.api.ai_assistant import get_credential_for_user
 
     credential = await get_credential_for_user(request.credential_id, current_user, db)
     if not credential:
@@ -1084,21 +1086,29 @@ async def generate_data_table_schema(
     existing_names = {col.name for col in existing_cols}
 
     config = decrypt_config(credential.encrypted_config)
-    client, _ = get_openai_client(credential.type, config)
+    api_key = str(config.get("api_key") or "")
+    raw_base_url = config.get("base_url")
+    base_url = str(raw_base_url) if raw_base_url else None
+    trace_context = LLMTraceContext(
+        user_id=current_user.id,
+        credential_id=credential.id,
+        source="data_table_ai",
+        node_label="AI DataTable Extend" if existing_cols else "AI DataTable Create",
+    )
 
-    kwargs: dict[str, Any] = {
-        "model": request.model,
-        "messages": [
-            {"role": "system", "content": _build_schema_system_prompt(bool(existing_cols))},
-            {"role": "user", "content": _build_schema_user_prompt(request.prompt, existing_cols)},
-        ],
-        "extra_body": {"disable_reasoning": True},
-    }
-    if not is_reasoning_model(request.model):
-        kwargs["temperature"] = 0.2
-
-    response = client.chat.completions.create(**kwargs)
-    content = response.choices[0].message.content or ""
+    result = await execute_llm(
+        credential_type=credential.type.value,
+        api_key=api_key,
+        base_url=base_url,
+        model=request.model,
+        system_instruction=_build_schema_system_prompt(bool(existing_cols)),
+        user_message=_build_schema_user_prompt(request.prompt, existing_cols),
+        temperature=None if is_reasoning_model(request.model) else 0.2,
+        extra_body={"disable_reasoning": True},
+        trace_context=trace_context,
+        content_only=True,
+    )
+    content = str(result.get("text") or "")
 
     payload = _extract_schema_payload(content)
     if payload is None:
