@@ -1264,6 +1264,19 @@ class DataTableListResponse(BaseModel):
         from_attributes = True
 
 
+class DataTableSchemaGenerateRequest(BaseModel):
+    credential_id: uuid.UUID
+    model: str
+    prompt: str = Field(min_length=1, max_length=10000)
+    existing_columns: list[DataTableColumnDef] | None = None
+
+
+class DataTableSchemaSuggestionResponse(BaseModel):
+    name: str
+    description: str | None = None
+    columns: list[DataTableColumnDef] = Field(default_factory=list)
+
+
 class DataTableRowCreate(BaseModel):
     data: dict = Field(default_factory=dict)
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import {
   ArrowLeft,
@@ -17,6 +17,7 @@ import {
   RefreshCw,
   Search,
   Share2,
+  Sparkles,
   Table2,
   Trash2,
   Upload,
@@ -35,6 +36,7 @@ import { dataTablesApi } from "@/services/api";
 import DataTableShareDialog from "./DataTableShareDialog.vue";
 import DataTableColumnEditor from "./DataTableColumnEditor.vue";
 import DataTableImportDialog from "./DataTableImportDialog.vue";
+import DataTableAISchemaDialog from "./DataTableAISchemaDialog.vue";
 import LLMPricingPanel from "./LLMPricingPanel.vue";
 
 const LLM_PRICING_ROUTE_ID = "llm-pricing";
@@ -94,6 +96,10 @@ const showShareDialog = ref(false);
 // ── Column editor ──
 const showColumnEditor = ref(false);
 const editingColumn = ref<DataTableColumn | null>(null);
+
+// ── AI schema dialog ──
+const showAIDialog = ref(false);
+const aiDialogMode = ref<"create" | "extend">("create");
 
 // ── Import dialog ──
 const showImportDialog = ref(false);
@@ -304,6 +310,29 @@ async function handleColumnDelete(colId: string) {
   } catch {
     error.value = "Failed to remove column";
   }
+}
+
+// ── AI schema generation ──
+
+function openAICreate() {
+  aiDialogMode.value = "create";
+  showAIDialog.value = true;
+}
+
+function openAIExtend() {
+  aiDialogMode.value = "extend";
+  showAIDialog.value = true;
+}
+
+async function handleAICreated(table: DataTable) {
+  showAIDialog.value = false;
+  await loadTables();
+  openTable(table.id);
+}
+
+function handleAIUpdated(table: DataTable) {
+  showAIDialog.value = false;
+  selectedTable.value = table;
 }
 
 // ── Row management ──
@@ -569,6 +598,16 @@ onMounted(async () => {
   }
   await tablesPromise;
 });
+
+// Close the inline "New DataTable" dialog on Esc.
+function handleCreateDialogEscape(event: KeyboardEvent): void {
+  if (event.key === "Escape" && showCreateDialog.value) {
+    event.stopPropagation();
+    showCreateDialog.value = false;
+  }
+}
+onMounted(() => window.addEventListener("keydown", handleCreateDialogEscape, true));
+onUnmounted(() => window.removeEventListener("keydown", handleCreateDialogEscape, true));
 </script>
 
 <template>
@@ -609,6 +648,13 @@ onMounted(async () => {
           @click="showCreateDialog = true"
         >
           <Plus class="mr-1 h-4 w-4" /> New DataTable
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          @click="openAICreate"
+        >
+          <Sparkles class="mr-1 h-4 w-4" /> Generate with AI
         </Button>
         <Button
           size="sm"
@@ -840,6 +886,14 @@ onMounted(async () => {
           @click="openAddColumn"
         >
           <Plus class="mr-1 h-3 w-3" /> Column
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          class="h-7 text-xs"
+          @click="openAIExtend"
+        >
+          <Sparkles class="mr-1 h-3 w-3" /> AI columns
         </Button>
       </div>
 
@@ -1205,6 +1259,16 @@ onMounted(async () => {
       :columns="selectedTable.columns"
       @close="showImportDialog = false"
       @imported="handleImportComplete"
+    />
+
+    <!-- ════════ AI SCHEMA DIALOG ════════ -->
+    <DataTableAISchemaDialog
+      v-if="showAIDialog"
+      :mode="aiDialogMode"
+      :existing-table="aiDialogMode === 'extend' ? selectedTable : null"
+      @created="handleAICreated"
+      @updated="handleAIUpdated"
+      @close="showAIDialog = false"
     />
   </div>
 </template>
