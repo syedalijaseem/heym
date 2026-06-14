@@ -56,6 +56,8 @@ _DRIVE_DOWNLOAD_REDIRECT_STATUS_CODES = {301, 302, 303, 307, 308}
 _DOTDICT_BUILTIN_METHOD_NAMES: frozenset[str] = frozenset(
     {"items", "keys", "values", "entries", "map", "filter"}
 )
+_ITEM_DOT_PATH_RE = re.compile(r"^item(?:\.[a-zA-Z_][a-zA-Z0-9_]*)+$")
+_ITEM_REF_IN_TEMPLATE_RE = re.compile(r"item\.[a-zA-Z_][a-zA-Z0-9_]*\b(?!\()")
 
 _SLUG_RE = re.compile(r"[^a-zA-Z0-9]+")
 
@@ -346,6 +348,14 @@ HTTP_TIMEOUT = 300.0
 def _parse_expression_tree(expr: str) -> ast.AST:
     """Cache parsed ASTs for repeated workflow expressions."""
     return SimpleEval.parse(expr)
+
+
+def _is_valid_expression_syntax(expr: str) -> bool:
+    try:
+        _parse_expression_tree(expr)
+    except Exception:  # noqa: BLE001 - syntax probing only
+        return False
+    return True
 
 
 def _expression_root_node(parsed: ast.AST) -> ast.AST:
@@ -660,7 +670,7 @@ class DotList(list):
         ]
         has_operator = any(op in expr for op in operators)
 
-        if expr.startswith("item.") and not has_operator:
+        if not has_operator and _ITEM_DOT_PATH_RE.fullmatch(expr):
             path = expr[5:].split(".")
             value = item
             for part in path:
@@ -679,7 +689,7 @@ class DotList(list):
                 if not isinstance(arg, str):
                     return arg
                 arg_str = arg.strip()
-                if arg_str.startswith("item."):
+                if _ITEM_DOT_PATH_RE.fullmatch(arg_str):
                     path = arg_str[5:].split(".")
                     value = wrapped_item
                     for part in path:
@@ -745,18 +755,15 @@ class DotList(list):
         return DotList(result)
 
     def map(self, expr: str) -> "DotList":
-        # Fix: Detect if expr looks like a prematurely evaluated concat expression
-        # (contains literal "item." strings that should be expressions)
-        # If so, try to reconstruct the concat call
-        if isinstance(expr, str) and "item." in expr and not expr.strip().startswith("concat("):
-            # This might be a prematurely evaluated concat - try to detect the pattern
-            # Pattern: "- item.source (Page: item.page): item.snippet"
-            # We'll try to parse it back into: concat("- ", item.source, " (Page: ", item.page, "): ", item.snippet)
-            import re
-
-            # Find all "item.xxx" patterns in the string
-            item_pattern = r"item\.\w+"
-            matches = list(re.finditer(item_pattern, expr))
+        if (
+            isinstance(expr, str)
+            and "item." in expr
+            and not expr.strip().startswith("concat(")
+            and not _is_valid_expression_syntax(expr)
+        ):
+            # Keep supporting template-like strings such as
+            # "- item.source (Page: item.page): item.snippet".
+            matches = list(_ITEM_REF_IN_TEMPLATE_RE.finditer(expr))
             if matches:
                 # Try to reconstruct concat call
                 # Split the string by item references and reconstruct as concat arguments
