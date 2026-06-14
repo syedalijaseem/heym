@@ -13,7 +13,19 @@ from app.services.workflow_executor import execute_workflow
 logger = logging.getLogger(__name__)
 
 _CHART_PAYLOAD_TYPES = frozenset(
-    ("pie", "bar", "line", "area", "table", "numeric", "gauge", "scatter", "proportion", "barGauge")
+    (
+        "pie",
+        "bar",
+        "line",
+        "area",
+        "table",
+        "numeric",
+        "gauge",
+        "scatter",
+        "proportion",
+        "barGauge",
+        "text",
+    )
 )
 
 

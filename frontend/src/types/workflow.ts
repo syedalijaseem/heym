@@ -532,7 +532,8 @@ export interface NodeData {
     | "gauge"
     | "scatter"
     | "proportion"
-    | "barGauge";
+    | "barGauge"
+    | "text";
   orientation?: "horizontal" | "vertical";
   dataPath?: string;
   labelField?: string;
@@ -544,6 +545,8 @@ export interface NodeData {
   series?: { name: string; field: string }[];
   columns?: string[];
   unit?: string;
+  // Static markdown body for the `text` chart type.
+  text?: string;
   title?: string;
 }
 

@@ -326,16 +326,15 @@ function openAIExtend() {
 }
 
 async function handleAICreated(table: DataTable) {
+  // The success sound fires at generation time (inside the AI dialog), not on save.
   showAIDialog.value = false;
   await loadTables();
   await openTable(table.id);
-  playSuccessSound();
 }
 
 function handleAIUpdated(table: DataTable) {
   showAIDialog.value = false;
   selectedTable.value = table;
-  playSuccessSound();
 }
 
 // ── Row management ──
@@ -1006,7 +1005,7 @@ onUnmounted(() => window.removeEventListener("keydown", handleCreateDialogEscape
                           false
                         </option>
                       </select>
-                      <ChevronDown class="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                      <ChevronDown class="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                     </div>
                     <textarea
                       v-else-if="col.type === 'string' || col.type === 'json'"
@@ -1104,7 +1103,7 @@ onUnmounted(() => window.removeEventListener("keydown", handleCreateDialogEscape
                       false
                     </option>
                   </select>
-                  <ChevronDown class="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <ChevronDown class="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                 </div>
                 <input
                   v-else

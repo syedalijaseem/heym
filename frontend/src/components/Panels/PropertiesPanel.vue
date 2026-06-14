@@ -8215,8 +8215,38 @@ onUnmounted(() => {
                   { value: 'scatter', label: 'Scatter' },
                   { value: 'proportion', label: 'Proportion' },
                   { value: 'barGauge', label: 'Bar gauge' },
+                  { value: 'text', label: 'Text' },
                 ]"
                 @update:model-value="updateNodeData('chartType', $event)"
+              />
+            </div>
+
+            <div
+              v-if="selectedNode.data.chartType === 'text'"
+              class="space-y-2"
+            >
+              <Label>Text (markdown)</Label>
+              <Textarea
+                :model-value="selectedNode.data.text || ''"
+                :rows="5"
+                placeholder="e.g. **Last execution** at `19:47`"
+                @update:model-value="updateNodeData('text', $event)"
+              />
+              <p class="text-xs text-muted-foreground">
+                Markdown is supported. Leave empty and set a Value field below to pull the message
+                from upstream data instead.
+              </p>
+            </div>
+
+            <div
+              v-if="selectedNode.data.chartType === 'text'"
+              class="space-y-2"
+            >
+              <Label>Value field (optional)</Label>
+              <Input
+                :model-value="selectedNode.data.valueField || ''"
+                placeholder="row key holding the markdown string"
+                @update:model-value="updateNodeData('valueField', $event)"
               />
             </div>
 

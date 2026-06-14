@@ -26,7 +26,7 @@ When you only have example/sample data (no real source), produce these rows with
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `label` | string | Node identifier (camelCase) |
-| `chartType` | string | `pie`, `bar`, `line`, `area`, `table`, `numeric`, `gauge`, `scatter`, `proportion`, or `barGauge` |
+| `chartType` | string | `pie`, `bar`, `line`, `area`, `table`, `numeric`, `gauge`, `scatter`, `proportion`, `barGauge`, or `text` |
 | `orientation` | string | `vertical` or `horizontal` (bar charts only) |
 | `dataPath` | string | Dot path to the rows array inside the upstream output (e.g. `data` or `result.items`). Leave empty to auto-detect. |
 | `labelField` | string | Row key used as the category label (pie/bar/line) |
@@ -36,6 +36,7 @@ When you only have example/sample data (no real source), produce these rows with
 | `xField` / `yField` | string | Row keys for the X and Y numeric axes (scatter) |
 | `min` / `max` | number | Numeric range for `gauge` (default `0` / `100`) |
 | `unit` | string | Optional unit shown next to a `numeric` or `gauge` value |
+| `text` | string | Markdown message for the `text` chart type. Leave empty and set `valueField` to render a dynamic message pulled from upstream data. |
 | `title` | string | Optional chart title |
 
 ## Chart types
@@ -47,6 +48,7 @@ When you only have example/sample data (no real source), produce these rows with
 - **scatter** — X/Y points from `xField` and `yField` for correlation plots.
 - **proportion** — a single horizontal bar split into shares with a percentage legend (e.g. a language breakdown). Uses `labelField` + `valueField`.
 - **barGauge** — one horizontal gauge per row with a red→green gradient and a value (e.g. free disk space). Uses `labelField` + `valueField`, optional `unit` and `max` (defaults to the largest row value).
+- **text** — a markdown message (e.g. a status note like "Last execution at 19:47"). Put the markdown in `text` for a static message, or leave `text` empty and set `valueField` to render a string produced upstream. Supports headings, bold/italic, lists, links, and inline code.
 
 ## How data is resolved
 
@@ -55,6 +57,7 @@ When you only have example/sample data (no real source), produce these rows with
 3. For `table`, each row becomes a table row using `columns` (or the first row's keys).
 4. For `numeric` and `gauge`, the value comes from `valueField` on the first row (or the first numeric field).
 5. For `scatter`, each row becomes an `[xField, yField]` point.
+6. For `text`, the message is taken from `valueField` on the first row when set, otherwise from the static `text` config (otherwise the first string field of the first row).
 
 ## Example
 
@@ -157,6 +160,34 @@ Bar gauge (per-row gradient gauge with values):
 }
 ```
 
+Text (a static markdown message — no upstream rows required):
+
+```json
+{
+  "type": "chartOutput",
+  "data": {
+    "label": "statusNote",
+    "chartType": "text",
+    "text": "**Last execution** at `19:47` — all checks passed ✅",
+    "title": "Status"
+  }
+}
+```
+
+Text (dynamic — the message string is produced upstream and pulled via `valueField`):
+
+```json
+{
+  "type": "chartOutput",
+  "data": {
+    "label": "lastRun",
+    "chartType": "text",
+    "dataPath": "rows",
+    "valueField": "message"
+  }
+}
+```
+
 ## Example AI prompts
 
 When generating a widget with **AI**, prompts like these map cleanly to each type:
@@ -169,6 +200,7 @@ When generating a widget with **AI**, prompts like these map cleanly to each typ
 - **Proportion** — "Show my most used languages as a proportion bar: Kotlin 49.64%, JavaScript 23.73%, TypeScript 11.64%, Java 8.92%, Python 6.06%. Use example data."
 - **Area** — "Show memory and CPU usage over the last 24 hours as an area chart with two series. Use example data."
 - **Bar gauge** — "Show free disk space per volume (sda1 to sda7) as a bar gauge in GB. Use example data."
+- **Text** — "Add a text widget that shows a markdown status note: **Last execution** at `19:47`, with a short bullet list of what ran."
 
 ## Related
 

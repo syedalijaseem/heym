@@ -15,13 +15,16 @@ export interface ChartPayload {
     | "gauge"
     | "scatter"
     | "proportion"
-    | "barGauge";
+    | "barGauge"
+    | "text";
   orientation?: "horizontal" | "vertical";
   labels?: string[];
   series?: ChartSeries[];
   columns?: string[];
   rows?: unknown[][];
   value?: number | string | null;
+  // Markdown content for the `text` chart type.
+  text?: string;
   unit?: string;
   decimals?: number;
   min?: number;
