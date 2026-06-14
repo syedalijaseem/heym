@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watchEffect } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watchEffect } from "vue";
 import { ChevronDown, Plus, Sparkles, Trash2 } from "lucide-vue-next";
 
 import type { CredentialListItem, LLMModel } from "@/types/credential";
@@ -34,6 +34,16 @@ const description = ref("");
 const columns = ref<DataTableColumn[]>([]);
 
 const existingColumns = computed<DataTableColumn[]>(() => props.existingTable?.columns ?? []);
+
+// Guarantee Esc closes the dialog regardless of focus / shared-Dialog quirks.
+function handleEscape(event: KeyboardEvent): void {
+  if (event.key === "Escape") {
+    event.stopPropagation();
+    emit("close");
+  }
+}
+onMounted(() => window.addEventListener("keydown", handleEscape, true));
+onBeforeUnmount(() => window.removeEventListener("keydown", handleEscape, true));
 
 const canGenerate = computed(
   () => prompt.value.trim().length > 0 && credentialId.value !== "" && modelName.value !== "",
@@ -145,6 +155,7 @@ async function handleSave(): Promise<void> {
 <template>
   <Dialog
     :open="true"
+    size="2xl"
     :title="mode === 'create' ? 'Generate Table with AI' : 'Generate Columns with AI'"
     @close="emit('close')"
   >
@@ -273,12 +284,12 @@ async function handleSave(): Promise<void> {
             >
               <Input
                 v-model="col.name"
-                placeholder="name"
-                class="flex-1"
+                placeholder="column name"
+                class="min-w-0 flex-1"
               />
               <select
                 v-model="col.type"
-                class="rounded border bg-background px-2 py-2 text-sm"
+                class="shrink-0 rounded border bg-background px-2 py-2 text-sm"
               >
                 <option
                   v-for="t in COLUMN_TYPES"
@@ -291,16 +302,16 @@ async function handleSave(): Promise<void> {
               <Input
                 v-model="col.defaultValue as string"
                 placeholder="default"
-                class="w-24"
+                class="w-20 shrink-0"
               />
-              <label class="flex items-center gap-1 text-xs">
+              <label class="flex shrink-0 items-center gap-1 text-xs">
                 <input
                   v-model="col.unique"
                   type="checkbox"
                 >
                 unique
               </label>
-              <label class="flex items-center gap-1 text-xs">
+              <label class="flex shrink-0 items-center gap-1 text-xs">
                 <input
                   v-model="col.required"
                   type="checkbox"
@@ -309,7 +320,7 @@ async function handleSave(): Promise<void> {
               </label>
               <button
                 type="button"
-                class="text-muted-foreground hover:text-red-500"
+                class="shrink-0 text-muted-foreground hover:text-red-500"
                 @click="removeColumn(col.id)"
               >
                 <Trash2 class="h-4 w-4" />
