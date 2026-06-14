@@ -1227,6 +1227,27 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
           <span class="hidden lg:inline">Clear</span>
         </Button>
         <Button
+          v-if="isDashboardWidget"
+          variant="ghost"
+          size="icon"
+          class="h-11 w-11 min-h-[44px] min-w-[44px] md:hidden text-foreground"
+          title="Back to Dashboard"
+          @click="returnToDashboard"
+        >
+          <ChevronLeft class="w-4 h-4" />
+        </Button>
+        <Button
+          v-if="isDashboardWidget"
+          variant="ghost"
+          size="sm"
+          class="hidden md:inline-flex gap-2 text-foreground"
+          title="Back to Dashboard"
+          @click="returnToDashboard"
+        >
+          <ChevronLeft class="w-4 h-4" />
+          <span class="hidden lg:inline">Dashboard</span>
+        </Button>
+        <Button
           variant="ghost"
           size="icon"
           class="h-11 w-11 min-h-[44px] min-w-[44px] md:hidden text-foreground"
@@ -2020,10 +2041,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
             />
           </button>
         </div>
-        <DebugPanel
-          :show-dashboard-return="isDashboardWidget"
-          @return-to-dashboard="returnToDashboard"
-        />
+        <DebugPanel />
       </div>
 
       <PropertiesPanel v-if="rightPanelOpen" />

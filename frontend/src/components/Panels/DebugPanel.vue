@@ -35,19 +35,6 @@ import { playSuccessSound } from "@/utils/audio";
 
 const { fitView, getNodes, updateNodeInternals } = useVueFlow();
 
-const props = withDefaults(
-  defineProps<{
-    showDashboardReturn?: boolean;
-  }>(),
-  {
-    showDashboardReturn: false,
-  },
-);
-
-const emit = defineEmits<{
-  (e: "returnToDashboard"): void;
-}>();
-
 const workflowStore = useWorkflowStore();
 
 const panelHeight = ref(212);
@@ -3275,15 +3262,6 @@ function renderContent(content: string): string {
             >
               <Trash2 class="w-3.5 h-3.5" />
               Clear
-            </button>
-            <button
-              v-if="props.showDashboardReturn"
-              class="ai-btn-secondary"
-              title="Back to Dashboard"
-              @click="emit('returnToDashboard')"
-            >
-              <ChevronLeft class="w-3.5 h-3.5" />
-              Dashboard
             </button>
             <button
               v-if="aiStreaming"
