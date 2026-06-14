@@ -15,6 +15,14 @@ $array($a.x, $b.y)
 $node.method(other.field)
 ```
 
+Inside `.filter()` and `.map()` expression strings:
+- `item` is the local list element; keep it unprefixed as `item.field`.
+- References to other nodes, loop context, or variables MUST keep `$` inside the quoted expression
+  string.
+- Use Python-style boolean operators: `and`, `or`, `not`. NEVER use JavaScript `&&` or `||`.
+- CORRECT: `$extractData.commitList.filter("item.date == $dateLoop.item and item.repo == 'dify'").length`
+- WRONG: `$extractData.commitList.filter("item.date == dateLoop.item && item.repo == 'dify'").length`
+
 Prefer the clearest readable form for the expression you are generating.
 
 ---
@@ -1562,16 +1570,21 @@ This will FAIL because `$vars.myList` doesn't exist yet!
 
 **⚠️ MUST USE VARIABLE NODE**: Array initialization with `$array()` MUST be done in a `variable` node, NOT in a `set` node! This is a strict requirement.
 
-**⛔⛔ CRITICAL: NEVER USE $ INSIDE METHOD PARENTHESES! ⛔⛔**
-When passing node references as parameters to methods like `.add()`, `.contains()`, etc., NEVER use `$` prefix inside the parentheses:
-- ✅ CORRECT: `$vars.myArray.add(previousNode.text)` - no `$` inside parentheses
-- ⛔ FORBIDDEN: `$vars.myArray.add($previousNode.text)` - $ inside () BREAKS the expression!
-- ✅ CORRECT: `$nodeA.text.contains(nodeB.keyword)` - no `$` for the parameter
-- ⛔ FORBIDDEN: `$nodeA.text.contains($nodeB.keyword)` - $ inside () BREAKS the expression!
+**Critical: Nested `$` references are allowed in method parameters**
+When passing node references as parameters to methods like `.add()`, `.contains()`, etc., use the
+form that makes the source clear:
+- ✅ CORRECT: `$vars.myArray.add($previousNode.text)`
+- ✅ ALSO VALID: `$vars.myArray.add(previousNode.text)`
+- ✅ CORRECT: `$nodeA.text.contains($nodeB.keyword)`
+
+Inside `.filter()` / `.map()` expression strings, external references MUST keep `$`, while the local
+list item stays `item`:
+- ✅ `$extractData.commitList.filter("item.date == $dateLoop.item and item.repo == 'dify'").length`
+- ⛔ `$extractData.commitList.filter("item.date == dateLoop.item && item.repo == 'dify'").length`
 
 **Full Pattern for Collecting Items in a Loop**:
 1. **Before loop**: Initialize array with `variable` node using `$array()` or `$array("item1", "item2")` - MUST use variable node!
-2. **Inside loop body**: Use another `variable` node with `.add()` to append items (NO `$` in parameters!)
+2. **Inside loop body**: Use another `variable` node with `.add()` to append items
 3. **After loop (done branch)**: Access collected items via `$vars.variableName`
 
 ### 18. loop (Iterate Over Array)
@@ -2688,7 +2701,7 @@ Each row object includes **`rowIndex`**: the 1-based sheet row number (useful fo
         "label": "analyzer",
         "credentialId": "openai-cred-id",
         "model": "gpt-4o",
-        "userMessage": "Analyze these items: $scraper.extracted.items.map(item.text).join('\\n')"
+        "userMessage": "Analyze these items: $scraper.extracted.items.map(\"item.text\").join(\"\\n\")"
       }
     },
     {
@@ -3149,9 +3162,11 @@ Output nodes are for FINAL results only. Use `set` or `variable` nodes inside lo
 // ⚠️ MUST: Array initialization MUST use variable node, NEVER use set node for $array()!
 ```
 
-**RULE 2: ⛔ NO $ INSIDE PARENTHESES! ONLY ONE $ PER EXPRESSION! ⛔**
+**RULE 2: NESTED `$` REFERENCES ARE VALID IN METHOD PARAMETERS**
 
-This is the MOST IMPORTANT rule. Parameters inside method calls MUST NOT have `$` prefix!
+When a method parameter or quoted list-operation expression needs data from another node, keep the
+`$` reference. For `.filter()` / `.map()` expression strings, use `item` without `$` only for the
+current list element.
 
 **RULE 3: ⛔ NEVER generate cURL examples or API call examples in your response!**
 - Do NOT include curl commands
@@ -3160,19 +3175,17 @@ This is the MOST IMPORTANT rule. Parameters inside method calls MUST NOT have `$
 ```
 
 ⛔⛔⛔ FORBIDDEN PATTERNS (WILL CAUSE ERRORS): ⛔⛔⛔
-$vars.searchResults.add($searchPerplexity.outputs.output.result)  ← WRONG!
-$vars.myList.add($loopNode.item)                                   ← WRONG!
-$text.contains($otherNode.keyword)                                 ← WRONG!
-$nodeA.field.replace($nodeB.old, $nodeB.new)                       ← WRONG!
+$extractData.commitList.filter("item.date == dateLoop.item && item.repo == 'dify'").length  ← WRONG!
 
-✅✅✅ CORRECT PATTERNS (NO $ INSIDE PARENTHESES): ✅✅✅
-$vars.searchResults.add(searchPerplexity.outputs.output.result)   ← CORRECT!
-$vars.myList.add(loopNode.item)                                    ← CORRECT!
-$text.contains(otherNode.keyword)                                  ← CORRECT!
-$nodeA.field.replace(nodeB.old, nodeB.new)                         ← CORRECT!
+✅✅✅ CORRECT PATTERNS: ✅✅✅
+$vars.searchResults.add($searchPerplexity.outputs.output.result)  ← CORRECT!
+$vars.myList.add($loopNode.item)                                   ← CORRECT!
+$text.contains($otherNode.keyword)                                 ← CORRECT!
+$nodeA.field.replace($nodeB.old, $nodeB.new)                       ← CORRECT!
+$extractData.commitList.filter("item.date == $dateLoop.item and item.repo == 'dify'").length  ← CORRECT!
 
-⛔ RULE: An expression has EXACTLY ONE $ at the very beginning!
-⛔ NEVER put $ inside parentheses - parameters are resolved automatically!
+RULE: In `.filter()` / `.map()` strings, use Python boolean operators (`and`, `or`, `not`), never
+JavaScript `&&` or `||`.
 ```
 
 ---
@@ -3196,14 +3209,17 @@ Always reference nodes by their LABEL NAME!
 
 **⚠️ IMPORTANT**: textInput nodes return data via `body` object, other nodes return directly!
 
-### ⛔ CRITICAL: Method Parameters - NEVER USE $ INSIDE PARENTHESES!
-When calling methods with node references as parameters, NEVER use `$` inside the parentheses:
-- ✅ `$userInput.body.sentence.contains(userInput.body.keyword)` - CORRECT: no $ inside ()
-- ⛔ `$userInput.body.sentence.contains($userInput.body.keyword)` - FORBIDDEN! $ inside () causes errors!
-- ✅ `$vars.list.add(loopNode.item)` - CORRECT: no $ inside ()
-- ⛔ `$vars.list.add($loopNode.item)` - FORBIDDEN! $ inside () causes errors!
+### Critical: Method Parameters and Nested References
+When calling methods with node references as parameters, nested `$` references are allowed and often
+clearer when the value comes from another node:
+- ✅ `$userInput.body.sentence.contains($userInput.body.keyword)` - CORRECT
+- ✅ `$vars.list.add($loopNode.item)` - CORRECT
+- ✅ `$vars.list.add(loopNode.item)` - Also supported for simple method arguments
 
-The `$` prefix is ONLY used at the START of an expression, NEVER inside method parentheses!
+For `.filter()` and `.map()` quoted expression strings, ALWAYS use `$` for references outside the
+current `item`:
+- ✅ `$extractData.commitList.filter("item.date == $dateLoop.item and item.repo == 'dify'").length`
+- ⛔ `$extractData.commitList.filter("item.date == dateLoop.item && item.repo == 'dify'").length`
 
 ### Merge Node Output
 When a merge node (e.g., labeled "mergeResults") combines inputs:
@@ -3335,12 +3351,10 @@ Create objects/dictionaries directly using curly brace syntax with any string ke
 - `.urlEncode()` - URL encode the string
 - `.urlDecode()` - URL decode the string
 
-**⛔ FORBIDDEN: NEVER use $ inside method parentheses!**
-- ✅ `$userInput.body.sentence.contains(userInput.body.keyword)` - CORRECT
-- ⛔ `$userInput.body.sentence.contains($userInput.body.keyword)` - FORBIDDEN! $ inside () breaks it!
-- ✅ `$nodeA.text.replace(nodeB.oldText, nodeB.newText)` - CORRECT
-- ⛔ `$nodeA.text.replace($nodeB.oldText, $nodeB.newText)` - FORBIDDEN!
-- ✅ `$data.message.startswith(config.prefix)` - CORRECT
+**Nested references in method parameters are allowed:**
+- ✅ `$userInput.body.sentence.contains($userInput.body.keyword)` - CORRECT
+- ✅ `$nodeA.text.replace($nodeB.oldText, $nodeB.newText)` - CORRECT
+- ✅ `$data.message.startswith($config.prefix)` - CORRECT
 - String literals are fine: `$text.contains("hello")`, `$text.replace("old", "new")`
 
 ### Array Methods (on arrays)
@@ -3374,6 +3388,14 @@ Use `item` variable to reference each element in the expression string:
 - `$numbers.take(3)` → Take first 3 elements
 - `$numbers.take(-2)` → Take last 2 elements
 
+**Critical `.filter()` / `.map()` expression-string rules:**
+- `item` is local to the list operation, so write `item.field` without `$`.
+- Any other node, loop context, or variable reference inside the quoted expression MUST include `$`.
+- Use `and`, `or`, `not` for boolean logic; do not use JavaScript `&&`, `||`, or `!`.
+- ✅ `$extractData.commitList.filter("item.date == $dateLoop.item and item.repo == 'dify'").length`
+- ✅ `$extractData.commitList.map("dict(date=item.created_at, current=$dateLoop.item)")`
+- ⛔ `$extractData.commitList.filter("item.date == dateLoop.item && item.repo == 'dify'").length`
+
 **concat() Function in map() - String Concatenation with Item Properties:**
 Use `concat()` inside `.map()` to build strings by combining literals with item properties:
 - `$posts.map("concat('https://example.com/', 'item.slug')")` → Prepend URL to each slug
@@ -3387,12 +3409,10 @@ Use `concat()` inside `.map()` to build strings by combining literals with item 
 - Supports N arguments: `concat('a', 'b', 'c', ...)` → "abc..."
 - Returns null-safe concatenation (null values become empty strings)
 
-**⛔ FORBIDDEN: NEVER use $ inside method parentheses!**
-- ✅ `$vars.myList.add(loopNode.item)` - CORRECT
-- ⛔ `$vars.myList.add($loopNode.item)` - FORBIDDEN! $ inside () breaks it!
-- ✅ `$vars.results.add(executeNode.outputs.output.result)` - CORRECT
-- ⛔ `$vars.results.add($executeNode.outputs.output.result)` - FORBIDDEN!
-- ✅ `$myArray.join(settings.separator)` - CORRECT
+**Nested references in method parameters are allowed:**
+- ✅ `$vars.myList.add($loopNode.item)` - CORRECT
+- ✅ `$vars.results.add($executeNode.outputs.output.result)` - CORRECT
+- ✅ `$myArray.join($settings.separator)` - CORRECT
 - String literals are fine: `$myArray.add("newItem")`, `$myArray.join(", ")`
 
 ### Object/Dictionary Methods (on objects)
@@ -3643,15 +3663,14 @@ Always include:
 - ❌ WRONG: Directly using `$vars.myList.add(item)` without initialization → WILL FAIL!
 - ✅ CORRECT: Step 1 (MUST use variable node): `{"type": "variable", "data": {"variableName": "myList", "variableValue": "$array()", "variableType": "array"}}` → Step 2: `$vars.myList.add(loopNode.item)`
 
-**RULE #2: ⛔⛔⛔ NEVER USE $ INSIDE PARENTHESES! ⛔⛔⛔**
-- An expression can have ONLY ONE `$` at the very beginning, NEVER inside method parentheses!
-- ⛔ FORBIDDEN: `$vars.searchResults.add($searchPerplexity.outputs.output.result)` → BROKEN!
-- ⛔ FORBIDDEN: `$vars.list.add($nodeName.field)` → BROKEN!
-- ⛔ FORBIDDEN: `$text.contains($otherNode.keyword)` → BROKEN!
-- ✅ CORRECT: `$vars.searchResults.add(searchPerplexity.outputs.output.result)` → Works!
-- ✅ CORRECT: `$vars.list.add(nodeName.field)` → Works!
-- ✅ CORRECT: `$text.contains(otherNode.keyword)` → Works!
-- **Parameters inside () are resolved automatically - adding $ breaks the parser!**
+**RULE #2: NESTED $ REFERENCES ARE VALID IN METHOD PARAMETERS**
+- When a method parameter or quoted list-operation expression needs data from another node, keep
+  the `$` reference.
+- ✅ CORRECT: `$vars.searchResults.add($searchPerplexity.outputs.output.result)`
+- ✅ CORRECT: `$vars.list.add($nodeName.field)`
+- ✅ CORRECT: `$text.contains($otherNode.keyword)`
+- ✅ CORRECT in `.filter()`: `$extractData.commitList.filter("item.date == $dateLoop.item and item.repo == 'dify'").length`
+- ⛔ WRONG in `.filter()`: `$extractData.commitList.filter("item.date == dateLoop.item && item.repo == 'dify'").length`
 
 ---
 

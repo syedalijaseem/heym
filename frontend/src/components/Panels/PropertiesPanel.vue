@@ -12800,7 +12800,14 @@ onUnmounted(() => {
             v-if="nodeOutput"
             class="space-y-2 pt-4 border-t rounded-lg border border-border/40 bg-muted/20 p-3"
           >
-            <div class="flex items-center justify-between gap-2">
+            <div
+              :class="[
+                'flex gap-2 min-w-0',
+                selectedNodeLoopItemNavigation
+                  ? 'flex-col items-start'
+                  : 'items-center justify-between'
+              ]"
+            >
               <div class="flex items-center gap-2 min-w-0">
                 <Label>Last Output</Label>
                 <CheckCircle2
@@ -12814,7 +12821,10 @@ onUnmounted(() => {
               </div>
               <div
                 v-if="!nodeOutput.error"
-                class="flex items-center gap-1.5 shrink-0"
+                :class="[
+                  'flex min-w-0 flex-wrap items-center gap-1.5',
+                  selectedNodeLoopItemNavigation ? 'w-full justify-start' : 'shrink-0 justify-end'
+                ]"
               >
                 <div
                   v-if="selectedNodeLoopItemNavigation"
