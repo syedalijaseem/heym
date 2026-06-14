@@ -26,6 +26,27 @@ Each column has:
 
 Add, edit, or remove columns from the table detail view header.
 
+## Generate Columns with AI
+
+Instead of adding columns by hand, you can describe the table in plain language (or paste sample JSON) and let an LLM propose the schema. Both entry points open the same dialog:
+
+- **Generate with AI** (DataTable list header) — creates a brand-new table from your description.
+- **AI columns** (table detail view, next to the column controls) — proposes *new* columns to append to the table you have open.
+
+### How it works
+
+1. Pick an **LLM credential** and **model** (defaults to your first LLM credential and its latest model).
+2. Type a description — for example *"A table of books with title, author, page count, and whether I've read it"* — or paste a JSON sample/schema.
+3. Click **Generate**. The model returns a suggested schema.
+4. Review the generated columns in an editable form: change the **name**, **type**, **default**, **unique**, and **notEmpty** (required) for each, delete unwanted columns, or **Add column** manually. For a new table you can also edit the AI-suggested **name** and **description**.
+5. Click **Create Table** (new table) or **Add Columns** (existing table) to save. Press **Esc** to close the dialog at any time.
+
+### Append-only for existing tables
+
+When generating columns for an existing table, the model sees your current columns as context and proposes **only new** columns. Existing columns and their data are never modified or removed — generated columns are appended. Duplicate names (case-insensitive) are dropped automatically.
+
+> An LLM credential (OpenAI, Google, or Custom) is required. If you have none, add one in Settings first.
+
 ## Managing Rows
 
 - **Add row**: Click the add button to create a new row
