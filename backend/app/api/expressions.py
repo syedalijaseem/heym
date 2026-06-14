@@ -256,8 +256,9 @@ async def _generate_expression(
         user_id=current_user.id,
         credential_id=request.credential_id,
         workflow_id=request.workflow_id,
-        source="expression_generate",
-        node_label="expression_generate",
+        node_id=request.current_node_id,
+        source="assistant",
+        node_label="Expression Builder",
     )
     result = await execute_llm(
         credential_type=credential.type.value,
