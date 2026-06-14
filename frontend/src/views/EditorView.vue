@@ -128,6 +128,10 @@ const editingDescriptionValue = ref("");
 const titleInputRef = ref<HTMLInputElement | null>(null);
 const descriptionInputRef = ref<HTMLInputElement | null>(null);
 let skipNextTitleCommit = false;
+
+function returnToDashboard(): void {
+  void router.push({ name: "dashboard", query: { tab: "dashboard" } });
+}
 let skipNextDescriptionCommit = false;
 
 function startTitleEdit(): void {
@@ -2016,7 +2020,10 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
             />
           </button>
         </div>
-        <DebugPanel />
+        <DebugPanel
+          :show-dashboard-return="isDashboardWidget"
+          @return-to-dashboard="returnToDashboard"
+        />
       </div>
 
       <PropertiesPanel v-if="rightPanelOpen" />
