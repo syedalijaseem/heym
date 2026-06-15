@@ -2484,10 +2484,15 @@ class WorkflowExecutor:
                 done_event = None
             try:
                 fut.result()
+            except Exception as exc:
+                logger.warning(
+                    "drain_bg_futures: background sub-workflow raised: %s",
+                    exc,
+                    exc_info=True,
+                )
+            finally:
                 if done_event is not None:
                     done_event.wait()
-            except Exception:
-                pass
 
     @staticmethod
     def _record_bg_sub_workflow_done(
