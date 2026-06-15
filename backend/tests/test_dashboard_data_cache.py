@@ -65,6 +65,31 @@ class TestExtractChartPayload(unittest.TestCase):
 
 
 class TestComputeWidgetData(unittest.IsolatedAsyncioTestCase):
+    def setUp(self) -> None:
+        self.collect_referenced_workflows = AsyncMock(return_value={})
+        self.get_credentials_context = AsyncMock(return_value={})
+        self.get_global_variables_context = AsyncMock(return_value={})
+        self.persist_global_variables = AsyncMock()
+
+        self.patchers = [
+            patch(
+                "app.api.workflows.collect_referenced_workflows",
+                new=self.collect_referenced_workflows,
+            ),
+            patch("app.api.workflows.get_credentials_context", new=self.get_credentials_context),
+            patch(
+                "app.services.global_variables_service.get_global_variables_context",
+                new=self.get_global_variables_context,
+            ),
+            patch(
+                "app.api.workflows._persist_global_variables_from_execution",
+                new=self.persist_global_variables,
+            ),
+        ]
+        for patcher in self.patchers:
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
     async def test_returns_cache_when_fresh(self):
         now = datetime.now(timezone.utc)
         widget = _widget(
@@ -100,6 +125,7 @@ class TestComputeWidgetData(unittest.IsolatedAsyncioTestCase):
         fake_result.node_results = [
             {"node_type": "chartOutput", "output": {"type": "bar", "labels": ["new"]}}
         ]
+        fake_result.allow_downstream_pending = False
         with patch.object(dashboard_data, "execute_workflow", return_value=fake_result):
             resp = await dashboard_data.compute_widget_data(db, widget, _User(), force=True)
 
@@ -128,6 +154,7 @@ class TestComputeWidgetData(unittest.IsolatedAsyncioTestCase):
         fake_result.outputs = {"commitChart": chart}
         fake_result.status = "success"
         fake_result.execution_time_ms = 12.0
+        fake_result.allow_downstream_pending = False
 
         with (
             patch.object(dashboard_data, "execute_workflow", return_value=fake_result),
@@ -160,11 +187,132 @@ class TestComputeWidgetData(unittest.IsolatedAsyncioTestCase):
         fake_result.node_results = [
             {"node_type": "chartOutput", "output": {"type": "bar", "fresh": True}}
         ]
+        fake_result.allow_downstream_pending = False
         with patch.object(dashboard_data, "execute_workflow", return_value=fake_result):
             resp = await dashboard_data.compute_widget_data(db, widget, _User(), force=False)
 
         self.assertFalse(resp.cached)
         self.assertEqual(resp.payload, {"type": "bar", "fresh": True})
+
+    async def test_recompute_uses_runtime_context_and_persists_global_variables(self):
+        widget = _widget(cached_payload=None, cached_at=None, version="v")
+        workflow_id = uuid.uuid4()
+        wf = MagicMock()
+        wf.id = workflow_id
+        wf.owner_id = uuid.uuid4()
+        wf.name = "widget"
+        wf.updated_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        wf.nodes = [
+            {
+                "id": "v",
+                "type": "variable",
+                "data": {"isGlobal": True, "variableName": "exchangeAuth"},
+            },
+            {"id": "c", "type": "chartOutput", "data": {}},
+        ]
+        wf.edges = [{"source": "v", "target": "c"}]
+        db = _db_returning_workflow(wf)
+
+        workflow_cache = {"child": {"nodes": [], "edges": []}}
+        credentials_context = {"Slack": "masked-secret"}
+        global_variables_context = {"exchangeAuth": [{"name": "token", "value": "abc"}]}
+        self.collect_referenced_workflows.return_value = workflow_cache
+        self.get_credentials_context.return_value = credentials_context
+        self.get_global_variables_context.return_value = global_variables_context
+
+        fake_result = MagicMock()
+        fake_result.node_results = [
+            {
+                "node_id": "v",
+                "node_type": "variable",
+                "output": {"name": "exchangeAuth", "value": [{"name": "token"}], "type": "array"},
+            },
+            {"node_id": "c", "node_type": "chartOutput", "output": {"type": "text", "text": "ok"}},
+        ]
+        fake_result.outputs = {"metricsDisplay": {"type": "text", "text": "ok"}}
+        fake_result.status = "success"
+        fake_result.execution_time_ms = 12.0
+        fake_result.sub_workflow_executions = []
+        fake_result.allow_downstream_pending = False
+
+        with (
+            patch.object(dashboard_data, "execute_workflow", return_value=fake_result) as execute,
+            patch(
+                "app.api.analytics.upsert_workflow_analytics_snapshot",
+                new=AsyncMock(),
+            ),
+        ):
+            resp = await dashboard_data.compute_widget_data(db, widget, _User(), force=True)
+
+        self.assertIsNone(resp.error)
+        self.assertEqual(resp.payload, {"type": "text", "text": "ok"})
+        execute.assert_called_once()
+        execute_kwargs = execute.call_args.kwargs
+        self.assertEqual(execute_kwargs["workflow_cache"], workflow_cache)
+        self.assertEqual(execute_kwargs["credentials_context"], credentials_context)
+        self.assertEqual(execute_kwargs["global_variables_context"], global_variables_context)
+        self.persist_global_variables.assert_awaited_once_with(
+            db,
+            execute_kwargs["actor_user_id"],
+            wf.nodes,
+            workflow_cache,
+            fake_result.node_results,
+            [],
+        )
+
+    async def test_recompute_returns_chart_before_side_branch_finishes(self):
+        widget = _widget(cached_payload=None, cached_at=None, version="v")
+        wf = MagicMock()
+        wf.id = uuid.uuid4()
+        wf.owner_id = uuid.uuid4()
+        wf.name = "widget"
+        wf.updated_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        wf.nodes = [
+            {"id": "chart", "type": "chartOutput", "data": {}},
+            {
+                "id": "variable",
+                "type": "variable",
+                "data": {"isGlobal": True, "variableName": "exchangeAuth"},
+            },
+        ]
+        wf.edges = []
+        db = _db_returning_workflow(wf)
+
+        fake_result = MagicMock()
+        fake_result.node_results = [
+            {
+                "node_id": "chart",
+                "node_type": "chartOutput",
+                "output": {"type": "text", "text": "ok"},
+            }
+        ]
+        fake_result.outputs = {"metricsDisplay": {"type": "text", "text": "ok"}}
+        fake_result.status = "success"
+        fake_result.execution_time_ms = 12.0
+        fake_result.allow_downstream_pending = True
+
+        scheduled = []
+
+        def create_task(coro):
+            scheduled.append(coro)
+            coro.close()
+            return MagicMock()
+
+        with (
+            patch.object(dashboard_data, "execute_workflow", return_value=fake_result) as execute,
+            patch("asyncio.create_task", side_effect=create_task),
+            patch(
+                "app.api.analytics.upsert_workflow_analytics_snapshot",
+                new=AsyncMock(),
+            ),
+        ):
+            resp = await dashboard_data.compute_widget_data(db, widget, _User(), force=True)
+
+        self.assertIsNone(resp.error)
+        self.assertEqual(resp.payload, {"type": "text", "text": "ok"})
+        self.assertTrue(scheduled)
+        self.persist_global_variables.assert_not_awaited()
+        self.assertTrue(execute.call_args.kwargs["return_on_chart_output"])
 
     async def test_cache_miss_records_execution_history(self):
         from app.db.models import ExecutionHistory
@@ -185,6 +333,7 @@ class TestComputeWidgetData(unittest.IsolatedAsyncioTestCase):
         fake_result.outputs = {}
         fake_result.status = "success"
         fake_result.execution_time_ms = 12.0
+        fake_result.allow_downstream_pending = False
 
         with (
             patch.object(dashboard_data, "execute_workflow", return_value=fake_result),

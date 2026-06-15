@@ -1416,16 +1416,17 @@ def _serialize_node_results(results: list[NodeResult]) -> list[dict]:
 
 
 def _build_node_complete_event(result: NodeResult, output: dict | None = None) -> dict:
+    output_payload = result.output if output is None else output
     return {
         "type": "node_complete",
         "node_id": result.node_id,
         "node_label": result.node_label,
         "node_type": result.node_type,
         "status": result.status,
-        "output": result.output if output is None else output,
+        "output": _to_json_compatible(output_payload),
         "execution_time_ms": result.execution_time_ms,
         "error": result.error,
-        "metadata": result.metadata,
+        "metadata": _to_json_compatible(result.metadata),
     }
 
 
@@ -1611,6 +1612,7 @@ class WorkflowExecutor:
         configured_timezone: tzinfo | None = None,
         invoked_by_agent: bool = False,
         public_base_url: str = "",
+        return_on_chart_output: bool = False,
     ) -> None:
         self.nodes = {node["id"]: node for node in nodes}
         self.agent_progress_queue = agent_progress_queue
@@ -1639,6 +1641,7 @@ class WorkflowExecutor:
         # "AI Agents" trigger_source tag down to Execute Workflow nodes inside the chain.
         self._invoked_by_agent = invoked_by_agent
         self._base_url = public_base_url
+        self.return_on_chart_output = return_on_chart_output
         self.cancel_event = cancel_event
         self.hitl_resume_context: dict[str, dict] = {}
         self.error_handler_nodes = {
@@ -2553,7 +2556,7 @@ class WorkflowExecutor:
         return ExecutionResult(
             workflow_id=workflow_id,
             status=status,
-            outputs=outputs,
+            outputs=_to_json_compatible(outputs),
             execution_time_ms=(time.time() - start_time) * 1000,
             node_results=_serialize_node_results(combined),
             sub_workflow_executions=self.sub_workflow_executions,
@@ -10117,7 +10120,9 @@ class WorkflowExecutor:
         output_nodes_with_downstream = set()
         for node_id in active_nodes:
             node = self.nodes.get(node_id, {})
-            if node.get("type") == "output" and node.get("data", {}).get("allowDownstream"):
+            if (node.get("type") == "output" and node.get("data", {}).get("allowDownstream")) or (
+                self.return_on_chart_output and node.get("type") == "chartOutput"
+            ):
                 output_nodes_with_downstream.add(node_id)
 
         def schedule_downstream(
@@ -10431,10 +10436,11 @@ class WorkflowExecutor:
 
 
 def mask_sensitive_output(output: dict, credentials_context: dict[str, str]) -> dict:
+    safe_output = _to_json_compatible(output)
     if not credentials_context:
-        return output
+        return safe_output
 
-    output_str = json.dumps(output, ensure_ascii=False)
+    output_str = json.dumps(safe_output, ensure_ascii=False)
 
     for name, value in credentials_context.items():
         if value and len(value) > 7:
@@ -10458,6 +10464,7 @@ def execute_workflow(
     conversation_history: list[dict[str, str]] | None = None,
     cancel_event: Event | None = None,
     public_base_url: str = "",
+    return_on_chart_output: bool = False,
 ) -> ExecutionResult:
     executor = WorkflowExecutor(
         nodes,
@@ -10472,6 +10479,7 @@ def execute_workflow(
         conversation_history=conversation_history,
         cancel_event=cancel_event,
         public_base_url=public_base_url,
+        return_on_chart_output=return_on_chart_output,
     )
     result = executor.execute(workflow_id, inputs)
 
@@ -11813,7 +11821,7 @@ def _execute_workflow_streaming_impl(
                         "node_id": node_id,
                         "node_label": result.node_label,
                         "node_type": result.node_type,
-                        "output": output_for_event,
+                        "output": _to_json_compatible(output_for_event),
                         "execution_time_ms": (time.time() - start_time) * 1000,
                     }
                 )
@@ -11859,7 +11867,9 @@ def _execute_workflow_streaming_impl(
             "type": "execution_complete",
             "workflow_id": str(workflow_id),
             "status": "pending",
-            "outputs": {pending_result.node_label: copy.deepcopy(pending_result.output)},
+            "outputs": _to_json_compatible(
+                {pending_result.node_label: copy.deepcopy(pending_result.output)}
+            ),
             "execution_time_ms": (time.time() - start_time) * 1000,
             "node_results": _serialized_graph_plus_delegated_node_results(
                 node_results, wf_executor
@@ -11907,7 +11917,7 @@ def _execute_workflow_streaming_impl(
             "type": "execution_complete",
             "workflow_id": str(workflow_id),
             "status": "error",
-            "outputs": final_outputs,
+            "outputs": _to_json_compatible(final_outputs),
             "execution_time_ms": (time.time() - start_time) * 1000,
             "node_results": _serialized_graph_plus_delegated_node_results(
                 node_results, wf_executor
@@ -11934,7 +11944,7 @@ def _execute_workflow_streaming_impl(
         "type": "execution_complete",
         "workflow_id": str(workflow_id),
         "status": "success",
-        "outputs": final_outputs,
+        "outputs": _to_json_compatible(final_outputs),
         "execution_time_ms": (time.time() - start_time) * 1000,
         "node_results": _serialized_graph_plus_delegated_node_results(node_results, wf_executor),
         "sub_workflow_executions": _serialize_sub_workflow_executions(

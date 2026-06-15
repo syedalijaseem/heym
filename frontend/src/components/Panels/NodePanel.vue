@@ -209,6 +209,7 @@ const DASHBOARD_HIDDEN_NODE_TYPES = new Set<NodeType>([
   "output",
   "jsonOutputMapper",
 ]);
+const WORKFLOW_HIDDEN_NODE_TYPES = new Set<NodeType>(["chartOutput"]);
 
 const isDashboardWidget = computed(
   () => workflowStore.currentWorkflow?.kind === "dashboard_widget",
@@ -224,7 +225,7 @@ watch(showNodeTemplates, (visible) => {
 const paletteNodeTypes = computed(() =>
   isDashboardWidget.value
     ? allNodeTypes.filter((node) => !DASHBOARD_HIDDEN_NODE_TYPES.has(node.type))
-    : allNodeTypes,
+    : allNodeTypes.filter((node) => !WORKFLOW_HIDDEN_NODE_TYPES.has(node.type)),
 );
 
 const nodeTypes = computed(() => {

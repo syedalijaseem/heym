@@ -132,8 +132,15 @@ const titleInputRef = ref<HTMLInputElement | null>(null);
 const descriptionInputRef = ref<HTMLInputElement | null>(null);
 let skipNextTitleCommit = false;
 
-function returnToDashboard(): void {
-  void router.push({ name: "dashboard", query: { tab: "dashboard" } });
+function returnToDashboard(event?: MouseEvent): void {
+  const target = { name: "dashboard", query: { tab: "dashboard" } };
+  if (event?.ctrlKey || event?.metaKey) {
+    const routeTarget = router.resolve(target);
+    window.open(routeTarget.href, "_blank", "noopener,noreferrer");
+    return;
+  }
+
+  void router.push(target);
 }
 let skipNextDescriptionCommit = false;
 
