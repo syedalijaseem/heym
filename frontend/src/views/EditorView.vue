@@ -64,8 +64,9 @@ const HITL_RESOLUTION_STORAGE_KEY = "heym-hitl-resolution";
 const isMobile = useMediaQuery("(max-width: 767px)");
 
 const loading = ref(true);
-const leftPanelOpen = ref(true);
-const rightPanelOpen = ref(true);
+// On mobile, start with both side panels collapsed so only the canvas is visible.
+const leftPanelOpen = ref(!isMobile.value);
+const rightPanelOpen = ref(!isMobile.value);
 const historyOpen = ref(false);
 const editHistoryOpen = ref(false);
 const shareOpen = ref(false);
@@ -251,6 +252,15 @@ watch(
     }
   },
 );
+
+// Collapse both side panels when the viewport becomes mobile so the canvas
+// (standard workflow or dashboard widget) is shown on its own.
+watch(isMobile, (mobile) => {
+  if (mobile) {
+    leftPanelOpen.value = false;
+    rightPanelOpen.value = false;
+  }
+});
 
 function toggleRightPanel(): void {
   rightPanelOpen.value = !rightPanelOpen.value;
@@ -1222,6 +1232,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
         class="flex items-center gap-1 md:gap-2 flex-wrap shrink-0"
       >
         <Button
+          v-if="!isDashboardWidget"
           variant="ghost"
           size="icon"
           class="md:hidden text-destructive hover:text-destructive h-11 w-11 min-h-[44px] min-w-[44px]"
@@ -1231,6 +1242,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
           <Trash2 class="w-4 h-4" />
         </Button>
         <Button
+          v-if="!isDashboardWidget"
           variant="ghost"
           size="sm"
           class="hidden md:inline-flex gap-2 text-destructive hover:text-destructive"
