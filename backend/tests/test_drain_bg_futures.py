@@ -11,7 +11,6 @@ from __future__ import annotations
 import threading
 import unittest
 from concurrent.futures import Future
-from unittest.mock import patch
 
 from app.services.workflow_executor import WorkflowExecutor
 
