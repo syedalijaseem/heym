@@ -211,6 +211,7 @@ async def get_user_mcp_workflows(db: AsyncSession, user_id: uuid.UUID) -> list[W
         .where(
             Workflow.mcp_enabled.is_(True),
             Workflow.owner_id == user_id,
+            Workflow.kind != "dashboard_widget",
         )
         .order_by(Workflow.name.asc())
     )
@@ -222,6 +223,7 @@ async def get_user_mcp_workflows(db: AsyncSession, user_id: uuid.UUID) -> list[W
         .where(
             WorkflowShare.user_id == user_id,
             WorkflowShare.mcp_enabled.is_(True),
+            Workflow.kind != "dashboard_widget",
         )
         .order_by(Workflow.name.asc())
     )
@@ -236,12 +238,13 @@ async def get_all_user_workflows(db: AsyncSession, user_id: uuid.UUID) -> list[W
     result = await db.execute(
         select(Workflow)
         .where(
+            Workflow.kind != "dashboard_widget",
             or_(
                 Workflow.owner_id == user_id,
                 Workflow.id.in_(
                     select(WorkflowShare.workflow_id).where(WorkflowShare.user_id == user_id)
                 ),
-            )
+            ),
         )
         .order_by(Workflow.name.asc())
     )
