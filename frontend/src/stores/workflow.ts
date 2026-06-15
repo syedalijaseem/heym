@@ -288,7 +288,7 @@ export const useWorkflowStore = defineStore("workflow", () => {
   }
 
   function undo(): void {
-    if (!canUndo.value) return;
+    if (!canUndo.value || isExecuting.value) return;
 
     isUndoRedo.value = true;
     historyIndex.value--;
@@ -300,7 +300,7 @@ export const useWorkflowStore = defineStore("workflow", () => {
   }
 
   function redo(): void {
-    if (!canRedo.value) return;
+    if (!canRedo.value || isExecuting.value) return;
 
     isUndoRedo.value = true;
     historyIndex.value++;
