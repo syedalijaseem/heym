@@ -1,3 +1,4 @@
+import time
 import unittest
 import uuid
 
@@ -57,3 +58,57 @@ class TestChartOutputNode(unittest.TestCase):
         self.assertEqual(payload["type"], "bar")
         self.assertEqual(payload["labels"], ["Jan", "Feb"])
         self.assertEqual(payload["series"], [{"name": "revenue", "data": [120, 150]}])
+
+    def test_return_on_chart_output_does_not_wait_for_side_branch(self):
+        nodes = [
+            {
+                "id": "src",
+                "type": "set",
+                "data": {
+                    "label": "source",
+                    "mappings": [
+                        {
+                            "key": "rows",
+                            "value": '$array(dict(label="A", value=1))',
+                        }
+                    ],
+                },
+            },
+            {
+                "id": "chart",
+                "type": "chartOutput",
+                "data": {
+                    "label": "chart",
+                    "chartType": "bar",
+                    "dataPath": "rows",
+                    "labelField": "label",
+                    "valueField": "value",
+                },
+            },
+            {
+                "id": "side",
+                "type": "wait",
+                "data": {"label": "sideEffect", "duration": 350},
+            },
+        ]
+        edges = [
+            {"id": "e1", "source": "src", "target": "chart"},
+            {"id": "e2", "source": "src", "target": "side"},
+        ]
+
+        started = time.perf_counter()
+        result = execute_workflow(
+            workflow_id=uuid.uuid4(),
+            nodes=nodes,
+            edges=edges,
+            inputs={},
+            test_run=True,
+            return_on_chart_output=True,
+        )
+        elapsed = time.perf_counter() - started
+
+        self.assertLess(elapsed, 0.3)
+        self.assertTrue(result.allow_downstream_pending)
+        self.assertEqual(result.outputs["chart"]["type"], "bar")
+        result.join_allow_downstream()
+        self.assertTrue(any(nr["node_id"] == "side" for nr in result.node_results))
