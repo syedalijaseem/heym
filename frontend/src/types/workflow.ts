@@ -549,6 +549,8 @@ export interface NodeData {
   // Static markdown body for the `text` chart type.
   text?: string;
   title?: string;
+  // Optional external link for a chartOutput widget; surfaced as an icon in the dashboard widget title.
+  url?: string;
 }
 
 export interface WorkflowShare {

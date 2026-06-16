@@ -56,6 +56,10 @@ def build_chart_payload(config: dict, data: Any) -> dict:
     if title:
         payload["title"] = title
 
+    url = config.get("url")
+    if isinstance(url, str) and url.strip():
+        payload["url"] = url.strip()
+
     if chart_type == "text":
         # A markdown message. Prefer a value pulled from upstream data (so the text can
         # be dynamic, e.g. "Last execution at 19:47"), then a static `text` config, then

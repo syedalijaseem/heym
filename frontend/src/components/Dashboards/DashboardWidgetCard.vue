@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import type { Component } from "vue";
 import { onClickOutside } from "@vueuse/core";
-import { Loader2, MoreVertical, Pencil, RefreshCw, Settings, Sparkles, Trash2 } from "lucide-vue-next";
+import { ExternalLink, Loader2, MoreVertical, Pencil, RefreshCw, Settings, Sparkles, Trash2 } from "lucide-vue-next";
 
 import ChartRenderer from "@/components/Dashboards/ChartRenderer.vue";
 import { dashboardApi } from "@/services/api";
@@ -22,6 +22,18 @@ const emit = defineEmits<{
 }>();
 
 const payload = ref<ChartPayload | null>(null);
+// Only surface http(s) links. The url can come from a dynamic expression over upstream
+// data, so reject javascript:/data:/relative values to avoid an injected-link XSS.
+const externalUrl = computed<string | null>(() => {
+  const raw = payload.value?.url;
+  if (!raw) return null;
+  try {
+    const parsed = new URL(raw);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.href : null;
+  } catch {
+    return null;
+  }
+});
 const loading = ref(true);
 const error = ref<string | null>(null);
 const editingTitle = ref(false);
@@ -162,6 +174,17 @@ onBeforeUnmount(() => {
       >
         {{ widget.title }}
       </button>
+
+      <a
+        v-if="externalUrl"
+        :href="externalUrl"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="shrink-0 rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+        title="Open link"
+      >
+        <ExternalLink class="h-3.5 w-3.5" />
+      </a>
 
       <!-- sm+: inline icon row -->
       <div class="hidden shrink-0 items-center gap-1 sm:flex">

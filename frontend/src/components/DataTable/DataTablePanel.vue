@@ -83,7 +83,7 @@ const rowPageSizeOptions: Array<{ value: RowPageSize; label: string }> = [
   { value: "all", label: "All" },
 ];
 const DATA_GRID_COLUMN_WIDTH_REM = 12;
-const DATA_GRID_META_WIDTH_REM = 33;
+const DATA_GRID_META_WIDTH_REM = 36;
 
 // ── Create dialog ──
 const showCreateDialog = ref(false);
@@ -229,6 +229,15 @@ async function handleDelete(id: string) {
     await loadTables();
   } catch {
     error.value = "Failed to delete data table";
+  }
+}
+
+async function handleDuplicate(id: string) {
+  try {
+    await dataTablesApi.clone(id);
+    await loadTables();
+  } catch {
+    error.value = "Failed to duplicate data table";
   }
 }
 
@@ -760,12 +769,21 @@ onUnmounted(() => window.removeEventListener("keydown", handleCreateDialogEscape
             <div class="ml-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
               <button
                 class="rounded p-1 hover:bg-accent"
+                title="Rename"
                 @click.stop="startRename(table)"
               >
                 <Pencil class="h-3.5 w-3.5 text-muted-foreground" />
               </button>
               <button
+                class="rounded p-1 hover:bg-accent"
+                title="Duplicate"
+                @click.stop="handleDuplicate(table.id)"
+              >
+                <Copy class="h-3.5 w-3.5 text-muted-foreground" />
+              </button>
+              <button
                 class="rounded p-1 hover:bg-destructive/10"
+                title="Delete"
                 @click.stop="handleDelete(table.id)"
               >
                 <Trash2 class="h-4 w-4 text-destructive" />
@@ -907,6 +925,7 @@ onUnmounted(() => window.removeEventListener("keydown", handleCreateDialogEscape
           :style="{ minWidth: dataGridMinWidth }"
         >
           <colgroup>
+            <col class="w-12">
             <col
               v-for="col in sortedColumns"
               :key="`width-${col.id}`"
@@ -919,6 +938,9 @@ onUnmounted(() => window.removeEventListener("keydown", handleCreateDialogEscape
           </colgroup>
           <thead>
             <tr class="border-b bg-muted/50">
+              <th class="w-12 min-w-12 px-3 py-2 text-center text-xs font-medium text-muted-foreground">
+                #
+              </th>
               <th
                 v-for="col in sortedColumns"
                 :key="col.id"
@@ -967,17 +989,20 @@ onUnmounted(() => window.removeEventListener("keydown", handleCreateDialogEscape
                 ID
               </th>
               <th class="w-24 min-w-24 px-3 py-2 text-right font-medium">
-                Actions
+                Delete
               </th>
             </tr>
           </thead>
           <tbody>
             <!-- Existing rows -->
             <tr
-              v-for="row in rows"
+              v-for="(row, rowIndex) in rows"
               :key="row.id"
               class="group border-b last:border-0 hover:bg-accent/30"
             >
+              <td class="w-12 min-w-12 px-3 py-2 text-center text-xs font-mono text-muted-foreground whitespace-nowrap">
+                {{ rowIndex + 1 }}
+              </td>
               <td
                 v-for="col in sortedColumns"
                 :key="col.id"
@@ -1052,7 +1077,7 @@ onUnmounted(() => window.removeEventListener("keydown", handleCreateDialogEscape
               </td>
               <td class="w-28 min-w-28 px-3 py-2 text-right">
                 <button
-                  class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-mono text-muted-foreground opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100"
+                  class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-mono text-muted-foreground transition-opacity hover:bg-accent"
                   :title="row.id"
                   @click="copyRowId(row.id)"
                 >
@@ -1067,7 +1092,7 @@ onUnmounted(() => window.removeEventListener("keydown", handleCreateDialogEscape
               </td>
               <td class="w-24 min-w-24 px-3 py-2 text-right">
                 <button
-                  class="rounded p-1 opacity-0 hover:bg-destructive/10 group-hover:opacity-100"
+                  class="rounded p-1 hover:bg-destructive/10"
                   @click="handleDeleteRow(row.id)"
                 >
                   <Trash2 class="h-3.5 w-3.5 text-destructive" />
@@ -1080,6 +1105,7 @@ onUnmounted(() => window.removeEventListener("keydown", handleCreateDialogEscape
               v-if="addingRow"
               class="border-b bg-accent/20"
             >
+              <td />
               <td
                 v-for="col in sortedColumns"
                 :key="col.id"
@@ -1143,7 +1169,7 @@ onUnmounted(() => window.removeEventListener("keydown", handleCreateDialogEscape
             <!-- Empty state -->
             <tr v-if="rows.length === 0 && !addingRow && !rowsLoading">
               <td
-                :colspan="sortedColumns.length + 4"
+                :colspan="sortedColumns.length + 5"
                 class="px-3 py-8 text-center text-muted-foreground"
               >
                 No rows yet. Click "Add Row" to get started.

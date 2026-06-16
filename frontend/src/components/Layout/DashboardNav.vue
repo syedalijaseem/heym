@@ -304,6 +304,7 @@ watch(activeTab, () => {
 .tab-item[data-tab-id="workflows"]:hover       .tab-icon { animation: icon-spin   0.45s ease-out; }
 .tab-item[data-tab-id="schedules"]:hover       .tab-icon { animation: icon-tick   0.40s ease-out; }
 .tab-item[data-tab-id="templates"]:hover       .tab-icon { animation: icon-pop    0.35s ease-out; }
+.tab-item[data-tab-id="dashboard"]:hover       .tab-icon { animation: icon-pop    0.35s ease-out; }
 .tab-item[data-tab-id="globalvariables"]:hover .tab-icon { animation: icon-bounce 0.40s ease-out; }
 .tab-item[data-tab-id="chat"]:hover            .tab-icon { animation: icon-pulse  0.40s ease-out; }
 .tab-item[data-tab-id="drive"]:hover           .tab-icon { animation: icon-spin   0.50s ease-out; }
