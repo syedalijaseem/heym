@@ -561,6 +561,68 @@ async def delete_data_table(
     await db.delete(table)
 
 
+@router.post(
+    "/{table_id}/clone", response_model=DataTableResponse, status_code=status.HTTP_201_CREATED
+)
+async def clone_data_table(
+    table_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> DataTableResponse:
+    """Duplicate a data table (columns + all rows) into a new table owned by the user."""
+    source = await _get_data_table_with_access(table_id, current_user.id, db)
+
+    new_name = f"{source.name} (Copy)"
+    count = 1
+    while True:
+        existing = await db.execute(
+            select(DataTable).where(
+                DataTable.owner_id == current_user.id,
+                DataTable.name == new_name,
+            )
+        )
+        if existing.scalar_one_or_none() is None:
+            break
+        count += 1
+        new_name = f"{source.name} (Copy {count})"
+
+    new_table = DataTable(
+        name=new_name,
+        description=source.description,
+        columns=source.columns,
+        owner_id=current_user.id,
+    )
+    db.add(new_table)
+    await db.flush()
+
+    source_rows = await db.execute(select(DataTableRow).where(DataTableRow.table_id == source.id))
+    row_count = 0
+    for src_row in source_rows.scalars():
+        db.add(
+            DataTableRow(
+                table_id=new_table.id,
+                data=src_row.data,
+                created_by=current_user.id,
+                updated_by=current_user.id,
+            )
+        )
+        row_count += 1
+
+    await db.flush()
+    await db.refresh(new_table)
+
+    return DataTableResponse(
+        id=new_table.id,
+        name=new_table.name,
+        description=new_table.description,
+        columns=new_table.columns,
+        owner_id=new_table.owner_id,
+        row_count=row_count,
+        created_at=new_table.created_at,
+        updated_at=new_table.updated_at,
+    )
+
+
 # ── Row CRUD ─────────────────────────────────────────────────────────────────
 
 

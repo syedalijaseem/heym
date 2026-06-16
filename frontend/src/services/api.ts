@@ -2513,6 +2513,11 @@ export const dataTablesApi = {
     return response.data;
   },
 
+  clone: async (id: string): Promise<DataTable> => {
+    const response = await api.post<DataTable>(`/data-tables/${id}/clone`);
+    return response.data;
+  },
+
   generateSchema: async (payload: {
     credential_id: string;
     model: string;
