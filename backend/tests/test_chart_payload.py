@@ -4,6 +4,34 @@ from app.services.chart_payload import build_chart_payload
 
 
 class TestBuildChartPayload(unittest.TestCase):
+    def test_url_passthrough_for_bar(self):
+        config = {
+            "chartType": "bar",
+            "labelField": "month",
+            "valueField": "revenue",
+            "url": "https://example.com/report",
+        }
+        data = [{"month": "Jan", "revenue": 120}]
+        payload = build_chart_payload(config, data)
+        self.assertEqual(payload["url"], "https://example.com/report")
+
+    def test_url_passthrough_for_numeric_and_is_trimmed(self):
+        config = {"chartType": "numeric", "valueField": "count", "url": "  https://example.com  "}
+        data = [{"count": 5}]
+        payload = build_chart_payload(config, data)
+        self.assertEqual(payload["url"], "https://example.com")
+
+    def test_no_url_key_when_missing_or_blank(self):
+        for url_val in (None, "", "   "):
+            config = {"chartType": "bar", "labelField": "m", "valueField": "v", "url": url_val}
+            payload = build_chart_payload(config, [{"m": "Jan", "v": 1}])
+            self.assertNotIn("url", payload)
+
+    def test_no_url_key_when_non_string(self):
+        config = {"chartType": "bar", "labelField": "m", "valueField": "v", "url": 123}
+        payload = build_chart_payload(config, [{"m": "Jan", "v": 1}])
+        self.assertNotIn("url", payload)
+
     def test_bar_vertical_single_series(self):
         config = {
             "chartType": "bar",
