@@ -685,6 +685,74 @@ class _ScalarsResult:
         return SimpleNamespace(all=lambda: self._values)
 
 
+class WorkflowExecutorContextSnapshotTests(unittest.TestCase):
+    def test_downstream_loop_expression_uses_source_iteration_snapshot(self) -> None:
+        nodes = [
+            {"id": "loop", "type": "loop", "data": {"label": "loop"}},
+            {
+                "id": "condition",
+                "type": "condition",
+                "data": {"label": "usernameRepoValid"},
+            },
+            {"id": "update", "type": "dataTable", "data": {"label": "updateRow"}},
+        ]
+        edges = [
+            {
+                "id": "e-loop-condition",
+                "source": "loop",
+                "target": "condition",
+                "sourceHandle": "loop",
+            },
+            {
+                "id": "e-condition-update",
+                "source": "condition",
+                "target": "update",
+                "sourceHandle": "false",
+            },
+        ]
+        executor = WorkflowExecutor(nodes=nodes, edges=edges)
+
+        first_loop_output = {
+            "item": {"id": "row-1", "data": {"targetRepo": "MoaKK/npmstats"}},
+            "index": 0,
+            "branch": "loop",
+        }
+        second_loop_output = {
+            "item": {"id": "row-2", "data": {"targetRepo": "kisugez/moderator"}},
+            "index": 1,
+            "branch": "loop",
+        }
+
+        executor.store_node_output("loop", "loop", first_loop_output, {})
+        condition_inputs = executor.get_node_inputs_for_edges("condition", edges)
+        executor.store_node_output(
+            "condition",
+            "usernameRepoValid",
+            {"branch": "false"},
+            condition_inputs,
+        )
+        executor.store_node_output("loop", "loop", second_loop_output, {})
+
+        update_inputs = executor.get_node_inputs_for_edges("update", edges)
+        resolved_row_id = executor.resolve_expression(
+            "$loop.item.id",
+            update_inputs,
+            "update",
+            preserve_type=True,
+        )
+
+        self.assertEqual(resolved_row_id, "row-1")
+        self.assertEqual(
+            executor.resolve_expression(
+                "$usernameRepoValid.branch",
+                update_inputs,
+                "update",
+                preserve_type=True,
+            ),
+            "false",
+        )
+
+
 class _FakeQuery:
     def __init__(self, result: object, count_result: int = 0) -> None:
         self._result = result

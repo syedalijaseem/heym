@@ -60,6 +60,7 @@ _ITEM_DOT_PATH_RE = re.compile(r"^item(?:\.[a-zA-Z_][a-zA-Z0-9_]*)+$")
 _ITEM_REF_IN_TEMPLATE_RE = re.compile(r"item\.[a-zA-Z_][a-zA-Z0-9_]*\b(?!\()")
 
 _SLUG_RE = re.compile(r"[^a-zA-Z0-9]+")
+_EXECUTION_CONTEXT_INPUT_KEY = "__heym_execution_context"
 
 
 def _slugify_tool_name(label: str) -> str:
@@ -1698,6 +1699,7 @@ class WorkflowExecutor:
         self.agent_progress_queue = agent_progress_queue
         self.edges = edges
         self.node_outputs: dict[str, dict] = {}
+        self.node_execution_contexts: dict[str, dict[str, object]] = {}
         self.skipped_nodes: set[str] = set()
         self.inactive_nodes: set[str] = set()
         self.label_to_output: dict[str, dict] = {}
@@ -2160,22 +2162,34 @@ class WorkflowExecutor:
 
     def get_node_inputs_for_edges(self, node_id: str, edges: list[dict]) -> dict:
         inputs = {}
+        execution_context: dict[str, object] = {}
         for edge in edges:
             if edge["target"] == node_id:
                 source_id = edge["source"]
                 if source_id in self.node_outputs and source_id not in self.skipped_nodes:
                     source_label = self.get_node_label(source_id)
-                    inputs[source_label] = self.node_outputs[source_id]
+                    source_output = self.node_outputs[source_id]
+                    execution_context.update(self.node_execution_contexts.get(source_id, {}))
+                    execution_context[source_label] = source_output
+                    inputs[source_label] = source_output
+        if execution_context:
+            inputs[_EXECUTION_CONTEXT_INPUT_KEY] = execution_context
         return inputs
 
     def get_node_inputs(self, node_id: str) -> dict:
         inputs = {}
+        execution_context: dict[str, object] = {}
         for edge in self.edges:
             if edge["target"] == node_id:
                 source_id = edge["source"]
                 if source_id in self.node_outputs and source_id not in self.skipped_nodes:
                     source_label = self.get_node_label(source_id)
-                    inputs[source_label] = self.node_outputs[source_id]
+                    source_output = self.node_outputs[source_id]
+                    execution_context.update(self.node_execution_contexts.get(source_id, {}))
+                    execution_context[source_label] = source_output
+                    inputs[source_label] = source_output
+        if execution_context:
+            inputs[_EXECUTION_CONTEXT_INPUT_KEY] = execution_context
         return inputs
 
     def _edge_matches_source_handle(self, edge: dict, handle_id: str | None) -> bool:
@@ -2466,10 +2480,50 @@ class WorkflowExecutor:
 
         return levels
 
-    def store_node_output(self, node_id: str, node_label: str, output: dict) -> None:
+    def _snapshot_execution_context(
+        self,
+        inputs: dict | None,
+        node_label: str,
+        output: dict,
+    ) -> dict[str, object]:
+        """Build the label context downstream nodes should inherit from this output."""
+        context: dict[str, object] = {}
+        if isinstance(inputs, dict):
+            inherited_context = inputs.get(_EXECUTION_CONTEXT_INPUT_KEY)
+            if isinstance(inherited_context, dict):
+                context.update(inherited_context)
+            for label, value in inputs.items():
+                if label == _EXECUTION_CONTEXT_INPUT_KEY:
+                    continue
+                context[label] = value
+        context[node_label] = output
+        return copy.deepcopy(context)
+
+    def _visible_inputs(self, inputs: dict) -> dict:
+        """Return user-facing node inputs without internal execution context."""
+        return {key: value for key, value in inputs.items() if key != _EXECUTION_CONTEXT_INPUT_KEY}
+
+    def _first_visible_input(self, inputs: dict) -> object:
+        """Return the first user-facing input value, preserving legacy `$input` behavior."""
+        visible_inputs = self._visible_inputs(inputs)
+        return next(iter(visible_inputs.values()), {})
+
+    def store_node_output(
+        self,
+        node_id: str,
+        node_label: str,
+        output: dict,
+        inputs: dict | None = None,
+    ) -> None:
         """Store node output in shared state (thread-safe)."""
+        if inputs is None and node_id in self.node_execution_contexts:
+            execution_context = copy.deepcopy(self.node_execution_contexts[node_id])
+            execution_context[node_label] = copy.deepcopy(output)
+        else:
+            execution_context = self._snapshot_execution_context(inputs, node_label, output)
         with self.lock:
             self.node_outputs[node_id] = output
+            self.node_execution_contexts[node_id] = execution_context
             self.label_to_output[node_label] = output
             self._wrapped_label_output_cache[node_label] = self._wrap_value(output)
 
@@ -2507,6 +2561,7 @@ class WorkflowExecutor:
                 )
             ),
             "node_outputs": copy.deepcopy(self.node_outputs),
+            "node_execution_contexts": copy.deepcopy(self.node_execution_contexts),
             "label_to_output": copy.deepcopy(self.label_to_output),
             "skipped_nodes": sorted(self.skipped_nodes),
             "inactive_nodes": sorted(self.inactive_nodes),
@@ -2533,6 +2588,7 @@ class WorkflowExecutor:
             "workflow_cache": copy.deepcopy(self.workflow_cache),
             "conversation_history": copy.deepcopy(self.conversation_history),
             "node_outputs": copy.deepcopy(self.node_outputs),
+            "node_execution_contexts": copy.deepcopy(self.node_execution_contexts),
             "label_to_output": copy.deepcopy(self.label_to_output),
             "skipped_nodes": sorted(self.skipped_nodes),
             "inactive_nodes": sorted(self.inactive_nodes),
@@ -2672,7 +2728,7 @@ class WorkflowExecutor:
         result = self._attach_gc_pause_metadata(result, gc_tracker)
         result = self._stamp_node_result(result)
         if result.status == "success":
-            self.store_node_output(node_id, result.node_label, result.output)
+            self.store_node_output(node_id, result.node_label, result.output, inputs)
             if result.output.get("_errorBranch"):
                 self._handle_error_branch_routing(node_id)
             else:
@@ -4210,7 +4266,7 @@ class WorkflowExecutor:
     ) -> dict:
         """Execute agent node with optional tool calling."""
         combined_input = ""
-        for data in inputs.values():
+        for data in self._visible_inputs(inputs).values():
             if isinstance(data, dict) and "text" in data:
                 combined_input += str(data["text"]) + " "
             else:
@@ -5173,7 +5229,16 @@ class WorkflowExecutor:
 
     def _build_context(self, inputs: dict, current_node_id: str | None = None) -> DotDict:
         combined = DotDict()
+        inherited_context = (
+            inputs.get(_EXECUTION_CONTEXT_INPUT_KEY) if isinstance(inputs, dict) else None
+        )
+        if isinstance(inherited_context, dict):
+            for label, data in inherited_context.items():
+                combined[label] = self._wrap_value(data)
+
         for label, data in inputs.items():
+            if label == _EXECUTION_CONTEXT_INPUT_KEY:
+                continue
             wrapped_data = self._wrap_value(data)
             if isinstance(data, dict):
                 for key, val in data.items():
@@ -5183,12 +5248,16 @@ class WorkflowExecutor:
         if current_node_id:
             upstream_labels = self.get_upstream_node_labels(current_node_id)
             for label in upstream_labels:
+                if label in combined:
+                    continue
                 if label in self._wrapped_label_output_cache:
                     combined[label] = self._wrapped_label_output_cache[label]
                 elif label in self.label_to_output:
                     combined[label] = self._wrap_value(self.label_to_output[label])
         else:
             for label, data in self.label_to_output.items():
+                if label in combined:
+                    continue
                 if label in self._wrapped_label_output_cache:
                     combined[label] = self._wrapped_label_output_cache[label]
                 else:
@@ -5472,7 +5541,7 @@ class WorkflowExecutor:
         expr = self._transform_ternary_expression(expression[1:])
 
         if expr == "input":
-            first_input = next(iter(inputs.values()), {})
+            first_input = self._first_visible_input(inputs)
             data = first_input if isinstance(first_input, dict) else {"value": first_input}
             if preserve_type or raw:
                 return data
@@ -6711,7 +6780,7 @@ class WorkflowExecutor:
                 }
             elif node_type == "llm":
                 combined_input = ""
-                for data in inputs.values():
+                for data in self._visible_inputs(inputs).values():
                     if isinstance(data, dict) and "text" in data:
                         combined_input += str(data["text"]) + " "
                     else:
@@ -7088,7 +7157,7 @@ class WorkflowExecutor:
                     else:
                         execute_inputs = {"value": transformed_input}
                 else:
-                    first_input = next(iter(inputs.values()), {})
+                    first_input = self._first_visible_input(inputs)
                     if isinstance(first_input, dict):
                         execute_inputs = dict(first_input)
                     else:
@@ -7600,7 +7669,7 @@ class WorkflowExecutor:
             elif node_type == "wait":
                 duration_ms = node_data.get("duration", 1000)
                 time.sleep(duration_ms / 1000.0)
-                first_input = next(iter(inputs.values()), {})
+                first_input = self._first_visible_input(inputs)
                 output = first_input if isinstance(first_input, dict) else {"value": first_input}
 
             elif node_type == "throwError":
@@ -7703,7 +7772,7 @@ class WorkflowExecutor:
                         output = {"result": inputs}
             elif node_type == "merge":
                 merged_data = {}
-                for label, data in inputs.items():
+                for label, data in self._visible_inputs(inputs).items():
                     if isinstance(data, dict):
                         merged_data[label] = data
                     else:
@@ -8947,17 +9016,18 @@ class WorkflowExecutor:
                 workflow_logger.info(
                     "[%s] [consoleLog:%s] %s", workflow_display, node_label, resolved
                 )
-                first_input = next(iter(inputs.values()), {})
+                first_input = self._first_visible_input(inputs)
                 output = first_input if isinstance(first_input, dict) else {"value": first_input}
                 output = dict(output)
                 output["logMessage"] = self._unwrap_value(resolved)
 
             elif node_type == "chartOutput":
-                if len(inputs) == 1:
-                    source_data = next(iter(inputs.values()))
-                elif inputs:
+                visible_inputs = self._visible_inputs(inputs)
+                if len(visible_inputs) == 1:
+                    source_data = next(iter(visible_inputs.values()))
+                elif visible_inputs:
                     merged: dict = {}
-                    for value in inputs.values():
+                    for value in visible_inputs.values():
                         if isinstance(value, dict):
                             merged.update(value)
                     source_data = merged
@@ -10647,6 +10717,9 @@ def resume_workflow_execution(
         invoked_by_agent=bool(snapshot.get("invoked_by_agent", False)),
     )
     wf_executor.node_outputs = copy.deepcopy(snapshot.get("node_outputs") or {})
+    wf_executor.node_execution_contexts = copy.deepcopy(
+        snapshot.get("node_execution_contexts") or {}
+    )
     wf_executor.label_to_output = copy.deepcopy(snapshot.get("label_to_output") or {})
     wf_executor._rebuild_wrapped_label_output_cache()
     wf_executor.skipped_nodes = set(snapshot.get("skipped_nodes") or [])
@@ -11061,6 +11134,9 @@ def execute_llm_batch_notification_branch(
         invoked_by_agent=bool(snapshot.get("invoked_by_agent", False)),
     )
     wf_executor.node_outputs = copy.deepcopy(snapshot.get("node_outputs") or {})
+    wf_executor.node_execution_contexts = copy.deepcopy(
+        snapshot.get("node_execution_contexts") or {}
+    )
     wf_executor.label_to_output = copy.deepcopy(snapshot.get("label_to_output") or {})
     wf_executor._rebuild_wrapped_label_output_cache()
     wf_executor.skipped_nodes = set(snapshot.get("skipped_nodes") or [])
@@ -11286,6 +11362,9 @@ def execute_hitl_notification_branch(
         invoked_by_agent=bool(snapshot.get("invoked_by_agent", False)),
     )
     wf_executor.node_outputs = copy.deepcopy(snapshot.get("node_outputs") or {})
+    wf_executor.node_execution_contexts = copy.deepcopy(
+        snapshot.get("node_execution_contexts") or {}
+    )
     wf_executor.label_to_output = copy.deepcopy(snapshot.get("label_to_output") or {})
     wf_executor._rebuild_wrapped_label_output_cache()
     wf_executor.skipped_nodes = set(snapshot.get("skipped_nodes") or [])
