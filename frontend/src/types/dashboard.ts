@@ -30,6 +30,8 @@ export interface ChartPayload {
   min?: number;
   max?: number;
   title?: string;
+  // Optional external link set on the chartOutput node; rendered as an icon in the widget title.
+  url?: string;
 }
 
 export interface WidgetLayout {
