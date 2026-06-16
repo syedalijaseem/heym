@@ -686,6 +686,36 @@ class _ScalarsResult:
 
 
 class WorkflowExecutorContextSnapshotTests(unittest.TestCase):
+    def test_condition_false_skips_default_true_source_handle(self) -> None:
+        nodes = [
+            {
+                "id": "condition",
+                "type": "condition",
+                "data": {"label": "isValid", "condition": "$input.valid"},
+            },
+            {"id": "loop", "type": "loop", "data": {"label": "loop"}},
+            {"id": "update", "type": "dataTable", "data": {"label": "updateRow"}},
+        ]
+        executor = WorkflowExecutor(nodes=nodes, edges=[])
+
+        result = executor.execute_node("condition", {"input": {"valid": False}})
+        skipped_handles = set(result.metadata.get("skip_loop_source_handles") or [])
+
+        self.assertEqual(result.output, {"branch": "false"})
+        self.assertIn("true", skipped_handles)
+        self.assertTrue(
+            executor._source_handle_is_skipped(
+                {"source": "condition", "target": "loop"},
+                skipped_handles,
+            )
+        )
+        self.assertFalse(
+            executor._source_handle_is_skipped(
+                {"source": "condition", "target": "update", "sourceHandle": "false"},
+                skipped_handles,
+            )
+        )
+
     def test_downstream_loop_expression_uses_source_iteration_snapshot(self) -> None:
         nodes = [
             {"id": "loop", "type": "loop", "data": {"label": "loop"}},

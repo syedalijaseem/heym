@@ -214,6 +214,72 @@ class WorkflowExecutorBranchingTests(unittest.TestCase):
         self.assertEqual(results["errorBranch"]["status"], "success")
         self.assertEqual(result.outputs, {"errorBranch": {"result": "false branch"}})
 
+    def test_false_branch_loop_back_waits_before_next_iteration(self) -> None:
+        nodes = [
+            {
+                "id": "input_1",
+                "type": "textInput",
+                "data": {"label": "userInput", "inputFields": [{"key": "text"}]},
+            },
+            {
+                "id": "set_1",
+                "type": "set",
+                "data": {
+                    "label": "prepareItems",
+                    "mappings": [{"key": "items", "value": "$array(true).add(false).add(true)"}],
+                },
+            },
+            {
+                "id": "loop_1",
+                "type": "loop",
+                "data": {"label": "loop", "arrayExpression": "$prepareItems.items"},
+            },
+            {
+                "id": "condition_1",
+                "type": "condition",
+                "data": {"label": "isValid", "condition": "$loop.item"},
+            },
+            {
+                "id": "wait_1",
+                "type": "wait",
+                "data": {"label": "pauseFalse", "duration": 25},
+            },
+        ]
+        edges = [
+            {"id": "e1", "source": "input_1", "target": "set_1"},
+            {"id": "e2", "source": "set_1", "target": "loop_1"},
+            {"id": "e3", "source": "loop_1", "target": "condition_1", "sourceHandle": "loop"},
+            {"id": "e4", "source": "condition_1", "target": "loop_1", "targetHandle": "loop"},
+            {
+                "id": "e5",
+                "source": "condition_1",
+                "target": "wait_1",
+                "sourceHandle": "false",
+            },
+            {"id": "e6", "source": "wait_1", "target": "loop_1", "targetHandle": "loop"},
+        ]
+        executor = WorkflowExecutor(nodes=nodes, edges=edges)
+
+        result = executor.execute(
+            workflow_id=uuid.uuid4(),
+            initial_inputs={"headers": {}, "query": {}, "body": {"text": "start"}},
+        )
+
+        self.assertEqual(result.status, "success")
+        pause_sequence = next(
+            row["metadata"]["sequence"]
+            for row in result.node_results
+            if row["node_label"] == "pauseFalse"
+        )
+        third_loop_sequence = next(
+            row["metadata"]["sequence"]
+            for row in result.node_results
+            if row["node_label"] == "loop"
+            and row["output"].get("branch") == "loop"
+            and row["output"].get("index") == 2
+        )
+        self.assertGreater(third_loop_sequence, pause_sequence)
+
     def test_error_branch_preserves_output_reached_by_parallel_branch(self) -> None:
         nodes = [
             {
