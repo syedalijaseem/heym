@@ -7,6 +7,7 @@ from fastapi import HTTPException
 
 from app.api import data_tables as dt_api
 from app.db.models import DataTable, DataTableRow
+from app.models.schemas import DataTableColumnDef, DataTableUpdate
 
 
 class _User:
@@ -57,7 +58,16 @@ def _scalar(value):
 
 def _scalars(values):
     res = MagicMock()
-    res.scalars.return_value = iter(values)
+    scalars = MagicMock()
+    scalars.__iter__.return_value = iter(values)
+    scalars.all.return_value = values
+    res.scalars.return_value = scalars
+    return res
+
+
+def _count(value: int):
+    res = MagicMock()
+    res.scalar.return_value = value
     return res
 
 
@@ -152,6 +162,54 @@ class TestCloneDataTable(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(HTTPException) as ctx:
             await dt_api.clone_data_table(table_id=table_id, current_user=user, db=db)
         self.assertEqual(ctx.exception.status_code, 404)
+
+
+class TestUpdateDataTable(unittest.IsolatedAsyncioTestCase):
+    async def test_update_columns_prunes_removed_column_values_from_rows(self):
+        user = _User()
+        table = _source_table(user.id)
+        table.columns.append(
+            {"id": "c3", "name": "name", "type": "string", "required": False, "order": 2}
+        )
+        rows = [
+            DataTableRow(
+                table_id=table.id,
+                data={"email": "a@x.com", "age": 30, "name": "Ada", "stale": "x"},
+            ),
+            DataTableRow(
+                table_id=table.id,
+                data={"email": "b@x.com", "age": 25, "name": "Ben"},
+            ),
+        ]
+
+        db = MagicMock()
+        _wire_db(db)
+        db.execute = AsyncMock(
+            side_effect=[
+                _scalar(table),  # table lookup
+                _scalars(rows),  # row pruning
+                _count(2),  # response row_count
+            ]
+        )
+
+        response = await dt_api.update_data_table(
+            table_id=table.id,
+            data=DataTableUpdate(
+                columns=[
+                    DataTableColumnDef(name="email"),
+                    DataTableColumnDef(name="name", order=1),
+                ]
+            ),
+            current_user=user,
+            db=db,
+        )
+
+        self.assertEqual(response.row_count, 2)
+        self.assertEqual([col["name"] for col in response.columns], ["email", "name"])
+        self.assertEqual(rows[0].data, {"email": "a@x.com", "name": "Ada"})
+        self.assertEqual(rows[1].data, {"email": "b@x.com", "name": "Ben"})
+        self.assertEqual(rows[0].updated_by, user.id)
+        self.assertEqual(rows[1].updated_by, user.id)
 
 
 if __name__ == "__main__":
