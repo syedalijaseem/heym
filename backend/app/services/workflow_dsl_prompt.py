@@ -2332,7 +2332,7 @@ Each row object includes **`rowIndex`**: the 1-based sheet row number (useful fo
   - `label`: Node identifier
   - `dataTableId`: UUID of the DataTable to operate on (required)
   - `dataTableOperation`: Operation type - "find" | "getAll" | "count" | "getById" | "insert" | "update" | "remove" | "upsert"
-  - `dataTableFilter`: JSON object for filtering (for find, upsert, count). `find`/`upsert` do exact-match {"column_name": "value"}. `count` also supports comparison operators via object values: {"age": {"$gt": 18}} — supported operators: $eq $ne $gt $gte $lt $lte $contains (case-insensitive substring) $in (array). A plain value still means equals. Numeric comparisons apply to columns typed as "number". You can also filter on row metadata (`id`, `created_at`, `updated_at`, `created_by`, `updated_by`) which are real columns — use a full date for range comparisons (e.g. {"created_at": {"$gt": "2026-06-04"}}) or $contains for partial date text matches.
+  - `dataTableFilter`: JSON object for filtering (for find, upsert, count). `find` and `count` support comparison operators via object values: {"age": {"$gt": 18}} — supported operators: $eq $ne $gt $gte $lt $lte $contains (case-insensitive substring) $in (array). A plain value still means equals. Numeric comparisons apply to columns typed as "number". You can also filter on row metadata (`id`, `table_id`, `created_at`, `updated_at`, `created_by`, `updated_by`) which are real columns outside the JSON data blob — use a full date for range comparisons (e.g. {"created_at": {"$gt": "2026-06-04"}}) or $contains for partial date text matches. `upsert` still uses exact-match {"column_name": "value"} to locate an existing row.
   - `dataTableData`: JSON object mapping column names to values (for insert, update, upsert)
   - `dataTableRowId`: Row UUID for single-row operations (for getById, update, remove)
   - `dataTableLimit`: Maximum rows to return (default: 100, for find, getAll)
@@ -2342,7 +2342,7 @@ Each row object includes **`rowIndex`**: the 1-based sheet row number (useful fo
 
 | Operation | Required Fields | Description |
 |-----------|----------------|-------------|
-| `find` | dataTableId | Find rows matching an exact-match filter with optional sort/limit |
+| `find` | dataTableId | Find rows matching an optional operator filter with optional sort/limit |
 | `getAll` | dataTableId | Get all rows with optional sort/limit |
 | `count` | dataTableId | Count rows matching an optional operator filter (DB-side, returns just a number) |
 | `getById` | dataTableId, dataTableRowId | Get a single row by its UUID |
@@ -2361,7 +2361,7 @@ Each row object includes **`rowIndex`**: the 1-based sheet row number (useful fo
     "label": "findUsers",
     "dataTableId": "datatable-uuid",
     "dataTableOperation": "find",
-    "dataTableFilter": "{\"status\": \"active\"}",
+    "dataTableFilter": "{\"status\": \"active\", \"age\": {\"$gte\": 18}, \"created_at\": {\"$contains\": \"2026-06\"}}",
     "dataTableSort": "-created_at",
     "dataTableLimit": 50
   }

@@ -9065,10 +9065,9 @@ class WorkflowExecutor:
                             DataTableRow.table_id == data_table_id
                         )
                         if filter_dict and isinstance(filter_dict, dict):
-                            for col_name, col_value in filter_dict.items():
-                                query = query.filter(
-                                    DataTableRow.data.op("->>")(col_name) == str(col_value)
-                                )
+                            clauses = _build_data_table_filter_clauses(filter_dict, columns)
+                            if clauses:
+                                query = query.filter(*clauses)
 
                         sort_template = node_data.get("dataTableSort", "")
                         if sort_template:

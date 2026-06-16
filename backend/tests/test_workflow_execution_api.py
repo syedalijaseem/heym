@@ -689,8 +689,10 @@ class _FakeQuery:
     def __init__(self, result: object, count_result: int = 0) -> None:
         self._result = result
         self._count_result = count_result
+        self.filter_args: list[tuple[object, ...]] = []
 
     def filter(self, *_args: object) -> "_FakeQuery":
+        self.filter_args.append(_args)
         return self
 
     def first(self) -> object:
@@ -700,6 +702,8 @@ class _FakeQuery:
         return self
 
     def all(self) -> list[object]:
+        if isinstance(self._result, list):
+            return self._result
         return [] if self._result is None else [self._result]
 
     def count(self) -> int:
@@ -748,6 +752,7 @@ class _FakeDataTableSession:
         self.count_result = count_result
         self.added_rows: list[DataTableRow] = []
         self.commits = 0
+        self.last_row_query: _FakeQuery | None = None
 
     def __enter__(self) -> "_FakeDataTableSession":
         return self
@@ -759,7 +764,8 @@ class _FakeDataTableSession:
         if model is DataTable:
             return _FakeQuery(self.table)
         if model is DataTableRow:
-            return _FakeQuery(self.existing_row, count_result=self.count_result)
+            self.last_row_query = _FakeQuery(self.existing_row, count_result=self.count_result)
+            return self.last_row_query
         return _FakeQuery(None)
 
     def add(self, row: DataTableRow) -> None:
@@ -1004,6 +1010,65 @@ class WorkflowExecutorDataTableNodeTests(unittest.TestCase):
         self.assertEqual(result.status, "success")
         self.assertEqual(result.output["operation"], "count")
         self.assertEqual(result.output["count"], 3)
+
+    def test_find_uses_operator_filter_for_data_and_metadata_columns(self) -> None:
+        from sqlalchemy.dialects import postgresql
+
+        table_id = uuid.uuid4()
+        table = SimpleNamespace(
+            id=table_id,
+            owner_id=uuid.uuid4(),
+            columns=[
+                {"name": "status", "type": "string"},
+                {"name": "age", "type": "number"},
+            ],
+        )
+        row = SimpleNamespace(
+            id=uuid.uuid4(),
+            data={"status": "active", "age": "21"},
+            created_at="2026-06-04T12:00:00Z",
+        )
+        fake_db = _FakeDataTableSession(table, existing_row=[row])
+        nodes = [
+            {
+                "id": "dt",
+                "type": "dataTable",
+                "data": {
+                    "label": "dataTable",
+                    "dataTableId": str(table_id),
+                    "dataTableOperation": "find",
+                    "dataTableFilter": (
+                        '{"status": "active", "age": {"$gte": 18}, '
+                        '"created_at": {"$contains": "2026-06-04"}}'
+                    ),
+                },
+            }
+        ]
+        executor = WorkflowExecutor(nodes=nodes, edges=[], actor_user_id=table.owner_id)
+
+        with patch("app.db.session.SessionLocal", return_value=fake_db):
+            result = executor.execute_node("dt", {})
+
+        self.assertEqual(result.status, "success")
+        self.assertEqual(result.output["operation"], "find")
+        self.assertEqual(result.output["count"], 1)
+        self.assertEqual(result.output["rows"][0]["data"], {"status": "active", "age": 21})
+        self.assertIsNotNone(fake_db.last_row_query)
+        filter_args = fake_db.last_row_query.filter_args
+        self.assertEqual(len(filter_args), 2)
+        operator_sql = " ".join(
+            str(
+                clause.compile(
+                    dialect=postgresql.dialect(),
+                    compile_kwargs={"literal_binds": True},
+                )
+            )
+            for clause in filter_args[1]
+        )
+        self.assertIn("data ->> 'status'", operator_sql)
+        self.assertIn("CAST", operator_sql.upper())
+        self.assertIn("data_table_rows.created_at", operator_sql)
+        self.assertIn("ILIKE", operator_sql.upper())
 
 
 class DataTableFilterClauseTests(unittest.TestCase):
