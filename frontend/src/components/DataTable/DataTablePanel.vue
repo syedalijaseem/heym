@@ -988,7 +988,7 @@ onUnmounted(() => window.removeEventListener("keydown", handleCreateDialogEscape
               <th class="w-28 min-w-28 px-3 py-2 text-right font-medium text-muted-foreground">
                 ID
               </th>
-              <th class="w-24 min-w-24 px-0 py-2 text-center font-medium">
+              <th class="w-24 min-w-24 py-2 pr-[22px] text-right font-medium">
                 Delete
               </th>
             </tr>
@@ -1090,7 +1090,7 @@ onUnmounted(() => window.removeEventListener("keydown", handleCreateDialogEscape
                   {{ row.id.slice(0, 8) }}
                 </button>
               </td>
-              <td class="w-24 min-w-24 px-0 py-2 text-center">
+              <td class="w-24 min-w-24 py-2 pr-[30px] text-right">
                 <button
                   class="inline-flex h-7 w-7 items-center justify-center rounded hover:bg-destructive/10"
                   @click="handleDeleteRow(row.id)"

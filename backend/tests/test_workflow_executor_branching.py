@@ -280,6 +280,92 @@ class WorkflowExecutorBranchingTests(unittest.TestCase):
         )
         self.assertGreater(third_loop_sequence, pause_sequence)
 
+    def test_true_branch_loop_back_does_not_execute_false_branch(self) -> None:
+        nodes = [
+            {
+                "id": "input_1",
+                "type": "textInput",
+                "data": {"label": "dataTable", "inputFields": [{"key": "text"}]},
+            },
+            {
+                "id": "loop_1",
+                "type": "loop",
+                "data": {"label": "loop", "arrayExpression": "$dataTable.body.rows"},
+            },
+            {
+                "id": "condition_1",
+                "type": "condition",
+                "data": {
+                    "label": "usernameRepoValid",
+                    "condition": "$loop.item.data.targetRepo.contains($loop.item.data.username)",
+                },
+            },
+            {
+                "id": "update_1",
+                "type": "set",
+                "data": {
+                    "label": "dataTable1",
+                    "mappings": [{"key": "rowId", "value": "$loop.item.id"}],
+                },
+            },
+        ]
+        edges = [
+            {"id": "e1", "source": "input_1", "target": "loop_1"},
+            {"id": "e2", "source": "loop_1", "target": "condition_1", "sourceHandle": "loop"},
+            {
+                "id": "e3",
+                "source": "condition_1",
+                "target": "update_1",
+                "sourceHandle": "false",
+            },
+            {"id": "e4", "source": "update_1", "target": "loop_1", "targetHandle": "loop"},
+            {
+                "id": "e5",
+                "source": "condition_1",
+                "target": "loop_1",
+                "sourceHandle": "true",
+                "targetHandle": "loop",
+            },
+        ]
+        rows = [
+            {
+                "id": "invalid-1",
+                "data": {"targetRepo": "acme-corp/analytics-app", "username": "user-beta"},
+            },
+            {
+                "id": "valid-1",
+                "data": {"targetRepo": "user-gamma/widget-repo", "username": "user-gamma"},
+            },
+            {
+                "id": "valid-2",
+                "data": {"targetRepo": "user-delta/sample-project", "username": "user-delta"},
+            },
+            {
+                "id": "invalid-2",
+                "data": {"targetRepo": "research-lab/agent-toolkit", "username": "user-zeta"},
+            },
+        ]
+        executor = WorkflowExecutor(nodes=nodes, edges=edges)
+
+        result = executor.execute(
+            workflow_id=uuid.uuid4(),
+            initial_inputs={"headers": {}, "query": {}, "body": {"rows": rows, "text": "start"}},
+        )
+
+        self.assertEqual(result.status, "success")
+        condition_branches = [
+            row["output"]["branch"]
+            for row in result.node_results
+            if row["node_label"] == "usernameRepoValid" and row["status"] == "success"
+        ]
+        updated_row_ids = [
+            row["output"]["rowId"]
+            for row in result.node_results
+            if row["node_label"] == "dataTable1" and row["status"] == "success"
+        ]
+        self.assertEqual(condition_branches, ["false", "true", "true", "false"])
+        self.assertEqual(updated_row_ids, ["invalid-1", "invalid-2"])
+
     def test_error_branch_preserves_output_reached_by_parallel_branch(self) -> None:
         nodes = [
             {
