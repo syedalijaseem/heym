@@ -1840,7 +1840,10 @@ function openPrimaryExpandDialogForSelectedNode(): void {
       } else if (rowDataOps.includes(op) && rawData && dataTableDataExpressionInputRef.value) {
         nextTick(() => openDataTableExpressionFieldAtIndex(0));
         return;
-      } else if (op === "find" && dataTableFilterExpressionInputRef.value) {
+      } else if (
+        ["find", "count"].includes(op) &&
+        dataTableFilterExpressionInputRef.value
+      ) {
         nextTick(() => openDataTableExpressionFieldAtIndex(0));
         return;
       } else if (op === "getAll" && dataTableSortExpressionInputRef.value) {
@@ -2881,6 +2884,10 @@ function openDataTableExpressionFieldAtIndex(index: number): void {
     }
     return;
   }
+  if (op === "count") {
+    dataTableFilterExpressionInputRef.value?.openExpandDialog();
+    return;
+  }
   if (op === "getAll") {
     dataTableSortExpressionInputRef.value?.openExpandDialog();
     return;
@@ -3521,6 +3528,7 @@ const dataTableOperationOptions = [
   { value: "", label: "Select operation..." },
   { value: "find", label: "Find Rows" },
   { value: "getAll", label: "Get All Rows" },
+  { value: "count", label: "Count Rows" },
   { value: "getById", label: "Get Row by ID" },
   { value: "insert", label: "Insert Row" },
   { value: "update", label: "Update Row" },
@@ -10548,7 +10556,7 @@ onUnmounted(() => {
               <p class="text-xs text-muted-foreground mt-1">
                 <a
                   href="/?tab=datatable"
-                  class="text-primary hover:underline"
+                  class="font-medium text-violet-600 hover:underline dark:text-violet-400"
                   @click.prevent="$router.push('/?tab=datatable')"
                 >Manage DataTables</a> in Dashboard
               </p>
@@ -10701,12 +10709,20 @@ onUnmounted(() => {
               </template>
             </div>
 
-            <!-- Filter — for find, upsert -->
+            <!-- Filter — for find, upsert, count -->
             <div
-              v-if="['find', 'upsert'].includes(selectedNode.data.dataTableOperation || '')"
+              v-if="['find', 'upsert', 'count'].includes(selectedNode.data.dataTableOperation || '')"
               class="space-y-2"
             >
-              <Label>Filter (JSON)</Label>
+              <div class="flex items-center justify-between">
+                <Label>Filter (JSON)</Label>
+                <button
+                  class="text-xs font-medium text-violet-600 hover:underline dark:text-violet-400"
+                  @click="() => { try { const parsed = JSON.parse(selectedNode?.data.dataTableFilter || '{}'); updateNodeData('dataTableFilter', JSON.stringify(parsed, null, 2)); } catch {} }"
+                >
+                  Format
+                </button>
+              </div>
               <ExpressionInput
                 ref="dataTableFilterExpressionInputRef"
                 :model-value="selectedNode.data.dataTableFilter || '{}'"
@@ -10719,7 +10735,7 @@ onUnmounted(() => {
                 :current-node-id="selectedNode.id"
                 :navigation-enabled="dataTableExpressionFieldCount > 1"
                 :navigation-index="
-                  selectedNode.data.dataTableOperation === 'find'
+                  ['find', 'count'].includes(selectedNode.data.dataTableOperation || '')
                     ? 0
                     : (selectedNode.data.dataTableInputMode || 'raw') === 'raw'
                       ? 1
@@ -10732,17 +10748,13 @@ onUnmounted(() => {
                 @register-field-index="onDataTableRegisterExpressionFieldIndex"
                 @update:model-value="updateNodeData('dataTableFilter', $event)"
               />
-              <div class="flex items-center justify-between">
-                <p class="text-xs text-muted-foreground">
-                  Exact-match filter: {"column": "$input.value"}
-                </p>
-                <button
-                  class="text-xs text-primary hover:underline"
-                  @click="() => { try { const parsed = JSON.parse(selectedNode?.data.dataTableFilter || '{}'); updateNodeData('dataTableFilter', JSON.stringify(parsed, null, 2)); } catch {} }"
-                >
-                  Format
-                </button>
-              </div>
+              <p class="text-xs text-muted-foreground">
+                {{
+                  selectedNode.data.dataTableOperation === "count"
+                    ? 'Plain value = equals. Operators: $eq $ne $gt $gte $lt $lte $contains $in (e.g. age with $gt 18)'
+                    : 'Exact-match filter: {"column": "$input.value"}'
+                }}
+              </p>
             </div>
 
             <!-- Sort — for find, getAll -->

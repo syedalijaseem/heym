@@ -67,6 +67,86 @@ def _slugify_tool_name(label: str) -> str:
     return slug[:64] or "node_tool"
 
 
+def _build_data_table_filter_clauses(filter_dict: dict, columns: list) -> list:
+    """Build SQLAlchemy filter clauses for a DataTable Mongo-style filter.
+
+    A plain value means equality. An object value applies comparison operators:
+    ``$eq``, ``$ne``, ``$gt``, ``$gte``, ``$lt``, ``$lte``, ``$contains`` (ILIKE
+    substring) and ``$in`` (list membership).
+
+    User-defined schema columns live in the JSONB ``data`` blob and are matched as
+    text (numeric comparisons cast to ``NUMERIC`` when the column type is ``number``).
+    Row metadata (``id``, ``created_at``, ``updated_at``, ``created_by``,
+    ``updated_by``, ``table_id``) are real table columns, so they are matched against
+    the model attribute directly; ``$contains`` casts them to text. A schema column
+    that happens to share a metadata name still resolves against the JSONB blob.
+    Unknown operators are ignored.
+    """
+    from sqlalchemy import Numeric, String, cast
+
+    from app.db.models import DataTableRow
+
+    if not isinstance(filter_dict, dict) or not filter_dict:
+        return []
+
+    schema_cols = {c["name"]: c for c in (columns or [])}
+    meta_columns = {
+        "id": DataTableRow.id,
+        "table_id": DataTableRow.table_id,
+        "created_at": DataTableRow.created_at,
+        "updated_at": DataTableRow.updated_at,
+        "created_by": DataTableRow.created_by,
+        "updated_by": DataTableRow.updated_by,
+    }
+    clauses: list = []
+
+    for col_name, condition in filter_dict.items():
+        is_meta = col_name not in schema_cols and col_name in meta_columns
+        if is_meta:
+            # Real typed column (timestamp/uuid): compare natively, no text coercion.
+            field = meta_columns[col_name]
+            is_json = False
+            is_number = False
+        else:
+            # User data lives in JSONB; ``->>`` yields text.
+            field = DataTableRow.data.op("->>")(col_name)
+            is_json = True
+            is_number = schema_cols.get(col_name, {}).get("type") == "number"
+
+        def _coerce(value: object) -> object:
+            return str(value) if is_json else value
+
+        if isinstance(condition, dict):
+            for op, raw_value in condition.items():
+                if op == "$eq":
+                    clauses.append(field == _coerce(raw_value))
+                elif op == "$ne":
+                    clauses.append(field != _coerce(raw_value))
+                elif op in ("$gt", "$gte", "$lt", "$lte"):
+                    if is_number:
+                        left, right = cast(field, Numeric), raw_value
+                    else:
+                        left, right = field, _coerce(raw_value)
+                    if op == "$gt":
+                        clauses.append(left > right)
+                    elif op == "$gte":
+                        clauses.append(left >= right)
+                    elif op == "$lt":
+                        clauses.append(left < right)
+                    else:
+                        clauses.append(left <= right)
+                elif op == "$contains":
+                    target = field if is_json else cast(field, String)
+                    clauses.append(target.ilike(f"%{raw_value}%"))
+                elif op == "$in" and isinstance(raw_value, list):
+                    clauses.append(field.in_([_coerce(v) for v in raw_value]))
+                # Unknown operators are ignored.
+        else:
+            clauses.append(field == _coerce(condition))
+
+    return clauses
+
+
 def _build_agent_execution_log_output(agent_result: dict) -> dict:
     """Rich agent fields for execution logs (e.g. sub-agent node_complete)."""
     out: dict = {"text": agent_result.get("text", "")}
@@ -1786,7 +1866,7 @@ class WorkflowExecutor:
     def _get_accessible_data_table(self, db, data_table_id: object, operation: str):
         from app.db.models import DataTable, DataTableShare, DataTableTeamShare, TeamMember
 
-        write_required = operation not in ("find", "getAll", "getById")
+        write_required = operation not in ("find", "getAll", "getById", "count")
         actor_user_id = self._require_actor_user_id("DataTable")
 
         table = (
@@ -9050,6 +9130,34 @@ class WorkflowExecutor:
                                 for r in rows
                             ],
                             "count": len(rows),
+                        }
+
+                    elif operation == "count":
+                        filter_template = node_data.get("dataTableFilter", "{}")
+                        filter_str = self.evaluate_message_template(
+                            filter_template, inputs, node_id
+                        )
+                        try:
+                            filter_dict = (
+                                json.loads(filter_str)
+                                if isinstance(filter_str, str)
+                                else filter_str
+                            )
+                        except Exception:
+                            filter_dict = {}
+
+                        query = db.query(DataTableRow).filter(
+                            DataTableRow.table_id == data_table_id
+                        )
+                        if isinstance(filter_dict, dict) and filter_dict:
+                            clauses = _build_data_table_filter_clauses(filter_dict, columns)
+                            if clauses:
+                                query = query.filter(*clauses)
+                        total = query.count()
+                        output = {
+                            "success": True,
+                            "operation": "count",
+                            "count": int(total),
                         }
 
                     elif operation == "getById":

@@ -418,12 +418,14 @@ function handleKeyDown(event: KeyboardEvent): void {
 
   if (event.key === "Escape") {
     event.preventDefault();
+    event.stopPropagation();
     emit("close");
     return;
   }
 
   if (event.key === "ArrowDown" || (event.key === "Tab" && !event.shiftKey)) {
     event.preventDefault();
+    event.stopPropagation();
     if (allItems.value.length > 0) {
       selectedIndex.value =
         selectedIndex.value >= allItems.value.length - 1
@@ -436,6 +438,7 @@ function handleKeyDown(event: KeyboardEvent): void {
 
   if (event.key === "ArrowUp" || (event.key === "Tab" && event.shiftKey)) {
     event.preventDefault();
+    event.stopPropagation();
     if (allItems.value.length > 0) {
       selectedIndex.value =
         selectedIndex.value <= 0
@@ -448,6 +451,7 @@ function handleKeyDown(event: KeyboardEvent): void {
 
   if (event.key === "Enter") {
     event.preventDefault();
+    event.stopPropagation();
     const item = allItems.value[selectedIndex.value];
     if (item) {
       handleSelectItem(item, selectedIndex.value, event);

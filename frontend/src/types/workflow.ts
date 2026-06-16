@@ -233,6 +233,7 @@ export type GristOperation =
 export type DataTableOperation =
   | "find"
   | "getAll"
+  | "count"
   | "getById"
   | "insert"
   | "update"

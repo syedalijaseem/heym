@@ -686,8 +686,9 @@ class _ScalarsResult:
 
 
 class _FakeQuery:
-    def __init__(self, result: object) -> None:
+    def __init__(self, result: object, count_result: int = 0) -> None:
         self._result = result
+        self._count_result = count_result
 
     def filter(self, *_args: object) -> "_FakeQuery":
         return self
@@ -700,6 +701,9 @@ class _FakeQuery:
 
     def all(self) -> list[object]:
         return [] if self._result is None else [self._result]
+
+    def count(self) -> int:
+        return self._count_result
 
 
 class _SequenceQuery:
@@ -733,9 +737,15 @@ class _SequenceSession:
 
 
 class _FakeDataTableSession:
-    def __init__(self, table: object, existing_row: object | None = None) -> None:
+    def __init__(
+        self,
+        table: object,
+        existing_row: object | None = None,
+        count_result: int = 0,
+    ) -> None:
         self.table = table
         self.existing_row = existing_row
+        self.count_result = count_result
         self.added_rows: list[DataTableRow] = []
         self.commits = 0
 
@@ -749,7 +759,7 @@ class _FakeDataTableSession:
         if model is DataTable:
             return _FakeQuery(self.table)
         if model is DataTableRow:
-            return _FakeQuery(self.existing_row)
+            return _FakeQuery(self.existing_row, count_result=self.count_result)
         return _FakeQuery(None)
 
     def add(self, row: DataTableRow) -> None:
@@ -917,6 +927,213 @@ class WorkflowExecutorDataTableNodeTests(unittest.TestCase):
             fake_db.added_rows[0].data,
             {"username": "ada", "githubToken": "tok", "targetRepo": ""},
         )
+
+    def test_data_table_lookup_allows_count_with_read_only_team_share(self) -> None:
+        actor_id = uuid.uuid4()
+        table = SimpleNamespace(id=uuid.uuid4(), owner_id=uuid.uuid4(), columns=[])
+        fake_db = _SequenceSession(
+            [
+                _SequenceQuery(first_result=None),
+                _SequenceQuery(all_result=[]),
+                _SequenceQuery(all_result=[(table, "read")]),
+            ]
+        )
+        executor = WorkflowExecutor(nodes=[], edges=[], actor_user_id=actor_id)
+
+        result = executor._get_accessible_data_table(fake_db, table.id, "count")
+
+        self.assertIs(result, table)
+
+    def test_count_returns_total_without_filter(self) -> None:
+        table_id = uuid.uuid4()
+        table = SimpleNamespace(
+            id=table_id,
+            owner_id=uuid.uuid4(),
+            columns=[{"name": "status", "type": "string"}],
+        )
+        fake_db = _FakeDataTableSession(table, count_result=7)
+        nodes = [
+            {
+                "id": "dt",
+                "type": "dataTable",
+                "data": {
+                    "label": "dataTable",
+                    "dataTableId": str(table_id),
+                    "dataTableOperation": "count",
+                },
+            }
+        ]
+        executor = WorkflowExecutor(nodes=nodes, edges=[], actor_user_id=table.owner_id)
+
+        with patch("app.db.session.SessionLocal", return_value=fake_db):
+            result = executor.execute_node("dt", {})
+
+        self.assertEqual(result.status, "success")
+        self.assertEqual(result.output["operation"], "count")
+        self.assertEqual(result.output["count"], 7)
+        self.assertTrue(result.output["success"])
+
+    def test_count_returns_filtered_total(self) -> None:
+        table_id = uuid.uuid4()
+        table = SimpleNamespace(
+            id=table_id,
+            owner_id=uuid.uuid4(),
+            columns=[
+                {"name": "status", "type": "string"},
+                {"name": "age", "type": "number"},
+            ],
+        )
+        fake_db = _FakeDataTableSession(table, count_result=3)
+        nodes = [
+            {
+                "id": "dt",
+                "type": "dataTable",
+                "data": {
+                    "label": "dataTable",
+                    "dataTableId": str(table_id),
+                    "dataTableOperation": "count",
+                    "dataTableFilter": '{"status": "active", "age": {"$gt": 18}}',
+                },
+            }
+        ]
+        executor = WorkflowExecutor(nodes=nodes, edges=[], actor_user_id=table.owner_id)
+
+        with patch("app.db.session.SessionLocal", return_value=fake_db):
+            result = executor.execute_node("dt", {})
+
+        self.assertEqual(result.status, "success")
+        self.assertEqual(result.output["operation"], "count")
+        self.assertEqual(result.output["count"], 3)
+
+
+class DataTableFilterClauseTests(unittest.TestCase):
+    """Unit tests for the Mongo-style operator -> SQLAlchemy clause builder."""
+
+    @staticmethod
+    def _sql(clause: object) -> str:
+        from sqlalchemy.dialects import postgresql
+
+        return str(
+            clause.compile(
+                dialect=postgresql.dialect(),
+                compile_kwargs={"literal_binds": True},
+            )
+        )
+
+    def test_plain_value_is_equality(self) -> None:
+        from app.services.workflow_executor import _build_data_table_filter_clauses
+
+        clauses = _build_data_table_filter_clauses(
+            {"status": "active"}, [{"name": "status", "type": "string"}]
+        )
+        self.assertEqual(len(clauses), 1)
+        sql = self._sql(clauses[0])
+        self.assertIn("data ->> 'status'", sql)
+        self.assertIn("= 'active'", sql)
+
+    def test_ne_operator(self) -> None:
+        from app.services.workflow_executor import _build_data_table_filter_clauses
+
+        clauses = _build_data_table_filter_clauses(
+            {"status": {"$ne": "done"}}, [{"name": "status", "type": "string"}]
+        )
+        sql = self._sql(clauses[0])
+        self.assertIn("data ->> 'status'", sql)
+        self.assertIn("!= 'done'", sql)
+
+    def test_gt_on_number_column_casts_to_numeric(self) -> None:
+        from app.services.workflow_executor import _build_data_table_filter_clauses
+
+        clauses = _build_data_table_filter_clauses(
+            {"age": {"$gt": 18}}, [{"name": "age", "type": "number"}]
+        )
+        sql = self._sql(clauses[0]).upper()
+        self.assertIn("CAST", sql)
+        self.assertIn("NUMERIC", sql)
+        self.assertIn("> 18", sql)
+
+    def test_gt_on_string_column_does_not_cast(self) -> None:
+        from app.services.workflow_executor import _build_data_table_filter_clauses
+
+        clauses = _build_data_table_filter_clauses(
+            {"name": {"$gt": "m"}}, [{"name": "name", "type": "string"}]
+        )
+        sql = self._sql(clauses[0])
+        self.assertNotIn("CAST", sql.upper())
+        self.assertIn("data ->> 'name'", sql)
+        self.assertIn("> 'm'", sql)
+
+    def test_contains_uses_ilike(self) -> None:
+        from app.services.workflow_executor import _build_data_table_filter_clauses
+
+        clauses = _build_data_table_filter_clauses(
+            {"name": {"$contains": "john"}}, [{"name": "name", "type": "string"}]
+        )
+        sql = self._sql(clauses[0]).upper()
+        self.assertIn("ILIKE", sql)
+        self.assertIn("%JOHN%", sql)
+
+    def test_in_uses_in_clause(self) -> None:
+        from app.services.workflow_executor import _build_data_table_filter_clauses
+
+        clauses = _build_data_table_filter_clauses(
+            {"plan": {"$in": ["pro", "team"]}}, [{"name": "plan", "type": "string"}]
+        )
+        sql = self._sql(clauses[0]).upper()
+        self.assertIn("IN (", sql)
+        self.assertIn("'PRO'", sql)
+        self.assertIn("'TEAM'", sql)
+
+    def test_meta_created_at_maps_to_real_column(self) -> None:
+        from app.services.workflow_executor import _build_data_table_filter_clauses
+
+        clauses = _build_data_table_filter_clauses(
+            {"created_at": {"$gt": "2026-06-04"}}, [{"name": "status", "type": "string"}]
+        )
+        sql = self._sql(clauses[0])
+        self.assertIn("data_table_rows.created_at", sql)
+        self.assertNotIn("->>", sql)
+        self.assertIn("> '2026-06-04'", sql)
+
+    def test_meta_created_at_contains_casts_to_text(self) -> None:
+        from app.services.workflow_executor import _build_data_table_filter_clauses
+
+        clauses = _build_data_table_filter_clauses({"created_at": {"$contains": "06-04"}}, [])
+        sql = self._sql(clauses[0]).upper()
+        self.assertIn("CAST", sql)
+        self.assertIn("ILIKE", sql)
+        self.assertIn("%06-04%", sql)
+
+    def test_meta_id_plain_value_maps_to_real_column(self) -> None:
+        from app.services.workflow_executor import _build_data_table_filter_clauses
+
+        clauses = _build_data_table_filter_clauses({"id": "abc-123"}, [])
+        sql = self._sql(clauses[0])
+        self.assertIn("data_table_rows.id", sql)
+        self.assertNotIn("->>", sql)
+
+    def test_schema_column_shadowing_meta_name_uses_json(self) -> None:
+        from app.services.workflow_executor import _build_data_table_filter_clauses
+
+        # A user-defined data column literally named created_at must still use JSONB.
+        clauses = _build_data_table_filter_clauses(
+            {"created_at": "x"}, [{"name": "created_at", "type": "string"}]
+        )
+        sql = self._sql(clauses[0])
+        self.assertIn("->>", sql)
+
+    def test_unknown_operator_is_ignored(self) -> None:
+        from app.services.workflow_executor import _build_data_table_filter_clauses
+
+        clauses = _build_data_table_filter_clauses(
+            {"age": {"$regex": ".*"}}, [{"name": "age", "type": "number"}]
+        )
+        self.assertEqual(clauses, [])
+
+    def test_empty_filter_yields_no_clauses(self) -> None:
+        from app.services.workflow_executor import _build_data_table_filter_clauses
+
+        self.assertEqual(_build_data_table_filter_clauses({}, []), [])
 
 
 class CredentialContextTeamShareTests(unittest.IsolatedAsyncioTestCase):

@@ -2331,8 +2331,8 @@ Each row object includes **`rowIndex`**: the 1-based sheet row number (useful fo
 - **Data fields**:
   - `label`: Node identifier
   - `dataTableId`: UUID of the DataTable to operate on (required)
-  - `dataTableOperation`: Operation type - "find" | "getAll" | "getById" | "insert" | "update" | "remove" | "upsert"
-  - `dataTableFilter`: JSON object for exact-match filtering {"column_name": "value"} (for find, upsert)
+  - `dataTableOperation`: Operation type - "find" | "getAll" | "count" | "getById" | "insert" | "update" | "remove" | "upsert"
+  - `dataTableFilter`: JSON object for filtering (for find, upsert, count). `find`/`upsert` do exact-match {"column_name": "value"}. `count` also supports comparison operators via object values: {"age": {"$gt": 18}} — supported operators: $eq $ne $gt $gte $lt $lte $contains (case-insensitive substring) $in (array). A plain value still means equals. Numeric comparisons apply to columns typed as "number". You can also filter on row metadata (`id`, `created_at`, `updated_at`, `created_by`, `updated_by`) which are real columns — use a full date for range comparisons (e.g. {"created_at": {"$gt": "2026-06-04"}}) or $contains for partial date text matches.
   - `dataTableData`: JSON object mapping column names to values (for insert, update, upsert)
   - `dataTableRowId`: Row UUID for single-row operations (for getById, update, remove)
   - `dataTableLimit`: Maximum rows to return (default: 100, for find, getAll)
@@ -2342,8 +2342,9 @@ Each row object includes **`rowIndex`**: the 1-based sheet row number (useful fo
 
 | Operation | Required Fields | Description |
 |-----------|----------------|-------------|
-| `find` | dataTableId | Find rows matching a filter with optional sort/limit |
+| `find` | dataTableId | Find rows matching an exact-match filter with optional sort/limit |
 | `getAll` | dataTableId | Get all rows with optional sort/limit |
+| `count` | dataTableId | Count rows matching an optional operator filter (DB-side, returns just a number) |
 | `getById` | dataTableId, dataTableRowId | Get a single row by its UUID |
 | `insert` | dataTableId, dataTableData | Insert a new row |
 | `update` | dataTableId, dataTableRowId, dataTableData | Update an existing row (merges data) |
@@ -2392,16 +2393,29 @@ Each row object includes **`rowIndex`**: the 1-based sheet row number (useful fo
   }
 }
 ```
+```json
+{
+  "id": "dt-count",
+  "type": "dataTable",
+  "position": {"x": 400, "y": 800},
+  "data": {
+    "label": "activeAdults",
+    "dataTableId": "datatable-uuid",
+    "dataTableOperation": "count",
+    "dataTableFilter": "{\"status\": \"active\", \"age\": {\"$gt\": 18}}"
+  }
+}
+```
 
 **Output access**:
 - `$nodeLabel.success` - Boolean success status
 - `$nodeLabel.rows` - Array of row objects (for find, getAll)
 - `$nodeLabel.row` - Single row object (for getById, insert, update, upsert)
 - `$nodeLabel.row.data.column_name` - Access specific column value
-- `$nodeLabel.count` - Number of rows returned
+- `$nodeLabel.count` - Number of rows (rows returned for find/getAll; matching-row total for count)
 - `$nodeLabel.id` - Row ID (for insert, update, remove)
 - `$nodeLabel.found` - Boolean (for getById)
-- `$nodeLabel.operation` - "insert" or "update" (for upsert)
+- `$nodeLabel.operation` - Operation name (e.g. "count"; "insert"/"update" for upsert)
 
 ### 24. throwError (Stop Workflow with Error)
 - **Purpose**: Immediately stop workflow execution and return an error response with a custom HTTP status code
