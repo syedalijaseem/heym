@@ -275,6 +275,33 @@ def _apply_defaults(data: dict, columns: list[dict]) -> dict:
     return result
 
 
+def _column_names(columns: list[dict]) -> set[str]:
+    """Return valid column names from stored DataTable column definitions."""
+    return {
+        str(col.get("name"))
+        for col in columns
+        if isinstance(col, dict) and str(col.get("name") or "").strip()
+    }
+
+
+async def _prune_rows_to_columns(
+    table_id: uuid.UUID,
+    columns: list[dict],
+    db: AsyncSession,
+    updated_by: uuid.UUID,
+) -> None:
+    """Remove row JSON keys that no longer exist in the table schema."""
+    allowed_names = _column_names(columns)
+    result = await db.execute(select(DataTableRow).where(DataTableRow.table_id == table_id))
+    rows = result.scalars().all()
+    for row in rows:
+        row_data = row.data if isinstance(row.data, dict) else {}
+        pruned_data = {key: value for key, value in row_data.items() if key in allowed_names}
+        if pruned_data != row_data:
+            row.data = pruned_data
+            row.updated_by = updated_by
+
+
 async def _check_unique_constraints(
     table_id: uuid.UUID,
     data: dict,
@@ -528,6 +555,7 @@ async def update_data_table(
         for i, col in enumerate(columns_json):
             col["id"] = str(col.get("id", uuid.uuid4()))
             col["order"] = col.get("order", i)
+        await _prune_rows_to_columns(table_id, columns_json, db, current_user.id)
         table.columns = columns_json
 
     await db.flush()

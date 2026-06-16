@@ -60,6 +60,7 @@ _ITEM_DOT_PATH_RE = re.compile(r"^item(?:\.[a-zA-Z_][a-zA-Z0-9_]*)+$")
 _ITEM_REF_IN_TEMPLATE_RE = re.compile(r"item\.[a-zA-Z_][a-zA-Z0-9_]*\b(?!\()")
 
 _SLUG_RE = re.compile(r"[^a-zA-Z0-9]+")
+_EXECUTION_CONTEXT_INPUT_KEY = "__heym_execution_context"
 
 
 def _slugify_tool_name(label: str) -> str:
@@ -1698,6 +1699,7 @@ class WorkflowExecutor:
         self.agent_progress_queue = agent_progress_queue
         self.edges = edges
         self.node_outputs: dict[str, dict] = {}
+        self.node_execution_contexts: dict[str, dict[str, object]] = {}
         self.skipped_nodes: set[str] = set()
         self.inactive_nodes: set[str] = set()
         self.label_to_output: dict[str, dict] = {}
@@ -2160,22 +2162,34 @@ class WorkflowExecutor:
 
     def get_node_inputs_for_edges(self, node_id: str, edges: list[dict]) -> dict:
         inputs = {}
+        execution_context: dict[str, object] = {}
         for edge in edges:
             if edge["target"] == node_id:
                 source_id = edge["source"]
                 if source_id in self.node_outputs and source_id not in self.skipped_nodes:
                     source_label = self.get_node_label(source_id)
-                    inputs[source_label] = self.node_outputs[source_id]
+                    source_output = self.node_outputs[source_id]
+                    execution_context.update(self.node_execution_contexts.get(source_id, {}))
+                    execution_context[source_label] = source_output
+                    inputs[source_label] = source_output
+        if execution_context:
+            inputs[_EXECUTION_CONTEXT_INPUT_KEY] = execution_context
         return inputs
 
     def get_node_inputs(self, node_id: str) -> dict:
         inputs = {}
+        execution_context: dict[str, object] = {}
         for edge in self.edges:
             if edge["target"] == node_id:
                 source_id = edge["source"]
                 if source_id in self.node_outputs and source_id not in self.skipped_nodes:
                     source_label = self.get_node_label(source_id)
-                    inputs[source_label] = self.node_outputs[source_id]
+                    source_output = self.node_outputs[source_id]
+                    execution_context.update(self.node_execution_contexts.get(source_id, {}))
+                    execution_context[source_label] = source_output
+                    inputs[source_label] = source_output
+        if execution_context:
+            inputs[_EXECUTION_CONTEXT_INPUT_KEY] = execution_context
         return inputs
 
     def _edge_matches_source_handle(self, edge: dict, handle_id: str | None) -> bool:
@@ -2191,6 +2205,29 @@ class WorkflowExecutor:
             return True
 
         return False
+
+    def _source_handle_is_skipped(self, edge: dict, skipped_handles: set[str]) -> bool:
+        """Return whether an edge's source handle is suppressed by node metadata."""
+        for handle_id in skipped_handles:
+            if self._edge_matches_source_handle(edge, handle_id):
+                return True
+        return False
+
+    def _loop_back_targets_for_source_handle(self, node_id: str, handle_id: str) -> set[str]:
+        """Return loop nodes reached directly by a specific branch handle."""
+        targets: set[str] = set()
+        for edge in self.edges:
+            if edge.get("source") != node_id:
+                continue
+            target = edge.get("target")
+            target_node = self.nodes.get(target, {})
+            if (
+                edge.get("targetHandle") == "loop"
+                and target_node.get("type") == "loop"
+                and self._edge_matches_source_handle(edge, handle_id)
+            ):
+                targets.add(target)
+        return targets
 
     def get_downstream_nodes(self, node_id: str, handle_id: str | None = None) -> list[str]:
         downstream = []
@@ -2466,10 +2503,50 @@ class WorkflowExecutor:
 
         return levels
 
-    def store_node_output(self, node_id: str, node_label: str, output: dict) -> None:
+    def _snapshot_execution_context(
+        self,
+        inputs: dict | None,
+        node_label: str,
+        output: dict,
+    ) -> dict[str, object]:
+        """Build the label context downstream nodes should inherit from this output."""
+        context: dict[str, object] = {}
+        if isinstance(inputs, dict):
+            inherited_context = inputs.get(_EXECUTION_CONTEXT_INPUT_KEY)
+            if isinstance(inherited_context, dict):
+                context.update(inherited_context)
+            for label, value in inputs.items():
+                if label == _EXECUTION_CONTEXT_INPUT_KEY:
+                    continue
+                context[label] = value
+        context[node_label] = output
+        return copy.deepcopy(context)
+
+    def _visible_inputs(self, inputs: dict) -> dict:
+        """Return user-facing node inputs without internal execution context."""
+        return {key: value for key, value in inputs.items() if key != _EXECUTION_CONTEXT_INPUT_KEY}
+
+    def _first_visible_input(self, inputs: dict) -> object:
+        """Return the first user-facing input value, preserving legacy `$input` behavior."""
+        visible_inputs = self._visible_inputs(inputs)
+        return next(iter(visible_inputs.values()), {})
+
+    def store_node_output(
+        self,
+        node_id: str,
+        node_label: str,
+        output: dict,
+        inputs: dict | None = None,
+    ) -> None:
         """Store node output in shared state (thread-safe)."""
+        if inputs is None and node_id in self.node_execution_contexts:
+            execution_context = copy.deepcopy(self.node_execution_contexts[node_id])
+            execution_context[node_label] = copy.deepcopy(output)
+        else:
+            execution_context = self._snapshot_execution_context(inputs, node_label, output)
         with self.lock:
             self.node_outputs[node_id] = output
+            self.node_execution_contexts[node_id] = execution_context
             self.label_to_output[node_label] = output
             self._wrapped_label_output_cache[node_label] = self._wrap_value(output)
 
@@ -2507,6 +2584,7 @@ class WorkflowExecutor:
                 )
             ),
             "node_outputs": copy.deepcopy(self.node_outputs),
+            "node_execution_contexts": copy.deepcopy(self.node_execution_contexts),
             "label_to_output": copy.deepcopy(self.label_to_output),
             "skipped_nodes": sorted(self.skipped_nodes),
             "inactive_nodes": sorted(self.inactive_nodes),
@@ -2533,6 +2611,7 @@ class WorkflowExecutor:
             "workflow_cache": copy.deepcopy(self.workflow_cache),
             "conversation_history": copy.deepcopy(self.conversation_history),
             "node_outputs": copy.deepcopy(self.node_outputs),
+            "node_execution_contexts": copy.deepcopy(self.node_execution_contexts),
             "label_to_output": copy.deepcopy(self.label_to_output),
             "skipped_nodes": sorted(self.skipped_nodes),
             "inactive_nodes": sorted(self.inactive_nodes),
@@ -2672,7 +2751,7 @@ class WorkflowExecutor:
         result = self._attach_gc_pause_metadata(result, gc_tracker)
         result = self._stamp_node_result(result)
         if result.status == "success":
-            self.store_node_output(node_id, result.node_label, result.output)
+            self.store_node_output(node_id, result.node_label, result.output, inputs)
             if result.output.get("_errorBranch"):
                 self._handle_error_branch_routing(node_id)
             else:
@@ -4210,7 +4289,7 @@ class WorkflowExecutor:
     ) -> dict:
         """Execute agent node with optional tool calling."""
         combined_input = ""
-        for data in inputs.values():
+        for data in self._visible_inputs(inputs).values():
             if isinstance(data, dict) and "text" in data:
                 combined_input += str(data["text"]) + " "
             else:
@@ -5173,7 +5252,16 @@ class WorkflowExecutor:
 
     def _build_context(self, inputs: dict, current_node_id: str | None = None) -> DotDict:
         combined = DotDict()
+        inherited_context = (
+            inputs.get(_EXECUTION_CONTEXT_INPUT_KEY) if isinstance(inputs, dict) else None
+        )
+        if isinstance(inherited_context, dict):
+            for label, data in inherited_context.items():
+                combined[label] = self._wrap_value(data)
+
         for label, data in inputs.items():
+            if label == _EXECUTION_CONTEXT_INPUT_KEY:
+                continue
             wrapped_data = self._wrap_value(data)
             if isinstance(data, dict):
                 for key, val in data.items():
@@ -5183,12 +5271,16 @@ class WorkflowExecutor:
         if current_node_id:
             upstream_labels = self.get_upstream_node_labels(current_node_id)
             for label in upstream_labels:
+                if label in combined:
+                    continue
                 if label in self._wrapped_label_output_cache:
                     combined[label] = self._wrapped_label_output_cache[label]
                 elif label in self.label_to_output:
                     combined[label] = self._wrap_value(self.label_to_output[label])
         else:
             for label, data in self.label_to_output.items():
+                if label in combined:
+                    continue
                 if label in self._wrapped_label_output_cache:
                     combined[label] = self._wrapped_label_output_cache[label]
                 else:
@@ -5472,7 +5564,7 @@ class WorkflowExecutor:
         expr = self._transform_ternary_expression(expression[1:])
 
         if expr == "input":
-            first_input = next(iter(inputs.values()), {})
+            first_input = self._first_visible_input(inputs)
             data = first_input if isinstance(first_input, dict) else {"value": first_input}
             if preserve_type or raw:
                 return data
@@ -6603,23 +6695,37 @@ class WorkflowExecutor:
             if self.test_mode and node_data.get("pinnedData") is not None:
                 pinned_output = node_data.get("pinnedData")
                 output = (
-                    pinned_output if isinstance(pinned_output, dict) else {"value": pinned_output}
+                    copy.deepcopy(pinned_output)
+                    if isinstance(pinned_output, dict)
+                    else {"value": pinned_output}
                 )
                 if allow_branch_skip and node_type == "condition":
                     branch = output.get("branch")
                     true_targets = self.get_downstream_nodes(node_id, "true")
                     false_targets = self.get_downstream_nodes(node_id, "false")
                     if branch == "true":
+                        output["_skip_loop_source_handles"] = ["false"]
+                        loop_back_targets = self._loop_back_targets_for_source_handle(
+                            node_id, "true"
+                        )
                         self.skip_branch_targets_preserving_shared_downstream(
                             node_id,
                             active_targets=true_targets,
                             inactive_targets=false_targets,
+                            active_exclude_node_ids=loop_back_targets,
+                            inactive_stop_node_ids=loop_back_targets,
                         )
                     elif branch == "false":
+                        output["_skip_loop_source_handles"] = ["true"]
+                        loop_back_targets = self._loop_back_targets_for_source_handle(
+                            node_id, "false"
+                        )
                         self.skip_branch_targets_preserving_shared_downstream(
                             node_id,
                             active_targets=false_targets,
                             inactive_targets=true_targets,
+                            active_exclude_node_ids=loop_back_targets,
+                            inactive_stop_node_ids=loop_back_targets,
                         )
                 if allow_branch_skip and node_type == "switch":
                     branch = output.get("branch")
@@ -6632,15 +6738,23 @@ class WorkflowExecutor:
                     if branch:
                         active_targets = self.get_downstream_nodes(node_id, branch)
                         inactive_targets: list[str] = []
+                        skipped_handles: list[str] = []
                         for handle_id in handles:
                             if handle_id != branch:
+                                skipped_handles.append(handle_id)
                                 inactive_targets.extend(
                                     self.get_downstream_nodes(node_id, handle_id)
                                 )
+                        output["_skip_loop_source_handles"] = skipped_handles
+                        loop_back_targets = self._loop_back_targets_for_source_handle(
+                            node_id, branch
+                        )
                         self.skip_branch_targets_preserving_shared_downstream(
                             node_id,
                             active_targets=active_targets,
                             inactive_targets=inactive_targets,
+                            active_exclude_node_ids=loop_back_targets,
+                            inactive_stop_node_ids=loop_back_targets,
                         )
                 execution_time_ms = (time.time() - start_time) * 1000
                 return NodeResult(
@@ -6711,7 +6825,7 @@ class WorkflowExecutor:
                 }
             elif node_type == "llm":
                 combined_input = ""
-                for data in inputs.values():
+                for data in self._visible_inputs(inputs).values():
                     if isinstance(data, dict) and "text" in data:
                         combined_input += str(data["text"]) + " "
                     else:
@@ -6998,23 +7112,37 @@ class WorkflowExecutor:
             elif node_type == "condition":
                 condition = node_data.get("condition", "true")
                 result = self.evaluate_condition(condition, inputs, node_id)
-                output = {"branch": "true" if result else "false"}
+                selected_handle = "true" if result else "false"
+                output = {
+                    "branch": selected_handle,
+                    "_skip_loop_source_handles": ["false" if result else "true"],
+                }
 
                 if allow_branch_skip:
                     true_targets = self.get_downstream_nodes(node_id, "true")
                     false_targets = self.get_downstream_nodes(node_id, "false")
 
                     if result:
+                        loop_back_targets = self._loop_back_targets_for_source_handle(
+                            node_id, "true"
+                        )
                         self.skip_branch_targets_preserving_shared_downstream(
                             node_id,
                             active_targets=true_targets,
                             inactive_targets=false_targets,
+                            active_exclude_node_ids=loop_back_targets,
+                            inactive_stop_node_ids=loop_back_targets,
                         )
                     else:
+                        loop_back_targets = self._loop_back_targets_for_source_handle(
+                            node_id, "false"
+                        )
                         self.skip_branch_targets_preserving_shared_downstream(
                             node_id,
                             active_targets=false_targets,
                             inactive_targets=true_targets,
+                            active_exclude_node_ids=loop_back_targets,
+                            inactive_stop_node_ids=loop_back_targets,
                         )
 
             elif node_type == "switch":
@@ -7034,19 +7162,30 @@ class WorkflowExecutor:
                         selected_handle = f"case-{index}"
                         break
 
-                output = {"branch": selected_handle, "value": value}
+                handle_ids = [f"case-{index}" for index in range(len(cases))] + ["default"]
+                output = {
+                    "branch": selected_handle,
+                    "value": value,
+                    "_skip_loop_source_handles": [
+                        handle_id for handle_id in handle_ids if handle_id != selected_handle
+                    ],
+                }
 
                 if allow_branch_skip:
-                    handle_ids = [f"case-{index}" for index in range(len(cases))] + ["default"]
                     active_targets = self.get_downstream_nodes(node_id, selected_handle)
                     inactive_targets: list[str] = []
                     for handle_id in handle_ids:
                         if handle_id != selected_handle:
                             inactive_targets.extend(self.get_downstream_nodes(node_id, handle_id))
+                    loop_back_targets = self._loop_back_targets_for_source_handle(
+                        node_id, selected_handle
+                    )
                     self.skip_branch_targets_preserving_shared_downstream(
                         node_id,
                         active_targets=active_targets,
                         inactive_targets=inactive_targets,
+                        active_exclude_node_ids=loop_back_targets,
+                        inactive_stop_node_ids=loop_back_targets,
                     )
 
             elif node_type == "execute":
@@ -7088,7 +7227,7 @@ class WorkflowExecutor:
                     else:
                         execute_inputs = {"value": transformed_input}
                 else:
-                    first_input = next(iter(inputs.values()), {})
+                    first_input = self._first_visible_input(inputs)
                     if isinstance(first_input, dict):
                         execute_inputs = dict(first_input)
                     else:
@@ -7600,7 +7739,7 @@ class WorkflowExecutor:
             elif node_type == "wait":
                 duration_ms = node_data.get("duration", 1000)
                 time.sleep(duration_ms / 1000.0)
-                first_input = next(iter(inputs.values()), {})
+                first_input = self._first_visible_input(inputs)
                 output = first_input if isinstance(first_input, dict) else {"value": first_input}
 
             elif node_type == "throwError":
@@ -7703,7 +7842,7 @@ class WorkflowExecutor:
                         output = {"result": inputs}
             elif node_type == "merge":
                 merged_data = {}
-                for label, data in inputs.items():
+                for label, data in self._visible_inputs(inputs).items():
                     if isinstance(data, dict):
                         merged_data[label] = data
                     else:
@@ -8947,17 +9086,18 @@ class WorkflowExecutor:
                 workflow_logger.info(
                     "[%s] [consoleLog:%s] %s", workflow_display, node_label, resolved
                 )
-                first_input = next(iter(inputs.values()), {})
+                first_input = self._first_visible_input(inputs)
                 output = first_input if isinstance(first_input, dict) else {"value": first_input}
                 output = dict(output)
                 output["logMessage"] = self._unwrap_value(resolved)
 
             elif node_type == "chartOutput":
-                if len(inputs) == 1:
-                    source_data = next(iter(inputs.values()))
-                elif inputs:
+                visible_inputs = self._visible_inputs(inputs)
+                if len(visible_inputs) == 1:
+                    source_data = next(iter(visible_inputs.values()))
+                elif visible_inputs:
                     merged: dict = {}
-                    for value in inputs.values():
+                    for value in visible_inputs.values():
                         if isinstance(value, dict):
                             merged.update(value)
                     source_data = merged
@@ -9065,10 +9205,9 @@ class WorkflowExecutor:
                             DataTableRow.table_id == data_table_id
                         )
                         if filter_dict and isinstance(filter_dict, dict):
-                            for col_name, col_value in filter_dict.items():
-                                query = query.filter(
-                                    DataTableRow.data.op("->>")(col_name) == str(col_value)
-                                )
+                            clauses = _build_data_table_filter_clauses(filter_dict, columns)
+                            if clauses:
+                                query = query.filter(*clauses)
 
                         sort_template = node_data.get("dataTableSort", "")
                         if sort_template:
@@ -9999,6 +10138,9 @@ class WorkflowExecutor:
             skip_source_handles = output.pop("_skip_source_handles", None)
             if isinstance(skip_source_handles, list):
                 metadata["skip_source_handles"] = skip_source_handles
+            skip_loop_source_handles = output.pop("_skip_loop_source_handles", None)
+            if isinstance(skip_loop_source_handles, list):
+                metadata["skip_loop_source_handles"] = skip_loop_source_handles
             trace_id = self._pop_internal_trace_id(output)
             if trace_id:
                 metadata["trace_id"] = trace_id
@@ -10247,6 +10389,12 @@ class WorkflowExecutor:
                 if source_result
                 else set()
             )
+            skip_loop_source_handles = (
+                set(source_result.metadata.get("skip_loop_source_handles") or [])
+                if source_result
+                else set()
+            )
+            source_is_skipped = source_result is not None and source_result.status == "skipped"
             source_node = self.nodes.get(source_node_id, {})
             if (
                 source_node.get("type") == "loop"
@@ -10261,14 +10409,17 @@ class WorkflowExecutor:
                 )
             for edge in active_edges:
                 if edge["source"] == source_node_id:
-                    source_handle = edge.get("sourceHandle")
-                    if source_handle in skip_source_handles:
+                    if self._source_handle_is_skipped(edge, skip_source_handles):
                         continue
                     target = edge["target"]
                     target_handle = edge.get("targetHandle")
                     target_node = self.nodes.get(target, {})
 
                     if target_node.get("type") == "loop" and target_handle == "loop":
+                        if source_is_skipped:
+                            continue
+                        if self._source_handle_is_skipped(edge, skip_loop_source_handles):
+                            continue
                         if self.prepare_loop_for_reexecution(
                             loop_node_id=target,
                             active_edges=active_edges,
@@ -10293,20 +10444,19 @@ class WorkflowExecutor:
                         if target in self.skipped_nodes:
                             node = self.nodes[target]
                             node_label = node.get("data", {}).get("label", target)
-                            node_results.append(
-                                self._stamp_node_result(
-                                    NodeResult(
-                                        node_id=target,
-                                        node_label=node_label,
-                                        node_type=node.get("type", "unknown"),
-                                        status="skipped",
-                                        output={},
-                                        execution_time_ms=0,
-                                    )
+                            skipped_result = self._stamp_node_result(
+                                NodeResult(
+                                    node_id=target,
+                                    node_label=node_label,
+                                    node_type=node.get("type", "unknown"),
+                                    status="skipped",
+                                    output={},
+                                    execution_time_ms=0,
                                 )
                             )
+                            node_results.append(skipped_result)
                             completed_nodes.add(target)
-                            schedule_downstream(target)
+                            schedule_downstream(target, skipped_result)
                         else:
                             already_running = any(nid == target for nid in running_futures.values())
                             if not already_running:
@@ -10394,6 +10544,12 @@ class WorkflowExecutor:
                                 if res.status == "success":
                                     with pending_lock:
                                         result_node = self.nodes.get(nid, {})
+                                        skip_source_handles = set(
+                                            res.metadata.get("skip_source_handles") or []
+                                        )
+                                        skip_loop_source_handles = set(
+                                            res.metadata.get("skip_loop_source_handles") or []
+                                        )
                                         if (
                                             result_node.get("type") == "loop"
                                             and res.output.get("branch") == "done"
@@ -10408,6 +10564,10 @@ class WorkflowExecutor:
                                             )
                                         for edge in active_edges:
                                             if edge["source"] == nid:
+                                                if self._source_handle_is_skipped(
+                                                    edge, skip_source_handles
+                                                ):
+                                                    continue
                                                 tgt = edge["target"]
                                                 tgt_handle = edge.get("targetHandle")
                                                 tgt_node = self.nodes.get(tgt, {})
@@ -10415,6 +10575,10 @@ class WorkflowExecutor:
                                                     tgt_node.get("type") == "loop"
                                                     and tgt_handle == "loop"
                                                 ):
+                                                    if self._source_handle_is_skipped(
+                                                        edge, skip_loop_source_handles
+                                                    ):
+                                                        continue
                                                     if self.prepare_loop_for_reexecution(
                                                         loop_node_id=tgt,
                                                         active_edges=active_edges,
@@ -10648,6 +10812,9 @@ def resume_workflow_execution(
         invoked_by_agent=bool(snapshot.get("invoked_by_agent", False)),
     )
     wf_executor.node_outputs = copy.deepcopy(snapshot.get("node_outputs") or {})
+    wf_executor.node_execution_contexts = copy.deepcopy(
+        snapshot.get("node_execution_contexts") or {}
+    )
     wf_executor.label_to_output = copy.deepcopy(snapshot.get("label_to_output") or {})
     wf_executor._rebuild_wrapped_label_output_cache()
     wf_executor.skipped_nodes = set(snapshot.get("skipped_nodes") or [])
@@ -10749,6 +10916,12 @@ def resume_workflow_execution(
         skip_source_handles = (
             set(source_result.metadata.get("skip_source_handles") or []) if source_result else set()
         )
+        skip_loop_source_handles = (
+            set(source_result.metadata.get("skip_loop_source_handles") or [])
+            if source_result
+            else set()
+        )
+        source_is_skipped = source_result is not None and source_result.status == "skipped"
         source_node = wf_executor.nodes.get(source_node_id, {})
         if (
             source_node.get("type") == "loop"
@@ -10763,14 +10936,17 @@ def resume_workflow_execution(
             )
         for edge in active_edges:
             if edge["source"] == source_node_id:
-                source_handle = edge.get("sourceHandle")
-                if source_handle in skip_source_handles:
+                if wf_executor._source_handle_is_skipped(edge, skip_source_handles):
                     continue
                 target = edge["target"]
                 target_handle = edge.get("targetHandle")
                 target_node = wf_executor.nodes.get(target, {})
 
                 if target_node.get("type") == "loop" and target_handle == "loop":
+                    if source_is_skipped:
+                        continue
+                    if wf_executor._source_handle_is_skipped(edge, skip_loop_source_handles):
+                        continue
                     if wf_executor.prepare_loop_for_reexecution(
                         loop_node_id=target,
                         active_edges=active_edges,
@@ -10797,20 +10973,19 @@ def resume_workflow_execution(
                     if target in wf_executor.skipped_nodes:
                         node = wf_executor.nodes[target]
                         node_label = node.get("data", {}).get("label", target)
-                        node_results.append(
-                            wf_executor._stamp_node_result(
-                                NodeResult(
-                                    node_id=target,
-                                    node_label=node_label,
-                                    node_type=node.get("type", "unknown"),
-                                    status="skipped",
-                                    output={},
-                                    execution_time_ms=0,
-                                )
+                        skipped_result = wf_executor._stamp_node_result(
+                            NodeResult(
+                                node_id=target,
+                                node_label=node_label,
+                                node_type=node.get("type", "unknown"),
+                                status="skipped",
+                                output={},
+                                execution_time_ms=0,
                             )
                         )
+                        node_results.append(skipped_result)
                         completed_nodes.add(target)
-                        schedule_downstream(target)
+                        schedule_downstream(target, skipped_result)
                     else:
                         already_running = any(
                             pending_node_id == target
@@ -10875,6 +11050,12 @@ def resume_workflow_execution(
                             if res.status == "success":
                                 with pending_lock:
                                     result_node = wf_executor.nodes.get(nid, {})
+                                    skip_source_handles = set(
+                                        res.metadata.get("skip_source_handles") or []
+                                    )
+                                    skip_loop_source_handles = set(
+                                        res.metadata.get("skip_loop_source_handles") or []
+                                    )
                                     if (
                                         result_node.get("type") == "loop"
                                         and res.output.get("branch") == "done"
@@ -10889,6 +11070,10 @@ def resume_workflow_execution(
                                         )
                                     for edge in active_edges:
                                         if edge["source"] == nid:
+                                            if wf_executor._source_handle_is_skipped(
+                                                edge, skip_source_handles
+                                            ):
+                                                continue
                                             tgt = edge["target"]
                                             tgt_handle = edge.get("targetHandle")
                                             tgt_node = wf_executor.nodes.get(tgt, {})
@@ -10896,6 +11081,10 @@ def resume_workflow_execution(
                                                 tgt_node.get("type") == "loop"
                                                 and tgt_handle == "loop"
                                             ):
+                                                if wf_executor._source_handle_is_skipped(
+                                                    edge, skip_loop_source_handles
+                                                ):
+                                                    continue
                                                 if wf_executor.prepare_loop_for_reexecution(
                                                     loop_node_id=tgt,
                                                     active_edges=active_edges,
@@ -11062,6 +11251,9 @@ def execute_llm_batch_notification_branch(
         invoked_by_agent=bool(snapshot.get("invoked_by_agent", False)),
     )
     wf_executor.node_outputs = copy.deepcopy(snapshot.get("node_outputs") or {})
+    wf_executor.node_execution_contexts = copy.deepcopy(
+        snapshot.get("node_execution_contexts") or {}
+    )
     wf_executor.label_to_output = copy.deepcopy(snapshot.get("label_to_output") or {})
     wf_executor._rebuild_wrapped_label_output_cache()
     wf_executor.skipped_nodes = set(snapshot.get("skipped_nodes") or [])
@@ -11155,6 +11347,12 @@ def execute_llm_batch_notification_branch(
         skip_source_handles = (
             set(source_result.metadata.get("skip_source_handles") or []) if source_result else set()
         )
+        skip_loop_source_handles = (
+            set(source_result.metadata.get("skip_loop_source_handles") or [])
+            if source_result
+            else set()
+        )
+        source_is_skipped = source_result is not None and source_result.status == "skipped"
         source_node = wf_executor.nodes.get(source_id, {})
         if (
             source_node.get("type") == "loop"
@@ -11173,13 +11371,17 @@ def execute_llm_batch_notification_branch(
             source_handle = edge.get("sourceHandle")
             if only_source_handles is not None and source_handle not in only_source_handles:
                 continue
-            if source_handle in skip_source_handles:
+            if wf_executor._source_handle_is_skipped(edge, skip_source_handles):
                 continue
 
             target = edge["target"]
             target_handle = edge.get("targetHandle")
             target_node = wf_executor.nodes.get(target, {})
             if target_node.get("type") == "loop" and target_handle == "loop":
+                if source_is_skipped:
+                    continue
+                if wf_executor._source_handle_is_skipped(edge, skip_loop_source_handles):
+                    continue
                 if wf_executor.prepare_loop_for_reexecution(
                     loop_node_id=target,
                     active_edges=branch_edges,
@@ -11210,7 +11412,7 @@ def execute_llm_batch_notification_branch(
                     completed_nodes.add(target)
                     if agent_progress_queue is not None:
                         agent_progress_queue.put(_build_node_complete_event(skipped_result, {}))
-                    schedule_downstream(target)
+                    schedule_downstream(target, skipped_result)
                 else:
                     _submit_node(target)
 
@@ -11287,6 +11489,9 @@ def execute_hitl_notification_branch(
         invoked_by_agent=bool(snapshot.get("invoked_by_agent", False)),
     )
     wf_executor.node_outputs = copy.deepcopy(snapshot.get("node_outputs") or {})
+    wf_executor.node_execution_contexts = copy.deepcopy(
+        snapshot.get("node_execution_contexts") or {}
+    )
     wf_executor.label_to_output = copy.deepcopy(snapshot.get("label_to_output") or {})
     wf_executor._rebuild_wrapped_label_output_cache()
     wf_executor.skipped_nodes = set(snapshot.get("skipped_nodes") or [])
@@ -11338,6 +11543,12 @@ def execute_hitl_notification_branch(
         skip_source_handles = (
             set(source_result.metadata.get("skip_source_handles") or []) if source_result else set()
         )
+        skip_loop_source_handles = (
+            set(source_result.metadata.get("skip_loop_source_handles") or [])
+            if source_result
+            else set()
+        )
+        source_is_skipped = source_result is not None and source_result.status == "skipped"
         source_node = wf_executor.nodes.get(source_node_id, {})
         if (
             source_node.get("type") == "loop"
@@ -11357,7 +11568,7 @@ def execute_hitl_notification_branch(
             source_handle = edge.get("sourceHandle")
             if only_source_handles is not None and source_handle not in only_source_handles:
                 continue
-            if source_handle in skip_source_handles:
+            if wf_executor._source_handle_is_skipped(edge, skip_source_handles):
                 continue
 
             target = edge["target"]
@@ -11365,6 +11576,10 @@ def execute_hitl_notification_branch(
             target_node = wf_executor.nodes.get(target, {})
 
             if target_node.get("type") == "loop" and target_handle == "loop":
+                if source_is_skipped:
+                    continue
+                if wf_executor._source_handle_is_skipped(edge, skip_loop_source_handles):
+                    continue
                 if wf_executor.prepare_loop_for_reexecution(
                     loop_node_id=target,
                     active_edges=active_edges,
@@ -11402,7 +11617,7 @@ def execute_hitl_notification_branch(
                     branch_node_results.append(skipped_result)
                     node_results.append(skipped_result)
                     completed_nodes.add(target)
-                    schedule_downstream(target)
+                    schedule_downstream(target, skipped_result)
                 else:
                     already_running = any(
                         pending_node_id == target for pending_node_id in running_futures.values()
@@ -11783,6 +11998,12 @@ def _execute_workflow_streaming_impl(
         skip_source_handles = (
             set(source_result.metadata.get("skip_source_handles") or []) if source_result else set()
         )
+        skip_loop_source_handles = (
+            set(source_result.metadata.get("skip_loop_source_handles") or [])
+            if source_result
+            else set()
+        )
+        source_is_skipped = source_result is not None and source_result.status == "skipped"
         source_node = wf_executor.nodes.get(source_node_id, {})
         if (
             source_node.get("type") == "loop"
@@ -11797,14 +12018,17 @@ def _execute_workflow_streaming_impl(
             )
         for edge in active_edges:
             if edge["source"] == source_node_id:
-                source_handle = edge.get("sourceHandle")
-                if source_handle in skip_source_handles:
+                if wf_executor._source_handle_is_skipped(edge, skip_source_handles):
                     continue
                 target = edge["target"]
                 target_handle = edge.get("targetHandle")
                 target_node = wf_executor.nodes.get(target, {})
 
                 if target_node.get("type") == "loop" and target_handle == "loop":
+                    if source_is_skipped:
+                        continue
+                    if wf_executor._source_handle_is_skipped(edge, skip_loop_source_handles):
+                        continue
                     if wf_executor.prepare_loop_for_reexecution(
                         loop_node_id=target,
                         active_edges=active_edges,
@@ -11826,21 +12050,20 @@ def _execute_workflow_streaming_impl(
                     if target in wf_executor.skipped_nodes:
                         node = wf_executor.nodes[target]
                         node_label = node.get("data", {}).get("label", target)
-                        node_results.append(
-                            wf_executor._stamp_node_result(
-                                NodeResult(
-                                    node_id=target,
-                                    node_label=node_label,
-                                    node_type=node.get("type", "unknown"),
-                                    status="skipped",
-                                    output={},
-                                    execution_time_ms=0,
-                                )
+                        skipped_result = wf_executor._stamp_node_result(
+                            NodeResult(
+                                node_id=target,
+                                node_label=node_label,
+                                node_type=node.get("type", "unknown"),
+                                status="skipped",
+                                output={},
+                                execution_time_ms=0,
                             )
                         )
+                        node_results.append(skipped_result)
                         completed_nodes.add(target)
                         nodes_to_schedule.append(target)
-                        schedule_downstream(target)
+                        schedule_downstream(target, skipped_result)
                     else:
                         already_running = any(nid == target for nid in running_futures.values())
                         if not already_running:

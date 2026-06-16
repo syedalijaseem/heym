@@ -685,12 +685,112 @@ class _ScalarsResult:
         return SimpleNamespace(all=lambda: self._values)
 
 
+class WorkflowExecutorContextSnapshotTests(unittest.TestCase):
+    def test_condition_false_skips_default_true_source_handle(self) -> None:
+        nodes = [
+            {
+                "id": "condition",
+                "type": "condition",
+                "data": {"label": "isValid", "condition": "$input.valid"},
+            },
+            {"id": "loop", "type": "loop", "data": {"label": "loop"}},
+            {"id": "update", "type": "dataTable", "data": {"label": "updateRow"}},
+        ]
+        executor = WorkflowExecutor(nodes=nodes, edges=[])
+
+        result = executor.execute_node("condition", {"input": {"valid": False}})
+        skipped_handles = set(result.metadata.get("skip_loop_source_handles") or [])
+
+        self.assertEqual(result.output, {"branch": "false"})
+        self.assertIn("true", skipped_handles)
+        self.assertTrue(
+            executor._source_handle_is_skipped(
+                {"source": "condition", "target": "loop"},
+                skipped_handles,
+            )
+        )
+        self.assertFalse(
+            executor._source_handle_is_skipped(
+                {"source": "condition", "target": "update", "sourceHandle": "false"},
+                skipped_handles,
+            )
+        )
+
+    def test_downstream_loop_expression_uses_source_iteration_snapshot(self) -> None:
+        nodes = [
+            {"id": "loop", "type": "loop", "data": {"label": "loop"}},
+            {
+                "id": "condition",
+                "type": "condition",
+                "data": {"label": "usernameRepoValid"},
+            },
+            {"id": "update", "type": "dataTable", "data": {"label": "updateRow"}},
+        ]
+        edges = [
+            {
+                "id": "e-loop-condition",
+                "source": "loop",
+                "target": "condition",
+                "sourceHandle": "loop",
+            },
+            {
+                "id": "e-condition-update",
+                "source": "condition",
+                "target": "update",
+                "sourceHandle": "false",
+            },
+        ]
+        executor = WorkflowExecutor(nodes=nodes, edges=edges)
+
+        first_loop_output = {
+            "item": {"id": "row-1", "data": {"targetRepo": "MoaKK/npmstats"}},
+            "index": 0,
+            "branch": "loop",
+        }
+        second_loop_output = {
+            "item": {"id": "row-2", "data": {"targetRepo": "kisugez/moderator"}},
+            "index": 1,
+            "branch": "loop",
+        }
+
+        executor.store_node_output("loop", "loop", first_loop_output, {})
+        condition_inputs = executor.get_node_inputs_for_edges("condition", edges)
+        executor.store_node_output(
+            "condition",
+            "usernameRepoValid",
+            {"branch": "false"},
+            condition_inputs,
+        )
+        executor.store_node_output("loop", "loop", second_loop_output, {})
+
+        update_inputs = executor.get_node_inputs_for_edges("update", edges)
+        resolved_row_id = executor.resolve_expression(
+            "$loop.item.id",
+            update_inputs,
+            "update",
+            preserve_type=True,
+        )
+
+        self.assertEqual(resolved_row_id, "row-1")
+        self.assertEqual(
+            executor.resolve_expression(
+                "$usernameRepoValid.branch",
+                update_inputs,
+                "update",
+                preserve_type=True,
+            ),
+            "false",
+        )
+
+
 class _FakeQuery:
     def __init__(self, result: object, count_result: int = 0) -> None:
         self._result = result
         self._count_result = count_result
+        self.filter_args: list[tuple[object, ...]] = []
 
     def filter(self, *_args: object) -> "_FakeQuery":
+        self.filter_args.append(_args)
         return self
 
     def first(self) -> object:
@@ -700,6 +800,8 @@ class _FakeQuery:
         return self
 
     def all(self) -> list[object]:
+        if isinstance(self._result, list):
+            return self._result
         return [] if self._result is None else [self._result]
 
     def count(self) -> int:
@@ -748,6 +850,7 @@ class _FakeDataTableSession:
         self.count_result = count_result
         self.added_rows: list[DataTableRow] = []
         self.commits = 0
+        self.last_row_query: _FakeQuery | None = None
 
     def __enter__(self) -> "_FakeDataTableSession":
         return self
@@ -759,7 +862,8 @@ class _FakeDataTableSession:
         if model is DataTable:
             return _FakeQuery(self.table)
         if model is DataTableRow:
-            return _FakeQuery(self.existing_row, count_result=self.count_result)
+            self.last_row_query = _FakeQuery(self.existing_row, count_result=self.count_result)
+            return self.last_row_query
         return _FakeQuery(None)
 
     def add(self, row: DataTableRow) -> None:
@@ -1004,6 +1108,65 @@ class WorkflowExecutorDataTableNodeTests(unittest.TestCase):
         self.assertEqual(result.status, "success")
         self.assertEqual(result.output["operation"], "count")
         self.assertEqual(result.output["count"], 3)
+
+    def test_find_uses_operator_filter_for_data_and_metadata_columns(self) -> None:
+        from sqlalchemy.dialects import postgresql
+
+        table_id = uuid.uuid4()
+        table = SimpleNamespace(
+            id=table_id,
+            owner_id=uuid.uuid4(),
+            columns=[
+                {"name": "status", "type": "string"},
+                {"name": "age", "type": "number"},
+            ],
+        )
+        row = SimpleNamespace(
+            id=uuid.uuid4(),
+            data={"status": "active", "age": "21"},
+            created_at="2026-06-04T12:00:00Z",
+        )
+        fake_db = _FakeDataTableSession(table, existing_row=[row])
+        nodes = [
+            {
+                "id": "dt",
+                "type": "dataTable",
+                "data": {
+                    "label": "dataTable",
+                    "dataTableId": str(table_id),
+                    "dataTableOperation": "find",
+                    "dataTableFilter": (
+                        '{"status": "active", "age": {"$gte": 18}, '
+                        '"created_at": {"$contains": "2026-06-04"}}'
+                    ),
+                },
+            }
+        ]
+        executor = WorkflowExecutor(nodes=nodes, edges=[], actor_user_id=table.owner_id)
+
+        with patch("app.db.session.SessionLocal", return_value=fake_db):
+            result = executor.execute_node("dt", {})
+
+        self.assertEqual(result.status, "success")
+        self.assertEqual(result.output["operation"], "find")
+        self.assertEqual(result.output["count"], 1)
+        self.assertEqual(result.output["rows"][0]["data"], {"status": "active", "age": 21})
+        self.assertIsNotNone(fake_db.last_row_query)
+        filter_args = fake_db.last_row_query.filter_args
+        self.assertEqual(len(filter_args), 2)
+        operator_sql = " ".join(
+            str(
+                clause.compile(
+                    dialect=postgresql.dialect(),
+                    compile_kwargs={"literal_binds": True},
+                )
+            )
+            for clause in filter_args[1]
+        )
+        self.assertIn("data ->> 'status'", operator_sql)
+        self.assertIn("CAST", operator_sql.upper())
+        self.assertIn("data_table_rows.created_at", operator_sql)
+        self.assertIn("ILIKE", operator_sql.upper())
 
 
 class DataTableFilterClauseTests(unittest.TestCase):
