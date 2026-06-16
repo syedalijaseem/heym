@@ -10774,11 +10774,16 @@ onUnmounted(() => {
                 @update:model-value="updateNodeData('dataTableFilter', $event)"
               />
               <p class="text-xs text-muted-foreground">
-                {{
-                  selectedNode.data.dataTableOperation === "count"
-                    ? 'Plain value = equals. Operators: $eq $ne $gt $gte $lt $lte $contains $in (e.g. age with $gt 18)'
-                    : 'Exact-match filter: {"column": "$input.value"}'
-                }}
+                <template v-if="['find', 'count'].includes(selectedNode.data.dataTableOperation || '')">
+                  Plain value = equals. Use operators like
+                  <code>{"age": {"$gt": 18}}</code>
+                  or
+                  <code>{"created_at": {"$contains": "2026-06"}}</code>.
+                </template>
+                <template v-else>
+                  Exact-match lookup for upsert:
+                  <code>{"column": "$input.value"}</code>
+                </template>
               </p>
             </div>
 
