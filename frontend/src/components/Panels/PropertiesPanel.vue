@@ -500,7 +500,8 @@ type ChartOutputExpressionFieldKey =
   | "min"
   | "max"
   | "unit"
-  | "title";
+  | "title"
+  | "url";
 
 interface ChartOutputExpressionField {
   key: ChartOutputExpressionFieldKey;
@@ -3084,6 +3085,7 @@ const chartOutputExpressionFields = computed<ChartOutputExpressionField[]>(() =>
   }
 
   fields.push({ key: "title", label: "Title" });
+  fields.push({ key: "url", label: "Website URL" });
   return fields;
 });
 
@@ -8695,6 +8697,29 @@ onUnmounted(() => {
                 @navigate="handleChartOutputExpressionFieldNavigate"
                 @register-field-index="onChartOutputRegisterExpressionFieldIndex"
                 @update:model-value="updateNodeData('title', $event)"
+              />
+            </div>
+
+            <div class="space-y-2">
+              <Label>Website URL</Label>
+              <ExpressionInput
+                :ref="(el: unknown) => setChartOutputExpressionInputRef('url', el)"
+                :model-value="selectedNode.data.url || ''"
+                placeholder="https://… (optional)"
+                single-line
+                :nodes="workflowStore.nodes"
+                :node-results="workflowStore.nodeResults"
+                :edges="workflowStore.edges"
+                :current-node-id="selectedNode.id"
+                :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                dialog-key-label="Website URL"
+                field-key="url"
+                :navigation-enabled="chartOutputExpressionFieldCount > 1"
+                :navigation-index="chartOutputExpressionFieldIndex('url')"
+                :navigation-total="chartOutputExpressionFieldCount"
+                @navigate="handleChartOutputExpressionFieldNavigate"
+                @register-field-index="onChartOutputRegisterExpressionFieldIndex"
+                @update:model-value="updateNodeData('url', $event)"
               />
             </div>
           </template>
