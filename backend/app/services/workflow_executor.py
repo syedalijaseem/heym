@@ -8792,15 +8792,20 @@ class WorkflowExecutor:
                 service = SupabaseService(supabase_config)
 
                 def _resolve_supabase_auto_map_source() -> object:
-                    if not inputs:
+                    upstream_inputs = {
+                        key: value
+                        for key, value in inputs.items()
+                        if key != _EXECUTION_CONTEXT_INPUT_KEY
+                    }
+                    if not upstream_inputs:
                         raise ValueError(
                             "Supabase auto-map requires exactly one upstream input object"
                         )
-                    if len(inputs) != 1:
+                    if len(upstream_inputs) != 1:
                         raise ValueError(
                             "Supabase auto-map requires exactly one upstream input source"
                         )
-                    return next(iter(inputs.values()))
+                    return next(iter(upstream_inputs.values()))
 
                 def _parse_ignored_fields(field_name: str) -> set[str]:
                     raw_value = str(node_data.get(field_name, "") or "").strip()
