@@ -462,6 +462,7 @@ class CredentialType(str, Enum):
     flaresolverr = "flaresolverr"
     google_sheets = "google_sheets"
     bigquery = "bigquery"
+    supabase = "supabase"
     s3 = "s3"
     elevenlabs = "elevenlabs"
 
@@ -516,6 +517,12 @@ class CredentialConfigS3(BaseModel):
     aws_session_token: str | None = None
 
 
+class CredentialConfigSupabase(BaseModel):
+    supabase_url: str
+    supabase_key: str
+    supabase_schema: str | None = "public"
+
+
 class CredentialCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     type: CredentialType
@@ -527,12 +534,35 @@ class CredentialUpdate(BaseModel):
     config: dict | None = None
 
 
+class CredentialTestRequest(BaseModel):
+    type: CredentialType
+    config: dict | None = None
+    credential_id: uuid.UUID | None = None
+
+
+class CredentialTestResponse(BaseModel):
+    success: bool
+    message: str
+
+
+class SupabaseTablesResponse(BaseModel):
+    tables: list[str]
+    success: bool = True
+
+
+class SupabaseColumnsResponse(BaseModel):
+    columns: list[str]
+    success: bool = True
+
+
 class CredentialResponse(BaseModel):
     id: uuid.UUID
     name: str
     type: CredentialType
     masked_value: str | None = None
     header_key: str | None = None
+    supabase_url: str | None = None
+    supabase_schema: str | None = None
     created_at: datetime
     updated_at: datetime
 

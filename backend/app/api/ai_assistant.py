@@ -677,6 +677,7 @@ _INTEGRATION_CREDENTIAL_NODE_TYPES = {
     "googleSheets",
     "slackTrigger",
     "bigquery",
+    "supabase",
 }
 
 

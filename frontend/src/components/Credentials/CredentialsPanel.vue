@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
-import { Brain, Globe, Key, MessageSquare, Plus, Share2, Shield, Trash2, Users, X } from "lucide-vue-next";
+import { Brain, Database, Globe, Key, MessageSquare, Plus, Share2, Shield, Trash2, Users, X } from "lucide-vue-next";
 
 import type { Credential, CredentialListItem, CredentialShare, CredentialType } from "@/types/credential";
 import type { Team, TeamShare } from "@/types/team";
@@ -70,6 +70,8 @@ function getTypeIcon(type: CredentialType): typeof Brain {
       return MessageSquare;
     case "slack":
       return MessageSquare;
+    case "supabase":
+      return Database;
     default:
       return Key;
   }
@@ -94,6 +96,8 @@ function getTypeColor(type: CredentialType): string {
       return "bg-indigo-500/10 text-indigo-500";
     case "slack":
       return "bg-emerald-500/10 text-emerald-500";
+    case "supabase":
+      return "bg-lime-500/10 text-lime-600";
     default:
       return "bg-muted text-muted-foreground";
   }

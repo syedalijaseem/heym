@@ -18,6 +18,7 @@ Some integration nodes do **not** require credentials. [WebSocket Trigger](../no
 | **Grist** | [Grist node](../nodes/grist-node.md) | `api_key`, `server_url` |
 | **Google Sheets** | [Google Sheets node](../nodes/google-sheets-node.md) | `client_id`, `client_secret` + OAuth2 consent |
 | **BigQuery** | [BigQuery node](../nodes/bigquery-node.md) | `client_id`, `client_secret` + OAuth2 consent |
+| **Supabase** | [Supabase node](../nodes/supabase-node.md) | `supabase_url`, `supabase_key`, optional `supabase_schema` |
 | **Amazon S3** | [Amazon S3 node](../nodes/amazon-s3-node.md) | `aws_access_key_id`, `aws_secret_access_key`, `aws_region` |
 | **SMTP** | [Send Email](../nodes/send-email-node.md) | `host`, `port`, `email`, `password` |
 | **IMAP** | [IMAP Trigger node](../nodes/imap-trigger-node.md) | `imap_host`, `imap_port`, `imap_username`, `imap_password` |
@@ -147,6 +148,30 @@ Tokens (`access_token`, `refresh_token`, `token_expiry`) are stored and refreshe
 ### Used By
 
 - [BigQuery node](../nodes/bigquery-node.md)
+
+---
+
+## Supabase
+
+The Supabase credential connects Heym to a Supabase project's PostgREST API so workflows can query and mutate Postgres-backed tables.
+
+### Required Fields
+
+| Field | Description |
+|-------|-------------|
+| `supabase_url` | Project base URL, for example `https://your-project.supabase.co` |
+| `supabase_key` | API key with access to the target tables |
+| `supabase_schema` | Optional default schema (defaults to `public`) |
+
+### Notes
+
+- The [Supabase node](../nodes/supabase-node.md) talks to `/rest/v1/<table>` and currently supports exact-match filters.
+- For write operations, prefer a key intended for trusted server-side use with the minimum required table permissions.
+- Nodes can override the schema per step even if the credential defines a default schema.
+
+### Used By
+
+- [Supabase node](../nodes/supabase-node.md)
 
 ---
 

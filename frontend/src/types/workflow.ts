@@ -154,6 +154,7 @@ export type NodeType =
   | "grist"
   | "googleSheets"
   | "bigquery"
+  | "supabase"
   | "throwError"
   | "rabbitmq"
   | "imapTrigger"
@@ -502,6 +503,20 @@ export interface NodeData {
   bqRowsInputMode?: "raw" | "selective";
   bqRows?: string;
   bqMappings?: Array<{ key: string; value: string }>;
+  supabaseOperation?: "select" | "insert" | "update" | "upsert" | "delete";
+  supabaseSchema?: string;
+  supabaseTable?: string;
+  supabaseSelectColumns?: string;
+  supabaseFilter?: string;
+  supabaseLimit?: string;
+  supabaseOrderBy?: string;
+  supabaseAscending?: boolean;
+  supabaseRowsInputMode?: "raw" | "auto";
+  supabaseDataInputMode?: "raw" | "auto";
+  supabaseIgnoredInputFields?: string;
+  supabaseRows?: string;
+  supabaseOnConflict?: string;
+  supabaseData?: string;
   gsOperation?: string;
   gsSpreadsheetId?: string;
   gsSheetName?: string;
