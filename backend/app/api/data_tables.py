@@ -42,6 +42,8 @@ from app.models.schemas import (
 )
 from app.services.encryption import decrypt_config
 from app.services.llm_provider import is_reasoning_model
+from app.services.llm_service import execute_llm
+from app.services.llm_trace import LLMTraceContext
 from app.services.upload_limits import read_upload_file_limited
 
 router = APIRouter()
@@ -271,6 +273,33 @@ def _apply_defaults(data: dict, columns: list[dict]) -> dict:
         if name not in result and col.get("defaultValue") is not None:
             result[name] = col["defaultValue"]
     return result
+
+
+def _column_names(columns: list[dict]) -> set[str]:
+    """Return valid column names from stored DataTable column definitions."""
+    return {
+        str(col.get("name"))
+        for col in columns
+        if isinstance(col, dict) and str(col.get("name") or "").strip()
+    }
+
+
+async def _prune_rows_to_columns(
+    table_id: uuid.UUID,
+    columns: list[dict],
+    db: AsyncSession,
+    updated_by: uuid.UUID,
+) -> None:
+    """Remove row JSON keys that no longer exist in the table schema."""
+    allowed_names = _column_names(columns)
+    result = await db.execute(select(DataTableRow).where(DataTableRow.table_id == table_id))
+    rows = result.scalars().all()
+    for row in rows:
+        row_data = row.data if isinstance(row.data, dict) else {}
+        pruned_data = {key: value for key, value in row_data.items() if key in allowed_names}
+        if pruned_data != row_data:
+            row.data = pruned_data
+            row.updated_by = updated_by
 
 
 async def _check_unique_constraints(
@@ -526,6 +555,7 @@ async def update_data_table(
         for i, col in enumerate(columns_json):
             col["id"] = str(col.get("id", uuid.uuid4()))
             col["order"] = col.get("order", i)
+        await _prune_rows_to_columns(table_id, columns_json, db, current_user.id)
         table.columns = columns_json
 
     await db.flush()
@@ -557,6 +587,68 @@ async def delete_data_table(
     if table is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Data table not found")
     await db.delete(table)
+
+
+@router.post(
+    "/{table_id}/clone", response_model=DataTableResponse, status_code=status.HTTP_201_CREATED
+)
+async def clone_data_table(
+    table_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> DataTableResponse:
+    """Duplicate a data table (columns + all rows) into a new table owned by the user."""
+    source = await _get_data_table_with_access(table_id, current_user.id, db)
+
+    new_name = f"{source.name} (Copy)"
+    count = 1
+    while True:
+        existing = await db.execute(
+            select(DataTable).where(
+                DataTable.owner_id == current_user.id,
+                DataTable.name == new_name,
+            )
+        )
+        if existing.scalar_one_or_none() is None:
+            break
+        count += 1
+        new_name = f"{source.name} (Copy {count})"
+
+    new_table = DataTable(
+        name=new_name,
+        description=source.description,
+        columns=source.columns,
+        owner_id=current_user.id,
+    )
+    db.add(new_table)
+    await db.flush()
+
+    source_rows = await db.execute(select(DataTableRow).where(DataTableRow.table_id == source.id))
+    row_count = 0
+    for src_row in source_rows.scalars():
+        db.add(
+            DataTableRow(
+                table_id=new_table.id,
+                data=src_row.data,
+                created_by=current_user.id,
+                updated_by=current_user.id,
+            )
+        )
+        row_count += 1
+
+    await db.flush()
+    await db.refresh(new_table)
+
+    return DataTableResponse(
+        id=new_table.id,
+        name=new_table.name,
+        description=new_table.description,
+        columns=new_table.columns,
+        owner_id=new_table.owner_id,
+        row_count=row_count,
+        created_at=new_table.created_at,
+        updated_at=new_table.updated_at,
+    )
 
 
 # ── Row CRUD ─────────────────────────────────────────────────────────────────
@@ -1062,7 +1154,7 @@ async def generate_data_table_schema(
     """Generate column suggestions for a data table from a description or JSON."""
     # Imported lazily to avoid a circular import (ai_assistant -> workflow_executor
     # -> data_tables). Tests patch these at app.api.ai_assistant.<name>.
-    from app.api.ai_assistant import get_credential_for_user, get_openai_client
+    from app.api.ai_assistant import get_credential_for_user
 
     credential = await get_credential_for_user(request.credential_id, current_user, db)
     if not credential:
@@ -1084,21 +1176,29 @@ async def generate_data_table_schema(
     existing_names = {col.name for col in existing_cols}
 
     config = decrypt_config(credential.encrypted_config)
-    client, _ = get_openai_client(credential.type, config)
+    api_key = str(config.get("api_key") or "")
+    raw_base_url = config.get("base_url")
+    base_url = str(raw_base_url) if raw_base_url else None
+    trace_context = LLMTraceContext(
+        user_id=current_user.id,
+        credential_id=credential.id,
+        source="data_table_ai",
+        node_label="AI DataTable Extend" if existing_cols else "AI DataTable Create",
+    )
 
-    kwargs: dict[str, Any] = {
-        "model": request.model,
-        "messages": [
-            {"role": "system", "content": _build_schema_system_prompt(bool(existing_cols))},
-            {"role": "user", "content": _build_schema_user_prompt(request.prompt, existing_cols)},
-        ],
-        "extra_body": {"disable_reasoning": True},
-    }
-    if not is_reasoning_model(request.model):
-        kwargs["temperature"] = 0.2
-
-    response = client.chat.completions.create(**kwargs)
-    content = response.choices[0].message.content or ""
+    result = await execute_llm(
+        credential_type=credential.type.value,
+        api_key=api_key,
+        base_url=base_url,
+        model=request.model,
+        system_instruction=_build_schema_system_prompt(bool(existing_cols)),
+        user_message=_build_schema_user_prompt(request.prompt, existing_cols),
+        temperature=None if is_reasoning_model(request.model) else 0.2,
+        extra_body={"disable_reasoning": True},
+        trace_context=trace_context,
+        content_only=True,
+    )
+    content = str(result.get("text") or "")
 
     payload = _extract_schema_payload(content)
     if payload is None:

@@ -773,7 +773,8 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
         | "gauge"
         | "scatter"
         | "proportion"
-        | "barGauge",
+        | "barGauge"
+        | "text",
       orientation: "vertical" as "horizontal" | "vertical",
       dataPath: "",
       labelField: "",
@@ -785,6 +786,7 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
       series: [] as { name: string; field: string }[],
       columns: [] as string[],
       unit: "",
+      text: "",
       title: "",
     },
   },

@@ -81,6 +81,28 @@ class TestBuildAssistantPromptNodeTemplates(unittest.TestCase):
         self.assertIn('"label": "bucketRequest"', prompt)
         self.assertIn('"s3Bucket": "$bucketRequest.body.bucketName"', prompt)
 
+    def test_includes_filter_map_nested_reference_guidance(self) -> None:
+        prompt = build_assistant_prompt()
+
+        correct_filter = (
+            "$extractData.commitList.filter("
+            "\"item.date == $dateLoop.item and item.repo == 'dify'\""
+            ").length"
+        )
+        wrong_filter = (
+            "$extractData.commitList.filter("
+            "\"item.date == dateLoop.item && item.repo == 'dify'\""
+            ").length"
+        )
+
+        self.assertIn("Inside `.filter()` and `.map()` expression strings", prompt)
+        self.assertIn(correct_filter, prompt)
+        self.assertIn(wrong_filter, prompt)
+        self.assertIn("Use Python-style boolean operators", prompt)
+        self.assertIn("References to other nodes, loop context, or variables MUST keep `$`", prompt)
+        self.assertNotIn("NEVER USE $ INSIDE PARENTHESES", prompt)
+        self.assertNotIn("NO $ INSIDE PARENTHESES", prompt)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -15,6 +15,14 @@ $array($a.x, $b.y)
 $node.method(other.field)
 ```
 
+Inside `.filter()` and `.map()` expression strings:
+- `item` is the local list element; keep it unprefixed as `item.field`.
+- References to other nodes, loop context, or variables MUST keep `$` inside the quoted expression
+  string.
+- Use Python-style boolean operators: `and`, `or`, `not`. NEVER use JavaScript `&&` or `||`.
+- CORRECT: `$extractData.commitList.filter("item.date == $dateLoop.item and item.repo == 'dify'").length`
+- WRONG: `$extractData.commitList.filter("item.date == dateLoop.item && item.repo == 'dify'").length`
+
 Prefer the clearest readable form for the expression you are generating.
 
 ---
@@ -1562,16 +1570,21 @@ This will FAIL because `$vars.myList` doesn't exist yet!
 
 **⚠️ MUST USE VARIABLE NODE**: Array initialization with `$array()` MUST be done in a `variable` node, NOT in a `set` node! This is a strict requirement.
 
-**⛔⛔ CRITICAL: NEVER USE $ INSIDE METHOD PARENTHESES! ⛔⛔**
-When passing node references as parameters to methods like `.add()`, `.contains()`, etc., NEVER use `$` prefix inside the parentheses:
-- ✅ CORRECT: `$vars.myArray.add(previousNode.text)` - no `$` inside parentheses
-- ⛔ FORBIDDEN: `$vars.myArray.add($previousNode.text)` - $ inside () BREAKS the expression!
-- ✅ CORRECT: `$nodeA.text.contains(nodeB.keyword)` - no `$` for the parameter
-- ⛔ FORBIDDEN: `$nodeA.text.contains($nodeB.keyword)` - $ inside () BREAKS the expression!
+**Critical: Nested `$` references are allowed in method parameters**
+When passing node references as parameters to methods like `.add()`, `.contains()`, etc., use the
+form that makes the source clear:
+- ✅ CORRECT: `$vars.myArray.add($previousNode.text)`
+- ✅ ALSO VALID: `$vars.myArray.add(previousNode.text)`
+- ✅ CORRECT: `$nodeA.text.contains($nodeB.keyword)`
+
+Inside `.filter()` / `.map()` expression strings, external references MUST keep `$`, while the local
+list item stays `item`:
+- ✅ `$extractData.commitList.filter("item.date == $dateLoop.item and item.repo == 'dify'").length`
+- ⛔ `$extractData.commitList.filter("item.date == dateLoop.item && item.repo == 'dify'").length`
 
 **Full Pattern for Collecting Items in a Loop**:
 1. **Before loop**: Initialize array with `variable` node using `$array()` or `$array("item1", "item2")` - MUST use variable node!
-2. **Inside loop body**: Use another `variable` node with `.add()` to append items (NO `$` in parameters!)
+2. **Inside loop body**: Use another `variable` node with `.add()` to append items
 3. **After loop (done branch)**: Access collected items via `$vars.variableName`
 
 ### 18. loop (Iterate Over Array)
@@ -2402,8 +2415,8 @@ Each row object includes **`rowIndex`**: the 1-based sheet row number (useful fo
 - **Data fields**:
   - `label`: Node identifier
   - `dataTableId`: UUID of the DataTable to operate on (required)
-  - `dataTableOperation`: Operation type - "find" | "getAll" | "getById" | "insert" | "update" | "remove" | "upsert"
-  - `dataTableFilter`: JSON object for exact-match filtering {"column_name": "value"} (for find, upsert)
+  - `dataTableOperation`: Operation type - "find" | "getAll" | "count" | "getById" | "insert" | "update" | "remove" | "upsert"
+  - `dataTableFilter`: JSON object for filtering (for find, upsert, count). `find` and `count` support comparison operators via object values: {"age": {"$gt": 18}} — supported operators: $eq $ne $gt $gte $lt $lte $contains (case-insensitive substring) $in (array). A plain value still means equals. Numeric comparisons apply to columns typed as "number". You can also filter on row metadata (`id`, `table_id`, `created_at`, `updated_at`, `created_by`, `updated_by`) which are real columns outside the JSON data blob — use a full date for range comparisons (e.g. {"created_at": {"$gt": "2026-06-04"}}) or $contains for partial date text matches. `upsert` still uses exact-match {"column_name": "value"} to locate an existing row.
   - `dataTableData`: JSON object mapping column names to values (for insert, update, upsert)
   - `dataTableRowId`: Row UUID for single-row operations (for getById, update, remove)
   - `dataTableLimit`: Maximum rows to return (default: 100, for find, getAll)
@@ -2413,8 +2426,9 @@ Each row object includes **`rowIndex`**: the 1-based sheet row number (useful fo
 
 | Operation | Required Fields | Description |
 |-----------|----------------|-------------|
-| `find` | dataTableId | Find rows matching a filter with optional sort/limit |
+| `find` | dataTableId | Find rows matching an optional operator filter with optional sort/limit |
 | `getAll` | dataTableId | Get all rows with optional sort/limit |
+| `count` | dataTableId | Count rows matching an optional operator filter (DB-side, returns just a number) |
 | `getById` | dataTableId, dataTableRowId | Get a single row by its UUID |
 | `insert` | dataTableId, dataTableData | Insert a new row |
 | `update` | dataTableId, dataTableRowId, dataTableData | Update an existing row (merges data) |
@@ -2431,7 +2445,7 @@ Each row object includes **`rowIndex`**: the 1-based sheet row number (useful fo
     "label": "findUsers",
     "dataTableId": "datatable-uuid",
     "dataTableOperation": "find",
-    "dataTableFilter": "{\"status\": \"active\"}",
+    "dataTableFilter": "{\"status\": \"active\", \"age\": {\"$gte\": 18}, \"created_at\": {\"$contains\": \"2026-06\"}}",
     "dataTableSort": "-created_at",
     "dataTableLimit": 50
   }
@@ -2463,16 +2477,29 @@ Each row object includes **`rowIndex`**: the 1-based sheet row number (useful fo
   }
 }
 ```
+```json
+{
+  "id": "dt-count",
+  "type": "dataTable",
+  "position": {"x": 400, "y": 800},
+  "data": {
+    "label": "activeAdults",
+    "dataTableId": "datatable-uuid",
+    "dataTableOperation": "count",
+    "dataTableFilter": "{\"status\": \"active\", \"age\": {\"$gt\": 18}}"
+  }
+}
+```
 
 **Output access**:
 - `$nodeLabel.success` - Boolean success status
 - `$nodeLabel.rows` - Array of row objects (for find, getAll)
 - `$nodeLabel.row` - Single row object (for getById, insert, update, upsert)
 - `$nodeLabel.row.data.column_name` - Access specific column value
-- `$nodeLabel.count` - Number of rows returned
+- `$nodeLabel.count` - Number of rows (rows returned for find/getAll; matching-row total for count)
 - `$nodeLabel.id` - Row ID (for insert, update, remove)
 - `$nodeLabel.found` - Boolean (for getById)
-- `$nodeLabel.operation` - "insert" or "update" (for upsert)
+- `$nodeLabel.operation` - Operation name (e.g. "count"; "insert"/"update" for upsert)
 
 ### 24. throwError (Stop Workflow with Error)
 - **Purpose**: Immediately stop workflow execution and return an error response with a custom HTTP status code
@@ -2772,7 +2799,7 @@ Each row object includes **`rowIndex`**: the 1-based sheet row number (useful fo
         "label": "analyzer",
         "credentialId": "openai-cred-id",
         "model": "gpt-4o",
-        "userMessage": "Analyze these items: $scraper.extracted.items.map(item.text).join('\\n')"
+        "userMessage": "Analyze these items: $scraper.extracted.items.map(\"item.text\").join(\"\\n\")"
       }
     },
     {
@@ -3110,7 +3137,7 @@ Access the converted file downstream: `$convertDoc.id`, `$convertDoc.download_ur
   `[{"month": "Jan", "revenue": 120}, ...]`).
 - **Data fields**:
   - `label`: Node identifier (camelCase)
-  - `chartType`: `"pie"` | `"bar"` | `"line"` | `"area"` | `"table"` | `"numeric"` | `"gauge"` | `"scatter"` | `"proportion"` | `"barGauge"` (required)
+  - `chartType`: `"pie"` | `"bar"` | `"line"` | `"area"` | `"table"` | `"numeric"` | `"gauge"` | `"scatter"` | `"proportion"` | `"barGauge"` | `"text"` (required)
   - `orientation`: `"horizontal"` | `"vertical"` (bar only, default `"vertical"`)
   - `dataPath`: optional dot path to the rows array inside the upstream output (e.g. `"data"` or `"result.items"`)
   - `labelField`: row key used as the category label (pie/bar/line)
@@ -3120,6 +3147,8 @@ Access the converted file downstream: `$convertDoc.id`, `$convertDoc.download_ur
   - `xField` / `yField`: row keys for the X and Y numeric axes (scatter)
   - `min` / `max`: numeric range for `gauge` (default `0` / `100`)
   - `unit`: optional unit string for `numeric`/`gauge`
+  - `text`: markdown string for the `text` chart type (a static message; supports markdown). For a
+    dynamic message, leave `text` empty and set `valueField` to a row key holding the string.
   - `title`: optional chart title
 - **Output**: a standardized chart payload (consumed by the dashboard renderer).
 
@@ -3201,6 +3230,13 @@ Bar gauge (one horizontal gauge per row with a red→green gradient and a value,
 {"type": "chartOutput", "data": {"label": "freeDisk", "chartType": "barGauge", "dataPath": "rows", "labelField": "name", "valueField": "value", "unit": "GB", "title": "Free disk space"}}
 ```
 
+Text (a markdown message, e.g. a status note or "last execution at 19:47"; no upstream rows are
+needed — put the markdown straight in `text`. For a DYNAMIC message build the string upstream and
+set `valueField` to its row key instead):
+```json
+{"type": "chartOutput", "data": {"label": "statusNote", "chartType": "text", "text": "**Last execution** at `19:47` — all checks passed ✅", "title": "Status"}}
+```
+
 ## Expression Syntax
 
 Expressions use `$nodeName` to reference node outputs by their label.
@@ -3233,9 +3269,11 @@ Output nodes are for FINAL results only. Use `set` or `variable` nodes inside lo
 // ⚠️ MUST: Array initialization MUST use variable node, NEVER use set node for $array()!
 ```
 
-**RULE 2: ⛔ NO $ INSIDE PARENTHESES! ONLY ONE $ PER EXPRESSION! ⛔**
+**RULE 2: NESTED `$` REFERENCES ARE VALID IN METHOD PARAMETERS**
 
-This is the MOST IMPORTANT rule. Parameters inside method calls MUST NOT have `$` prefix!
+When a method parameter or quoted list-operation expression needs data from another node, keep the
+`$` reference. For `.filter()` / `.map()` expression strings, use `item` without `$` only for the
+current list element.
 
 **RULE 3: ⛔ NEVER generate cURL examples or API call examples in your response!**
 - Do NOT include curl commands
@@ -3244,19 +3282,17 @@ This is the MOST IMPORTANT rule. Parameters inside method calls MUST NOT have `$
 ```
 
 ⛔⛔⛔ FORBIDDEN PATTERNS (WILL CAUSE ERRORS): ⛔⛔⛔
-$vars.searchResults.add($searchPerplexity.outputs.output.result)  ← WRONG!
-$vars.myList.add($loopNode.item)                                   ← WRONG!
-$text.contains($otherNode.keyword)                                 ← WRONG!
-$nodeA.field.replace($nodeB.old, $nodeB.new)                       ← WRONG!
+$extractData.commitList.filter("item.date == dateLoop.item && item.repo == 'dify'").length  ← WRONG!
 
-✅✅✅ CORRECT PATTERNS (NO $ INSIDE PARENTHESES): ✅✅✅
-$vars.searchResults.add(searchPerplexity.outputs.output.result)   ← CORRECT!
-$vars.myList.add(loopNode.item)                                    ← CORRECT!
-$text.contains(otherNode.keyword)                                  ← CORRECT!
-$nodeA.field.replace(nodeB.old, nodeB.new)                         ← CORRECT!
+✅✅✅ CORRECT PATTERNS: ✅✅✅
+$vars.searchResults.add($searchPerplexity.outputs.output.result)  ← CORRECT!
+$vars.myList.add($loopNode.item)                                   ← CORRECT!
+$text.contains($otherNode.keyword)                                 ← CORRECT!
+$nodeA.field.replace($nodeB.old, $nodeB.new)                       ← CORRECT!
+$extractData.commitList.filter("item.date == $dateLoop.item and item.repo == 'dify'").length  ← CORRECT!
 
-⛔ RULE: An expression has EXACTLY ONE $ at the very beginning!
-⛔ NEVER put $ inside parentheses - parameters are resolved automatically!
+RULE: In `.filter()` / `.map()` strings, use Python boolean operators (`and`, `or`, `not`), never
+JavaScript `&&` or `||`.
 ```
 
 ---
@@ -3280,14 +3316,17 @@ Always reference nodes by their LABEL NAME!
 
 **⚠️ IMPORTANT**: textInput nodes return data via `body` object, other nodes return directly!
 
-### ⛔ CRITICAL: Method Parameters - NEVER USE $ INSIDE PARENTHESES!
-When calling methods with node references as parameters, NEVER use `$` inside the parentheses:
-- ✅ `$userInput.body.sentence.contains(userInput.body.keyword)` - CORRECT: no $ inside ()
-- ⛔ `$userInput.body.sentence.contains($userInput.body.keyword)` - FORBIDDEN! $ inside () causes errors!
-- ✅ `$vars.list.add(loopNode.item)` - CORRECT: no $ inside ()
-- ⛔ `$vars.list.add($loopNode.item)` - FORBIDDEN! $ inside () causes errors!
+### Critical: Method Parameters and Nested References
+When calling methods with node references as parameters, nested `$` references are allowed and often
+clearer when the value comes from another node:
+- ✅ `$userInput.body.sentence.contains($userInput.body.keyword)` - CORRECT
+- ✅ `$vars.list.add($loopNode.item)` - CORRECT
+- ✅ `$vars.list.add(loopNode.item)` - Also supported for simple method arguments
 
-The `$` prefix is ONLY used at the START of an expression, NEVER inside method parentheses!
+For `.filter()` and `.map()` quoted expression strings, ALWAYS use `$` for references outside the
+current `item`:
+- ✅ `$extractData.commitList.filter("item.date == $dateLoop.item and item.repo == 'dify'").length`
+- ⛔ `$extractData.commitList.filter("item.date == dateLoop.item && item.repo == 'dify'").length`
 
 ### Merge Node Output
 When a merge node (e.g., labeled "mergeResults") combines inputs:
@@ -3419,12 +3458,10 @@ Create objects/dictionaries directly using curly brace syntax with any string ke
 - `.urlEncode()` - URL encode the string
 - `.urlDecode()` - URL decode the string
 
-**⛔ FORBIDDEN: NEVER use $ inside method parentheses!**
-- ✅ `$userInput.body.sentence.contains(userInput.body.keyword)` - CORRECT
-- ⛔ `$userInput.body.sentence.contains($userInput.body.keyword)` - FORBIDDEN! $ inside () breaks it!
-- ✅ `$nodeA.text.replace(nodeB.oldText, nodeB.newText)` - CORRECT
-- ⛔ `$nodeA.text.replace($nodeB.oldText, $nodeB.newText)` - FORBIDDEN!
-- ✅ `$data.message.startswith(config.prefix)` - CORRECT
+**Nested references in method parameters are allowed:**
+- ✅ `$userInput.body.sentence.contains($userInput.body.keyword)` - CORRECT
+- ✅ `$nodeA.text.replace($nodeB.oldText, $nodeB.newText)` - CORRECT
+- ✅ `$data.message.startswith($config.prefix)` - CORRECT
 - String literals are fine: `$text.contains("hello")`, `$text.replace("old", "new")`
 
 ### Array Methods (on arrays)
@@ -3458,6 +3495,14 @@ Use `item` variable to reference each element in the expression string:
 - `$numbers.take(3)` → Take first 3 elements
 - `$numbers.take(-2)` → Take last 2 elements
 
+**Critical `.filter()` / `.map()` expression-string rules:**
+- `item` is local to the list operation, so write `item.field` without `$`.
+- Any other node, loop context, or variable reference inside the quoted expression MUST include `$`.
+- Use `and`, `or`, `not` for boolean logic; do not use JavaScript `&&`, `||`, or `!`.
+- ✅ `$extractData.commitList.filter("item.date == $dateLoop.item and item.repo == 'dify'").length`
+- ✅ `$extractData.commitList.map("dict(date=item.created_at, current=$dateLoop.item)")`
+- ⛔ `$extractData.commitList.filter("item.date == dateLoop.item && item.repo == 'dify'").length`
+
 **concat() Function in map() - String Concatenation with Item Properties:**
 Use `concat()` inside `.map()` to build strings by combining literals with item properties:
 - `$posts.map("concat('https://example.com/', 'item.slug')")` → Prepend URL to each slug
@@ -3471,12 +3516,10 @@ Use `concat()` inside `.map()` to build strings by combining literals with item 
 - Supports N arguments: `concat('a', 'b', 'c', ...)` → "abc..."
 - Returns null-safe concatenation (null values become empty strings)
 
-**⛔ FORBIDDEN: NEVER use $ inside method parentheses!**
-- ✅ `$vars.myList.add(loopNode.item)` - CORRECT
-- ⛔ `$vars.myList.add($loopNode.item)` - FORBIDDEN! $ inside () breaks it!
-- ✅ `$vars.results.add(executeNode.outputs.output.result)` - CORRECT
-- ⛔ `$vars.results.add($executeNode.outputs.output.result)` - FORBIDDEN!
-- ✅ `$myArray.join(settings.separator)` - CORRECT
+**Nested references in method parameters are allowed:**
+- ✅ `$vars.myList.add($loopNode.item)` - CORRECT
+- ✅ `$vars.results.add($executeNode.outputs.output.result)` - CORRECT
+- ✅ `$myArray.join($settings.separator)` - CORRECT
 - String literals are fine: `$myArray.add("newItem")`, `$myArray.join(", ")`
 
 ### Object/Dictionary Methods (on objects)
@@ -3727,15 +3770,14 @@ Always include:
 - ❌ WRONG: Directly using `$vars.myList.add(item)` without initialization → WILL FAIL!
 - ✅ CORRECT: Step 1 (MUST use variable node): `{"type": "variable", "data": {"variableName": "myList", "variableValue": "$array()", "variableType": "array"}}` → Step 2: `$vars.myList.add(loopNode.item)`
 
-**RULE #2: ⛔⛔⛔ NEVER USE $ INSIDE PARENTHESES! ⛔⛔⛔**
-- An expression can have ONLY ONE `$` at the very beginning, NEVER inside method parentheses!
-- ⛔ FORBIDDEN: `$vars.searchResults.add($searchPerplexity.outputs.output.result)` → BROKEN!
-- ⛔ FORBIDDEN: `$vars.list.add($nodeName.field)` → BROKEN!
-- ⛔ FORBIDDEN: `$text.contains($otherNode.keyword)` → BROKEN!
-- ✅ CORRECT: `$vars.searchResults.add(searchPerplexity.outputs.output.result)` → Works!
-- ✅ CORRECT: `$vars.list.add(nodeName.field)` → Works!
-- ✅ CORRECT: `$text.contains(otherNode.keyword)` → Works!
-- **Parameters inside () are resolved automatically - adding $ breaks the parser!**
+**RULE #2: NESTED $ REFERENCES ARE VALID IN METHOD PARAMETERS**
+- When a method parameter or quoted list-operation expression needs data from another node, keep
+  the `$` reference.
+- ✅ CORRECT: `$vars.searchResults.add($searchPerplexity.outputs.output.result)`
+- ✅ CORRECT: `$vars.list.add($nodeName.field)`
+- ✅ CORRECT: `$text.contains($otherNode.keyword)`
+- ✅ CORRECT in `.filter()`: `$extractData.commitList.filter("item.date == $dateLoop.item and item.repo == 'dify'").length`
+- ⛔ WRONG in `.filter()`: `$extractData.commitList.filter("item.date == dateLoop.item && item.repo == 'dify'").length`
 
 ---
 

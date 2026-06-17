@@ -1,5 +1,5 @@
-import asyncio
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
@@ -10,7 +10,6 @@ from app.api.ai_assistant import (
     _extract_generated_workflow_config,
     _record_chat_workflow_edit_version,
     get_credential_for_user,
-    get_openai_client,
 )
 from app.api.deps import get_current_user
 from app.db.models import CredentialType, Dashboard, DashboardWidget, User, Workflow
@@ -27,6 +26,8 @@ from app.models.dashboard_schemas import (
 from app.services.dashboard_data import compute_widget_data
 from app.services.encryption import decrypt_config
 from app.services.llm_provider import is_reasoning_model
+from app.services.llm_service import execute_llm
+from app.services.llm_trace import LLMTraceContext
 from app.services.workflow_dsl_prompt import build_assistant_prompt
 
 router = APIRouter()
@@ -34,9 +35,9 @@ router = APIRouter()
 _AI_WIDGET_SUFFIX = (
     " The workflow MUST end with a single chartOutput node that produces the chart. "
     "Choose an appropriate chartType (pie, bar, line, area, table, numeric, gauge, scatter, "
-    "proportion, or barGauge) and set "
+    "proportion, barGauge, or text) and set "
     "labelField/valueField (or series for multi-series line/area, or xField/yField for scatter, "
-    "or min/max for gauge) on the "
+    "or min/max for gauge, or text for a markdown message) on the "
     "chartOutput node so it renders the requested metric. When the user only describes example or "
     "sample data, produce the upstream rows with a set node using "
     "$array(dict(key=value, ...), ...) — never use ${...} or bare {...} object literals."
@@ -44,31 +45,45 @@ _AI_WIDGET_SUFFIX = (
 
 
 async def generate_widget_dsl(
-    prompt: str, *, credential, model: str, user: User, current_workflow: dict | None = None
-) -> dict:
+    prompt: str,
+    *,
+    credential: Any,
+    model: str,
+    user: User,
+    current_workflow: dict[str, Any] | None = None,
+    workflow_id: uuid.UUID | None = None,
+    node_label: str | None = None,
+) -> dict[str, Any]:
     """Generate a widget workflow DSL (nodes + edges) ending in a chartOutput node.
 
     When ``current_workflow`` is provided the model edits that existing widget
     workflow (used by the per-widget AI refine action) instead of building a new one.
     """
     config = decrypt_config(credential.encrypted_config)
-    client, _ = get_openai_client(credential.type, config)
+    api_key = str(config.get("api_key") or "")
+    raw_base_url = config.get("base_url")
+    base_url = str(raw_base_url) if raw_base_url else None
     system_prompt = build_assistant_prompt(current_workflow, [], getattr(user, "user_rules", None))
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": prompt + _AI_WIDGET_SUFFIX},
-    ]
-    kwargs: dict = {"model": model, "messages": messages, "stream": False}
-    if not is_reasoning_model(model):
-        kwargs["temperature"] = WORKFLOW_BUILDER_TEMPERATURE
-
-    def _call() -> str:
-        resp = client.chat.completions.create(**kwargs)
-        choice = resp.choices[0] if resp.choices else None
-        return choice.message.content if choice else ""
-
-    content = await asyncio.to_thread(_call)
-    return _extract_generated_workflow_config(content or "", prompt)
+    trace_context = LLMTraceContext(
+        user_id=user.id,
+        credential_id=credential.id,
+        workflow_id=workflow_id,
+        source="dashboard_widget_ai",
+        node_label=node_label
+        or ("AI Widget Fine-tune" if current_workflow else "AI Widget Create"),
+    )
+    result = await execute_llm(
+        credential_type=credential.type.value,
+        api_key=api_key,
+        base_url=base_url,
+        model=model,
+        system_instruction=system_prompt,
+        user_message=prompt + _AI_WIDGET_SUFFIX,
+        temperature=None if is_reasoning_model(model) else WORKFLOW_BUILDER_TEMPERATURE,
+        trace_context=trace_context,
+    )
+    content = str(result.get("text") or "")
+    return _extract_generated_workflow_config(content, prompt)
 
 
 async def _get_or_create_dashboard(db: AsyncSession, user: User) -> Dashboard:
@@ -91,7 +106,9 @@ def _seed_widget_nodes(chart_type: str) -> tuple[list, list]:
     src_id = str(uuid.uuid4())
     chart_id = str(uuid.uuid4())
     chart_data: dict = {"label": "chart", "chartType": chart_type, "dataPath": "rows"}
-    if chart_type == "scatter":
+    if chart_type == "text":
+        chart_data["valueField"] = "text"
+    elif chart_type == "scatter":
         chart_data["xField"] = "x"
         chart_data["yField"] = "y"
     elif chart_type == "gauge":
@@ -287,7 +304,11 @@ async def ai_generate_widget(
 
     dashboard = await _get_or_create_dashboard(db, current_user)
     dsl = await generate_widget_dsl(
-        body.prompt, credential=credential, model=body.model, user=current_user
+        body.prompt,
+        credential=credential,
+        model=body.model,
+        user=current_user,
+        node_label="AI Widget Create",
     )
     nodes = dsl.get("nodes", [])
     edges = dsl.get("edges", [])
@@ -365,6 +386,8 @@ async def ai_refine_widget(
         model=body.model,
         user=current_user,
         current_workflow=current_workflow,
+        workflow_id=widget.workflow_id,
+        node_label="AI Widget Fine-tune",
     )
     nodes = dsl.get("nodes", [])
     edges = dsl.get("edges", [])

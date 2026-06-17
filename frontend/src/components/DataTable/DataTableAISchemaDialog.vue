@@ -10,6 +10,7 @@ import Input from "@/components/ui/Input.vue";
 import Label from "@/components/ui/Label.vue";
 import Textarea from "@/components/ui/Textarea.vue";
 import { credentialsApi, dataTablesApi } from "@/services/api";
+import { playSuccessSound } from "@/utils/audio";
 
 const props = defineProps<{
   mode: "create" | "extend";
@@ -95,6 +96,7 @@ async function handleGenerate(): Promise<void> {
       description.value = suggestion.description ?? "";
     }
     phase.value = "review";
+    playSuccessSound();
   } catch {
     error.value = "Couldn't generate a schema. Try rephrasing your description.";
   } finally {
@@ -178,7 +180,7 @@ async function handleSave(): Promise<void> {
                   {{ cred.name }}
                 </option>
               </select>
-              <ChevronDown class="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <ChevronDown class="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             </div>
           </div>
           <div>
@@ -196,7 +198,7 @@ async function handleSave(): Promise<void> {
                   {{ m.id }}
                 </option>
               </select>
-              <ChevronDown class="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <ChevronDown class="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             </div>
           </div>
         </div>
@@ -287,18 +289,21 @@ async function handleSave(): Promise<void> {
                 placeholder="column name"
                 class="min-w-0 flex-1"
               />
-              <select
-                v-model="col.type"
-                class="shrink-0 rounded border bg-background px-2 py-2 text-sm"
-              >
-                <option
-                  v-for="t in COLUMN_TYPES"
-                  :key="t"
-                  :value="t"
+              <div class="relative shrink-0">
+                <select
+                  v-model="col.type"
+                  class="w-full appearance-none rounded border bg-background py-2 pl-2 pr-8 text-sm"
                 >
-                  {{ t }}
-                </option>
-              </select>
+                  <option
+                    v-for="t in COLUMN_TYPES"
+                    :key="t"
+                    :value="t"
+                  >
+                    {{ t }}
+                  </option>
+                </select>
+                <ChevronDown class="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              </div>
               <Input
                 v-model="col.defaultValue as string"
                 placeholder="default"

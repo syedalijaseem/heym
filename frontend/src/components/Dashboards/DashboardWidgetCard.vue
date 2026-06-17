@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from "vue";
-import { Loader2, Pencil, RefreshCw, Settings, Sparkles, Trash2 } from "lucide-vue-next";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import type { Component } from "vue";
+import { onClickOutside } from "@vueuse/core";
+import { ExternalLink, Loader2, MoreVertical, Pencil, RefreshCw, Settings, Sparkles, Trash2 } from "lucide-vue-next";
 
 import ChartRenderer from "@/components/Dashboards/ChartRenderer.vue";
 import { dashboardApi } from "@/services/api";
@@ -20,10 +22,91 @@ const emit = defineEmits<{
 }>();
 
 const payload = ref<ChartPayload | null>(null);
+// Only surface http(s) links. The url can come from a dynamic expression over upstream
+// data, so reject javascript:/data:/relative values to avoid an injected-link XSS.
+const externalUrl = computed<string | null>(() => {
+  const raw = payload.value?.url;
+  if (!raw) return null;
+  try {
+    const parsed = new URL(raw);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.href : null;
+  } catch {
+    return null;
+  }
+});
 const loading = ref(true);
 const error = ref<string | null>(null);
 const editingTitle = ref(false);
 const titleDraft = ref(props.widget.title);
+
+// Header actions are shared between the inline icon row (sm+) and the collapsed
+// 3-dot menu (small screens), so the two stay in sync from a single source.
+interface WidgetAction {
+  key: string;
+  icon: Component;
+  label: string;
+  danger?: boolean;
+  run: () => void;
+}
+
+const actions: WidgetAction[] = [
+  { key: "refine", icon: Sparkles, label: "Fine-tune with AI", run: () => emit("refine", props.widget) },
+  { key: "refresh", icon: RefreshCw, label: "Refresh", run: () => void loadData(true) },
+  { key: "edit", icon: Pencil, label: "Edit workflow", run: () => emit("edit", props.widget.workflow_id) },
+  { key: "settings", icon: Settings, label: "Settings", run: () => emit("settings", props.widget) },
+  { key: "delete", icon: Trash2, label: "Delete widget", danger: true, run: () => emit("delete", props.widget.id) },
+];
+
+const menuOpen = ref(false);
+const triggerRef = ref<HTMLElement | null>(null);
+const menuPanelRef = ref<HTMLElement | null>(null);
+const menuPos = ref<{ top: number; left: number }>({ top: 0, left: 0 });
+const MENU_WIDTH = 176;
+
+// The menu is teleported to <body> because each grid item is transformed and so
+// forms its own stacking/clipping context — a z-indexed dropdown would otherwise
+// be hidden behind neighbouring widgets.
+onClickOutside(
+  triggerRef,
+  () => {
+    menuOpen.value = false;
+  },
+  { ignore: [menuPanelRef] },
+);
+
+function toggleMenu(): void {
+  if (menuOpen.value) {
+    menuOpen.value = false;
+    return;
+  }
+  const rect = triggerRef.value?.getBoundingClientRect();
+  if (rect) {
+    menuPos.value = {
+      top: rect.bottom + 4,
+      left: Math.max(8, rect.right - MENU_WIDTH),
+    };
+  }
+  menuOpen.value = true;
+}
+
+function closeMenu(): void {
+  menuOpen.value = false;
+}
+
+function runAction(action: WidgetAction): void {
+  menuOpen.value = false;
+  action.run();
+}
+
+watch(menuOpen, (open) => {
+  if (open) {
+    window.addEventListener("scroll", closeMenu, true);
+    window.addEventListener("resize", closeMenu);
+  } else {
+    window.removeEventListener("scroll", closeMenu, true);
+    window.removeEventListener("resize", closeMenu);
+  }
+});
 
 async function loadData(force = false): Promise<void> {
   loading.value = true;
@@ -65,6 +148,11 @@ watch(
 onMounted(() => {
   void loadData();
 });
+
+onBeforeUnmount(() => {
+  window.removeEventListener("scroll", closeMenu, true);
+  window.removeEventListener("resize", closeMenu);
+});
 </script>
 
 <template>
@@ -73,57 +161,84 @@ onMounted(() => {
       <input
         v-if="editingTitle"
         v-model="titleDraft"
-        class="w-full bg-transparent text-sm font-medium outline-none"
+        class="w-full min-w-0 bg-transparent text-sm font-medium outline-none"
         autofocus
         @blur="commitTitle"
         @keyup.enter="commitTitle"
       >
       <button
         v-else
-        class="truncate text-left text-sm font-medium hover:text-primary"
+        class="min-w-0 flex-1 truncate text-left text-sm font-medium hover:text-primary"
         :title="widget.title"
         @click="editingTitle = true"
       >
         {{ widget.title }}
       </button>
 
-      <div class="flex shrink-0 items-center gap-1">
+      <a
+        v-if="externalUrl"
+        :href="externalUrl"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="shrink-0 rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+        title="Open link"
+      >
+        <ExternalLink class="h-3.5 w-3.5" />
+      </a>
+
+      <!-- sm+: inline icon row -->
+      <div class="hidden shrink-0 items-center gap-1 sm:flex">
         <button
+          v-for="action in actions"
+          :key="action.key"
           class="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-          title="Fine-tune with AI"
-          @click="emit('refine', widget)"
+          :class="action.danger ? 'hover:bg-destructive/10 hover:text-destructive' : ''"
+          :title="action.label"
+          @click="action.run()"
         >
-          <Sparkles class="h-3.5 w-3.5" />
-        </button>
-        <button
-          class="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-          title="Refresh"
-          @click="loadData(true)"
-        >
-          <RefreshCw class="h-3.5 w-3.5" />
-        </button>
-        <button
-          class="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-          title="Edit workflow"
-          @click="emit('edit', widget.workflow_id)"
-        >
-          <Pencil class="h-3.5 w-3.5" />
-        </button>
-        <button
-          class="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-          title="Settings"
-          @click="emit('settings', widget)"
-        >
-          <Settings class="h-3.5 w-3.5" />
-        </button>
-        <button
-          class="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-          title="Delete widget"
-          @click="emit('delete', widget.id)"
-        >
-          <Trash2 class="h-3.5 w-3.5" />
+          <component
+            :is="action.icon"
+            class="h-3.5 w-3.5"
+          />
         </button>
       </div>
+
+      <!-- below sm: collapsed 3-dot menu so the title keeps its space -->
+      <div
+        ref="triggerRef"
+        class="shrink-0 sm:hidden"
+      >
+        <button
+          class="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+          title="Actions"
+          @click.stop="toggleMenu"
+        >
+          <MoreVertical class="h-4 w-4" />
+        </button>
+      </div>
+
+      <Teleport to="body">
+        <div
+          v-if="menuOpen"
+          ref="menuPanelRef"
+          class="fixed z-[100] w-44 overflow-hidden rounded-lg border border-border bg-card py-1 shadow-lg"
+          :style="{ top: `${menuPos.top}px`, left: `${menuPos.left}px` }"
+        >
+          <button
+            v-for="action in actions"
+            :key="action.key"
+            class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-accent"
+            :class="action.danger ? 'text-destructive hover:bg-destructive/10' : 'text-foreground'"
+            @click.stop="runAction(action)"
+          >
+            <component
+              :is="action.icon"
+              class="h-4 w-4 shrink-0"
+            />
+            {{ action.label }}
+          </button>
+        </div>
+      </Teleport>
     </div>
 
     <div

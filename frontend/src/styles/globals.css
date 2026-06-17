@@ -712,6 +712,23 @@ body,
   transition: all 0.2s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* Invisible larger grab/hover zone so handles are easy to catch without
+   pixel-perfect aiming on the 12px dot. The node root keeps overflow:hidden
+   (so the dot stays recessed and the accent bar is clipped to the rounded
+   corners), which means this zone is effective on the node side — it grows
+   the target inward without changing the dot's visual size. */
+.vue-flow__handle::before {
+  content: '';
+  position: absolute;
+  inset: -12px;
+}
+
+/* Stacked handles (merge inputs, switch/true-false/loop/error/hitl outputs)
+   sit close together, so keep their grab zone tight to avoid overlap. */
+.vue-flow__handle.\!relative::before {
+  inset: -5px;
+}
+
 .vue-flow__handle:hover {
   background: hsl(var(--primary));
   border-color: hsl(var(--primary));

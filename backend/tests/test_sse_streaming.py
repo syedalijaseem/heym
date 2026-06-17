@@ -1,5 +1,6 @@
 """Unit tests for SSE streaming workflow configuration."""
 
+import json
 import unittest
 import uuid
 from types import SimpleNamespace
@@ -10,8 +11,10 @@ from app.models.schemas import NodeResultSchema, WorkflowUpdate
 from app.services.workflow_executor import (
     NodeResult,
     WorkflowExecutor,
+    _wrap_value,
     build_node_start_message,
     execute_workflow_streaming,
+    mask_sensitive_output,
 )
 
 _FAKE_NODE_OUTPUT = {
@@ -246,6 +249,65 @@ class NodeResultTimingMetadataTests(unittest.TestCase):
 
         self.assertEqual(schema.metadata["started_at_ms"], 100.0)
         self.assertEqual(schema.metadata["ended_at_ms"], 112.5)
+
+
+class MaskSensitiveOutputTests(unittest.TestCase):
+    def test_masks_dot_wrapped_outputs_without_json_serialization_error(self) -> None:
+        output = {
+            "value": _wrap_value(
+                [
+                    {
+                        "name": "token",
+                        "value": "super-secret-cookie",
+                        "httpOnly": True,
+                    }
+                ]
+            )
+        }
+
+        masked = mask_sensitive_output(output, {"cookie": "super-secret-cookie"})
+
+        self.assertEqual(
+            masked,
+            {
+                "value": [
+                    {
+                        "name": "token",
+                        "value": "super-s**",
+                        "httpOnly": True,
+                    }
+                ]
+            },
+        )
+
+    def test_streaming_completion_outputs_are_json_compatible(self) -> None:
+        nodes = [
+            {
+                "id": "variable",
+                "type": "variable",
+                "data": {
+                    "label": "variable",
+                    "variableName": "exchangeAuth",
+                    "variableValue": '$array(dict(value="super-secret-cookie", httpOnly=True))',
+                    "variableType": "array",
+                    "isGlobal": True,
+                },
+            }
+        ]
+
+        events = list(
+            execute_workflow_streaming(
+                workflow_id=uuid.uuid4(),
+                nodes=nodes,
+                edges=[],
+                inputs={},
+                test_run=True,
+            )
+        )
+
+        complete = next(event for event in events if event.get("type") == "execution_complete")
+        json.dumps(complete)
+        self.assertIs(complete["outputs"]["variable"]["value"][0]["httpOnly"], True)
 
 
 class UpdateWorkflowSseConfigTests(unittest.IsolatedAsyncioTestCase):

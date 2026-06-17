@@ -64,8 +64,9 @@ const HITL_RESOLUTION_STORAGE_KEY = "heym-hitl-resolution";
 const isMobile = useMediaQuery("(max-width: 767px)");
 
 const loading = ref(true);
-const leftPanelOpen = ref(true);
-const rightPanelOpen = ref(true);
+// On mobile, start with both side panels collapsed so only the canvas is visible.
+const leftPanelOpen = ref(!isMobile.value);
+const rightPanelOpen = ref(!isMobile.value);
 const historyOpen = ref(false);
 const editHistoryOpen = ref(false);
 const shareOpen = ref(false);
@@ -117,6 +118,9 @@ const workflowDescription = computed(() => workflowStore.currentWorkflow?.descri
 const isDashboardWidget = computed(
   () => workflowStore.currentWorkflow?.kind === "dashboard_widget",
 );
+const isStandardWorkflow = computed(
+  () => Boolean(workflowStore.currentWorkflow) && !isDashboardWidget.value,
+);
 const hasUnsavedChanges = computed(() => workflowStore.hasUnsavedChanges);
 const isSaving = computed(() => workflowStore.isSaving);
 const isEditing = computed(() => isTitleEditing.value || isDescriptionEditing.value);
@@ -128,6 +132,17 @@ const editingDescriptionValue = ref("");
 const titleInputRef = ref<HTMLInputElement | null>(null);
 const descriptionInputRef = ref<HTMLInputElement | null>(null);
 let skipNextTitleCommit = false;
+
+function returnToDashboard(event?: MouseEvent): void {
+  const target = { name: "dashboard", query: { tab: "dashboard" } };
+  if (event?.ctrlKey || event?.metaKey) {
+    const routeTarget = router.resolve(target);
+    window.open(routeTarget.href, "_blank", "noopener,noreferrer");
+    return;
+  }
+
+  void router.push(target);
+}
 let skipNextDescriptionCommit = false;
 
 function startTitleEdit(): void {
@@ -237,6 +252,15 @@ watch(
     }
   },
 );
+
+// Collapse both side panels when the viewport becomes mobile so the canvas
+// (standard workflow or dashboard widget) is shown on its own.
+watch(isMobile, (mobile) => {
+  if (mobile) {
+    leftPanelOpen.value = false;
+    rightPanelOpen.value = false;
+  }
+});
 
 function toggleRightPanel(): void {
   rightPanelOpen.value = !rightPanelOpen.value;
@@ -661,6 +685,10 @@ watch(webhookBodyMode, async (value) => {
 
 watch(shareOpen, async (open) => {
   if (!open) return;
+  if (!isStandardWorkflow.value) {
+    shareOpen.value = false;
+    return;
+  }
   shareError.value = "";
   await loadShares();
 });
@@ -1204,6 +1232,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
         class="flex items-center gap-1 md:gap-2 flex-wrap shrink-0"
       >
         <Button
+          v-if="!isDashboardWidget"
           variant="ghost"
           size="icon"
           class="md:hidden text-destructive hover:text-destructive h-11 w-11 min-h-[44px] min-w-[44px]"
@@ -1213,6 +1242,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
           <Trash2 class="w-4 h-4" />
         </Button>
         <Button
+          v-if="!isDashboardWidget"
           variant="ghost"
           size="sm"
           class="hidden md:inline-flex gap-2 text-destructive hover:text-destructive"
@@ -1221,6 +1251,27 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
         >
           <Trash2 class="w-4 h-4" />
           <span class="hidden lg:inline">Clear</span>
+        </Button>
+        <Button
+          v-if="isDashboardWidget"
+          variant="ghost"
+          size="icon"
+          class="h-11 w-11 min-h-[44px] min-w-[44px] md:hidden text-foreground"
+          title="Back to Dashboard"
+          @click="returnToDashboard"
+        >
+          <ChevronLeft class="w-4 h-4" />
+        </Button>
+        <Button
+          v-if="isDashboardWidget"
+          variant="ghost"
+          size="sm"
+          class="hidden md:inline-flex gap-2 text-foreground"
+          title="Back to Dashboard"
+          @click="returnToDashboard"
+        >
+          <ChevronLeft class="w-4 h-4" />
+          <span class="hidden lg:inline">Dashboard</span>
         </Button>
         <Button
           variant="ghost"
@@ -1266,7 +1317,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
           Download
         </Button>
         <Button
-          v-if="!isDashboardWidget"
+          v-if="isStandardWorkflow"
           variant="ghost"
           size="sm"
           class="hidden lg:inline-flex gap-2 text-foreground"
@@ -1276,7 +1327,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
           Portal
         </Button>
         <Button
-          v-if="!isDashboardWidget"
+          v-if="isStandardWorkflow"
           variant="ghost"
           size="sm"
           class="hidden lg:inline-flex gap-2 text-foreground"
@@ -1286,7 +1337,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
           Share
         </Button>
         <Button
-          v-if="!isDashboardWidget"
+          v-if="isStandardWorkflow"
           variant="ghost"
           size="sm"
           class="hidden xl:inline-flex gap-2 text-foreground"
@@ -1297,7 +1348,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
           Template
         </Button>
         <Button
-          v-if="!isDashboardWidget"
+          v-if="isStandardWorkflow"
           variant="ghost"
           size="sm"
           class="hidden xl:inline-flex gap-2 text-foreground"
@@ -2093,6 +2144,8 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
       :open="showCommandPalette"
       :workflows="paletteWorkflows"
       context="editor"
+      :hide-templates="isDashboardWidget"
+      :hide-runbook="isDashboardWidget"
       @select="openWorkflowFromPalette"
       @tab-select="handleTabSelectFromPalette"
       @doc-select="onDocSelectFromPalette"
@@ -2102,7 +2155,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
 
     <!-- Share as Template modal -->
     <ShareTemplateModal
-      v-if="shareTemplateOpen"
+      v-if="shareTemplateOpen && isStandardWorkflow"
       kind="workflow"
       :nodes="(workflowStore.currentWorkflow?.nodes ?? []) as Record<string, unknown>[]"
       :edges="(workflowStore.currentWorkflow?.edges ?? []) as Record<string, unknown>[]"

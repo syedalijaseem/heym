@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import DOMPurify from "dompurify";
+import { marked } from "marked";
 
 import { useThemeStore } from "@/stores/theme";
 import type { ChartPayload } from "@/types/dashboard";
 
 const props = defineProps<{
-  payload: ChartPayload | null;
+  payload: ChartPayload | Record<string, unknown> | null;
 }>();
 
 const themeStore = useThemeStore();
@@ -26,6 +28,39 @@ const PROPORTION_COLORS = [
   "#ea580c",
 ];
 
+const CHART_TYPES = new Set<ChartPayload["type"]>([
+  "pie",
+  "bar",
+  "line",
+  "area",
+  "table",
+  "numeric",
+  "gauge",
+  "scatter",
+  "proportion",
+  "barGauge",
+  "text",
+]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isChartPayload(value: unknown): value is ChartPayload {
+  if (!isRecord(value) || typeof value.type !== "string") return false;
+  return CHART_TYPES.has(value.type as ChartPayload["type"]);
+}
+
+function normalizeChartPayload(value: ChartPayload | Record<string, unknown> | null): ChartPayload | null {
+  if (isChartPayload(value)) return value;
+  if (!isRecord(value)) return null;
+
+  const nestedPayloads = Object.values(value).filter(isChartPayload);
+  return nestedPayloads.length === 1 ? nestedPayloads[0] : null;
+}
+
+const chartPayload = computed((): ChartPayload | null => normalizeChartPayload(props.payload));
+
 interface ProportionSegment {
   label: string;
   pct: number;
@@ -33,7 +68,7 @@ interface ProportionSegment {
 }
 
 const proportionSegments = computed((): ProportionSegment[] => {
-  const p = props.payload;
+  const p = chartPayload.value;
   if (!p || p.type !== "proportion") return [];
   const data = (p.series?.[0]?.data ?? []) as number[];
   const labels = p.labels ?? [];
@@ -73,7 +108,7 @@ interface BarGaugeRow {
 }
 
 const barGaugeRows = computed((): BarGaugeRow[] => {
-  const p = props.payload;
+  const p = chartPayload.value;
   if (!p || p.type !== "barGauge") return [];
   const data = (p.series?.[0]?.data ?? []) as number[];
   const labels = p.labels ?? [];
@@ -100,15 +135,24 @@ const barGaugeRows = computed((): BarGaugeRow[] => {
 // pass it as a number instead.
 const containerRef = ref<HTMLElement | null>(null);
 const chartHeight = ref(220);
+const chartWidth = ref(220);
 let resizeObserver: ResizeObserver | null = null;
 
 onMounted(() => {
   if (!containerRef.value) return;
   resizeObserver = new ResizeObserver((entries) => {
-    const h = entries[0]?.contentRect.height ?? 0;
-    if (h > 0) chartHeight.value = Math.round(h);
+    const rect = entries[0]?.contentRect;
+    if (rect && rect.height > 0) chartHeight.value = Math.round(rect.height);
+    if (rect && rect.width > 0) chartWidth.value = Math.round(rect.width);
   });
   resizeObserver.observe(containerRef.value);
+});
+
+// Pie / radial charts derive their radius from the smaller dimension, so in a tall,
+// narrow widget the chart canvas should stay square and be centered vertically —
+// otherwise ApexCharts pins the circle to the top and leaves dead space below.
+const radialHeight = computed((): number => {
+  return Math.max(120, Math.min(chartHeight.value, chartWidth.value));
 });
 
 onBeforeUnmount(() => {
@@ -117,16 +161,25 @@ onBeforeUnmount(() => {
 });
 
 const isEmpty = computed((): boolean => {
-  const p = props.payload;
+  const p = chartPayload.value;
   if (!p) return true;
   if (p.type === "table") return !p.rows || p.rows.length === 0;
   if (p.type === "numeric") return p.value === null || p.value === undefined;
   if (p.type === "gauge") return p.value === null || p.value === undefined;
+  if (p.type === "text") return !p.text || p.text.trim().length === 0;
   return !p.series || p.series.length === 0;
 });
 
+// Render the markdown body of a `text` chart to sanitized HTML.
+const renderedText = computed((): string => {
+  const p = chartPayload.value;
+  if (!p || p.type !== "text" || !p.text) return "";
+  const html = marked(p.text, { breaks: true, gfm: true }) as string;
+  return DOMPurify.sanitize(html);
+});
+
 const numericValue = computed((): string => {
-  const p = props.payload;
+  const p = chartPayload.value;
   if (!p || p.value === null || p.value === undefined) return "—";
   const raw = p.value;
   if (typeof raw === "number" && typeof p.decimals === "number") {
@@ -136,7 +189,7 @@ const numericValue = computed((): string => {
 });
 
 const apexType = computed((): "pie" | "bar" | "line" | "area" | "scatter" | "radialBar" => {
-  const t = props.payload?.type;
+  const t = chartPayload.value?.type;
   if (t === "pie") return "pie";
   if (t === "line") return "line";
   if (t === "area") return "area";
@@ -147,7 +200,7 @@ const apexType = computed((): "pie" | "bar" | "line" | "area" | "scatter" | "rad
 
 // Gauge value as a 0-100 percentage of [min, max].
 const gaugePercent = computed((): number => {
-  const p = props.payload;
+  const p = chartPayload.value;
   if (!p || typeof p.value !== "number") return 0;
   const min = typeof p.min === "number" ? p.min : 0;
   const max = typeof p.max === "number" ? p.max : 100;
@@ -156,7 +209,7 @@ const gaugePercent = computed((): number => {
 });
 
 const apexSeries = computed(() => {
-  const p = props.payload;
+  const p = chartPayload.value;
   if (!p) return [];
   if (p.type === "pie") return p.series?.[0]?.data ?? [];
   if (p.type === "gauge") return [gaugePercent.value];
@@ -164,7 +217,7 @@ const apexSeries = computed(() => {
 });
 
 const apexOptions = computed((): Record<string, unknown> => {
-  const p = props.payload;
+  const p = chartPayload.value;
   if (!p) return {};
   const base: Record<string, unknown> = {
     chart: {
@@ -182,17 +235,29 @@ const apexOptions = computed((): Record<string, unknown> => {
   }
 
   if (p.type === "pie") {
+    const dataLabelOffset = -Math.max(12, Math.min(24, Math.round(radialHeight.value * 0.04)));
     return {
       ...base,
       labels: p.labels ?? [],
       colors: PROPORTION_COLORS,
+      plotOptions: {
+        pie: {
+          dataLabels: {
+            offset: dataLabelOffset,
+            minAngleToShowLabel: 8,
+          },
+        },
+      },
       legend: {
         position: "bottom",
         labels: { colors: themeStore.isDark ? "#e2e8f0" : "#0f172a" },
       },
       // Slice gaps match the card background so slices read cleanly in dark mode.
       stroke: { colors: [themeStore.isDark ? "#0b1220" : "#ffffff"], width: 2 },
-      dataLabels: { style: { colors: ["#ffffff"] }, dropShadow: { enabled: false } },
+      dataLabels: {
+        style: { colors: ["#ffffff"], fontSize: "13px", fontWeight: 700 },
+        dropShadow: { enabled: false },
+      },
       tooltip: { theme: themeStore.isDark ? "dark" : "light", fillSeriesColor: false },
     };
   }
@@ -202,8 +267,8 @@ const apexOptions = computed((): Record<string, unknown> => {
     const unit = p.unit ?? "";
     // Scale the center value with the chart size so it fits the hollow at any
     // widget size (a fixed size overflows small gauges).
-    const valueFontPx = Math.max(13, Math.min(34, Math.round(chartHeight.value * 0.13)));
-    const nameFontPx = Math.max(9, Math.min(15, Math.round(chartHeight.value * 0.06)));
+    const valueFontPx = Math.max(13, Math.min(34, Math.round(radialHeight.value * 0.13)));
+    const nameFontPx = Math.max(9, Math.min(15, Math.round(radialHeight.value * 0.06)));
     return {
       ...base,
       plotOptions: {
@@ -262,29 +327,37 @@ const apexOptions = computed((): Record<string, unknown> => {
     </div>
 
     <div
-      v-else-if="payload && payload.type === 'numeric'"
+      v-else-if="chartPayload && chartPayload.type === 'numeric'"
       class="flex h-full min-h-[120px] flex-col items-center justify-center"
     >
       <div class="text-4xl font-semibold tabular-nums text-foreground">
         {{ numericValue }}
       </div>
       <div
-        v-if="payload.unit"
+        v-if="chartPayload.unit"
         class="mt-1 text-sm text-muted-foreground"
       >
-        {{ payload.unit }}
+        {{ chartPayload.unit }}
       </div>
     </div>
 
+    <!-- eslint-disable vue/no-v-html -->
     <div
-      v-else-if="payload && payload.type === 'table'"
+      v-else-if="chartPayload && chartPayload.type === 'text'"
+      class="chart-markdown h-full overflow-auto break-words px-1 py-1 text-sm text-foreground"
+      v-html="renderedText"
+    />
+    <!-- eslint-enable vue/no-v-html -->
+
+    <div
+      v-else-if="chartPayload && chartPayload.type === 'table'"
       class="h-full overflow-auto pb-3"
     >
       <table class="w-full text-sm text-foreground">
         <thead class="sticky top-0 bg-card">
           <tr class="border-b border-border">
             <th
-              v-for="col in payload.columns"
+              v-for="col in chartPayload.columns"
               :key="col"
               class="px-2 py-1 text-left font-medium text-muted-foreground"
             >
@@ -294,7 +367,7 @@ const apexOptions = computed((): Record<string, unknown> => {
         </thead>
         <tbody>
           <tr
-            v-for="(row, rowIndex) in payload.rows"
+            v-for="(row, rowIndex) in chartPayload.rows"
             :key="rowIndex"
             class="border-b border-border/50"
           >
@@ -311,7 +384,7 @@ const apexOptions = computed((): Record<string, unknown> => {
     </div>
 
     <div
-      v-else-if="payload && payload.type === 'proportion'"
+      v-else-if="chartPayload && chartPayload.type === 'proportion'"
       class="flex h-full flex-col justify-center gap-4 px-1"
     >
       <div class="flex h-3 w-full overflow-hidden rounded-full bg-muted">
@@ -339,7 +412,7 @@ const apexOptions = computed((): Record<string, unknown> => {
     </div>
 
     <div
-      v-else-if="payload && payload.type === 'barGauge'"
+      v-else-if="chartPayload && chartPayload.type === 'barGauge'"
       class="flex h-full flex-col justify-center gap-2 overflow-auto px-1 py-1"
     >
       <div
@@ -364,11 +437,25 @@ const apexOptions = computed((): Record<string, unknown> => {
           :style="{ color: row.valueColor }"
         >
           {{ row.value }}<span
-            v-if="payload.unit"
+            v-if="chartPayload.unit"
             class="ml-1 text-xs font-normal text-muted-foreground"
-          >{{ payload.unit }}</span>
+          >{{ chartPayload.unit }}</span>
         </span>
       </div>
+    </div>
+
+    <!-- Pie / gauge: keep the canvas square and centered in tall, narrow widgets. -->
+    <div
+      v-else-if="apexType === 'pie' || apexType === 'radialBar'"
+      class="flex h-full w-full items-center justify-center"
+    >
+      <apexchart
+        :key="apexType"
+        :type="apexType"
+        :height="radialHeight"
+        :options="apexOptions"
+        :series="apexSeries"
+      />
     </div>
 
     <apexchart
@@ -381,3 +468,103 @@ const apexOptions = computed((): Record<string, unknown> => {
     />
   </div>
 </template>
+
+<style scoped>
+.chart-markdown :deep(p) {
+  margin: 0 0 0.5rem;
+}
+
+.chart-markdown :deep(p:last-child) {
+  margin-bottom: 0;
+}
+
+.chart-markdown :deep(h1),
+.chart-markdown :deep(h2),
+.chart-markdown :deep(h3) {
+  margin: 0.5rem 0 0.35rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.chart-markdown :deep(h1) {
+  font-size: 1.5rem;
+}
+
+.chart-markdown :deep(h2) {
+  font-size: 1.25rem;
+}
+
+.chart-markdown :deep(h3) {
+  font-size: 1.05rem;
+}
+
+.chart-markdown :deep(ul),
+.chart-markdown :deep(ol) {
+  margin: 0 0 0.5rem;
+  padding-left: 1.25rem;
+}
+
+.chart-markdown :deep(ul) {
+  list-style: disc;
+}
+
+.chart-markdown :deep(ol) {
+  list-style: decimal;
+}
+
+.chart-markdown :deep(a) {
+  color: rgb(37 99 235);
+  text-decoration: underline;
+}
+
+.chart-markdown :deep(code) {
+  border-radius: 0.25rem;
+  background: rgb(0 0 0 / 0.08);
+  padding: 0.1rem 0.3rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.85em;
+}
+
+.chart-markdown :deep(pre) {
+  margin: 0 0 0.5rem;
+  overflow-x: auto;
+  border-radius: 0.375rem;
+  background: rgb(0 0 0 / 0.06);
+  padding: 0.5rem 0.75rem;
+}
+
+.chart-markdown :deep(pre code) {
+  background: transparent;
+  padding: 0;
+}
+
+.chart-markdown :deep(strong) {
+  font-weight: 700;
+}
+
+.chart-markdown :deep(em) {
+  font-style: italic;
+}
+
+.chart-markdown :deep(blockquote) {
+  margin: 0 0 0.5rem;
+  border-left: 3px solid rgb(0 0 0 / 0.15);
+  padding-left: 0.75rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.chart-markdown :deep(hr) {
+  margin: 0.75rem 0;
+  border: none;
+  border-top: 1px solid hsl(var(--border));
+}
+
+:global(.dark) .chart-markdown :deep(a) {
+  color: rgb(96 165 250);
+}
+
+:global(.dark) .chart-markdown :deep(code),
+:global(.dark) .chart-markdown :deep(pre) {
+  background: rgb(255 255 255 / 0.1);
+}
+</style>

@@ -1126,10 +1126,13 @@ async def update_workflow(
     if workflow_data.sse_node_config is not None:
         workflow.sse_node_config = sanitized_sse_node_config
 
-    # Keep the dashboard widget title/description in sync when its hidden workflow
+    # Keep the dashboard widget metadata/cache in sync when its hidden workflow
     # is edited on the canvas (canvas -> dashboard direction).
     if getattr(workflow, "kind", None) == "dashboard_widget" and (
-        workflow_data.name is not None or workflow_data.description is not None
+        workflow_data.name is not None
+        or workflow_data.description is not None
+        or sanitized_nodes is not None
+        or sanitized_edges is not None
     ):
         widget_result = await db.execute(
             select(DashboardWidget).where(DashboardWidget.workflow_id == workflow_id)
@@ -1140,6 +1143,19 @@ async def update_workflow(
                 widget.title = workflow.name
             if workflow_data.description is not None:
                 widget.description = workflow.description
+            if sanitized_nodes is not None or sanitized_edges is not None:
+                chart_nodes = [
+                    node
+                    for node in (workflow.nodes or [])
+                    if isinstance(node, dict) and node.get("type") == "chartOutput"
+                ]
+                if chart_nodes:
+                    widget.chart_type = (
+                        chart_nodes[-1].get("data", {}).get("chartType", widget.chart_type)
+                    )
+                widget.cached_payload = None
+                widget.cached_at = None
+                widget.cached_workflow_version = None
 
     if should_create_version:
         max_version_result = await db.execute(

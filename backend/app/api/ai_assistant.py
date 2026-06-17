@@ -128,6 +128,7 @@ MAX_DASHBOARD_CHAT_HISTORY = 25
 DASHBOARD_CHAT_TEMPERATURE = 0.1
 WORKFLOW_BUILDER_TEMPERATURE = 0.0
 WORKFLOW_ASSISTANT_SSE_HEARTBEAT_SECONDS = 10.0
+DASHBOARD_CHAT_SSE_HEARTBEAT_SECONDS = 10.0
 
 
 def _get_dashboard_chat_node_label(
@@ -3603,27 +3604,58 @@ async def dashboard_chat_stream(
 
     async def event_generator() -> AsyncGenerator[str, None]:
         watcher = asyncio.create_task(cancel_on_disconnect())
+        queue: asyncio.Queue[str | Exception | None] = asyncio.Queue()
+
+        async def produce_chunks() -> None:
+            try:
+                async for chunk in stream_dashboard_chat(
+                    client,
+                    request.model,
+                    system_prompt,
+                    messages,
+                    db,
+                    current_user,
+                    provider,
+                    public_base_url,
+                    trace_context,
+                    cancel_event,
+                    request.attachment,
+                    credential,
+                ):
+                    if cancel_event.is_set():
+                        break
+                    await queue.put(chunk)
+            except Exception as exc:
+                await queue.put(exc)
+            finally:
+                await queue.put(None)
+
+        producer = asyncio.create_task(produce_chunks())
         try:
-            async for chunk in stream_dashboard_chat(
-                client,
-                request.model,
-                system_prompt,
-                messages,
-                db,
-                current_user,
-                provider,
-                public_base_url,
-                trace_context,
-                cancel_event,
-                request.attachment,
-                credential,
-            ):
+            while True:
+                try:
+                    item = await asyncio.wait_for(
+                        queue.get(), timeout=DASHBOARD_CHAT_SSE_HEARTBEAT_SECONDS
+                    )
+                except TimeoutError:
+                    if cancel_event.is_set():
+                        break
+                    yield ": ping\n\n"
+                    continue
+
+                if item is None:
+                    break
+                if isinstance(item, Exception):
+                    raise item
                 if cancel_event.is_set():
                     break
-                yield chunk
+                yield item
         finally:
             cancel_event.set()
+            producer.cancel()
             watcher.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await producer
             with contextlib.suppress(asyncio.CancelledError):
                 await watcher
 

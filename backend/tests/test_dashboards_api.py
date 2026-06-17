@@ -81,6 +81,84 @@ class TestSeedWidgetNodes(unittest.TestCase):
         self.assertEqual(edges[0]["target"], nodes[1]["id"])
 
 
+class TestGenerateWidgetDsl(unittest.IsolatedAsyncioTestCase):
+    async def test_generate_widget_dsl_passes_trace_context_to_llm(self):
+        user = _User()
+        credential_id = uuid.uuid4()
+        credential = MagicMock()
+        credential.id = credential_id
+        from app.db.models import CredentialType
+
+        credential.type = CredentialType.openai
+        credential.encrypted_config = "enc"
+        content = (
+            '```json\n{"name": "Signups", "description": "Monthly signups", "nodes": ['
+            '{"id": "chart", "type": "chartOutput", "data": {"chartType": "bar"}}], '
+            '"edges": []}\n```'
+        )
+        execute_llm = AsyncMock(return_value={"text": content})
+
+        with (
+            patch.object(dash_api, "decrypt_config", return_value={"api_key": "x"}),
+            patch.object(dash_api, "execute_llm", execute_llm),
+        ):
+            result = await dash_api.generate_widget_dsl(
+                "show signups",
+                credential=credential,
+                model="gpt-4o-mini",
+                user=user,
+                node_label="AI Widget Create",
+            )
+
+        self.assertEqual(result["name"], "Signups")
+        execute_llm.assert_awaited_once()
+        kwargs = execute_llm.await_args.kwargs
+        trace_context = kwargs["trace_context"]
+        self.assertEqual(kwargs["model"], "gpt-4o-mini")
+        self.assertEqual(trace_context.user_id, user.id)
+        self.assertEqual(trace_context.credential_id, credential_id)
+        self.assertEqual(trace_context.source, "dashboard_widget_ai")
+        self.assertEqual(trace_context.node_label, "AI Widget Create")
+        self.assertIsNone(trace_context.workflow_id)
+
+    async def test_generate_widget_dsl_links_fine_tune_trace_to_workflow(self):
+        user = _User()
+        workflow_id = uuid.uuid4()
+        credential = MagicMock()
+        credential.id = uuid.uuid4()
+        from app.db.models import CredentialType
+
+        credential.type = CredentialType.openai
+        credential.encrypted_config = "enc"
+        execute_llm = AsyncMock(
+            return_value={
+                "text": (
+                    '```json\n{"nodes": ['
+                    '{"id": "chart", "type": "chartOutput", "data": {"chartType": "line"}}], '
+                    '"edges": []}\n```'
+                )
+            }
+        )
+
+        with (
+            patch.object(dash_api, "decrypt_config", return_value={"api_key": "x"}),
+            patch.object(dash_api, "execute_llm", execute_llm),
+        ):
+            await dash_api.generate_widget_dsl(
+                "make it line",
+                credential=credential,
+                model="gpt-4o-mini",
+                user=user,
+                current_workflow={"nodes": [], "edges": []},
+                workflow_id=workflow_id,
+                node_label="AI Widget Fine-tune",
+            )
+
+        trace_context = execute_llm.await_args.kwargs["trace_context"]
+        self.assertEqual(trace_context.node_label, "AI Widget Fine-tune")
+        self.assertEqual(trace_context.workflow_id, workflow_id)
+
+
 class TestCreateWidget(unittest.IsolatedAsyncioTestCase):
     async def test_create_widget_creates_hidden_workflow(self):
         user = _User()
@@ -266,8 +344,9 @@ class TestAiRefineWidget(unittest.IsolatedAsyncioTestCase):
 
         credential = MagicMock(type=CredentialType.openai)
         record_version = AsyncMock()
+        generate_dsl = AsyncMock(return_value=fake_dsl)
         with (
-            patch.object(dash_api, "generate_widget_dsl", AsyncMock(return_value=fake_dsl)),
+            patch.object(dash_api, "generate_widget_dsl", generate_dsl),
             patch.object(dash_api, "get_credential_for_user", AsyncMock(return_value=credential)),
             patch.object(dash_api, "_record_chat_workflow_edit_version", record_version),
         ):
@@ -285,6 +364,8 @@ class TestAiRefineWidget(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(widget.cached_at)
         # AI fine-tune records a pre-edit snapshot so it appears in Edit History.
         record_version.assert_awaited_once()
+        self.assertEqual(generate_dsl.await_args.kwargs["workflow_id"], widget.workflow_id)
+        self.assertEqual(generate_dsl.await_args.kwargs["node_label"], "AI Widget Fine-tune")
 
     async def test_refine_records_change_history_snapshot(self):
         user = _User()

@@ -35,7 +35,7 @@ const router = useRouter();
 
 const config = ref<MCPConfigResponse | null>(null);
 const loading = ref(true);
-const connectionTab = ref<"api-key" | "claude">("api-key");
+const connectionTab = ref<"api-key" | "claude" | "openai">("api-key");
 const showApiKey = ref(false);
 const regenerating = ref(false);
 const togglingWorkflowId = ref<string | null>(null);
@@ -353,6 +353,15 @@ function addToCursor(): void {
               >
                 Claude Connector
               </button>
+              <button
+                :class="cn(
+                  'px-3 py-1.5 text-sm font-medium rounded-md transition-colors',
+                  connectionTab === 'openai' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
+                )"
+                @click="connectionTab = 'openai'"
+              >
+                ChatGPT Connector
+              </button>
             </div>
 
             <div
@@ -477,6 +486,48 @@ function addToCursor(): void {
               <div class="flex items-start gap-2 p-3 rounded-md bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/50 text-sm">
                 <Info class="w-4 h-4 shrink-0 mt-0.5" />
                 <span>Claude uses OAuth 2.1 to securely authenticate. Your Heym credentials are used to authorize access and are never shared with Claude.</span>
+              </div>
+            </div>
+
+            <div
+              v-else-if="connectionTab === 'openai'"
+              class="space-y-4"
+            >
+              <div>
+                <label class="text-sm font-medium text-muted-foreground block mb-1.5">
+                  MCP Server URL
+                </label>
+                <div class="flex items-center gap-2">
+                  <code class="flex-1 px-3 py-2 bg-muted rounded-md text-sm font-mono truncate">
+                    {{ sseEndpointUrl }}
+                  </code>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    @click="copyToClipboard(sseEndpointUrl, 'MCP Server URL')"
+                  >
+                    <Copy class="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+
+              <div class="rounded-lg bg-muted/50 border p-4 space-y-3">
+                <h4 class="font-medium text-sm">
+                  Setup Instructions
+                </h4>
+                <ol class="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
+                  <li>Open <strong class="text-foreground">chatgpt.com</strong> in your browser and go to Settings</li>
+                  <li>Navigate to <strong class="text-foreground">Apps → Advanced settings</strong> and enable <strong class="text-foreground">Developer mode</strong></li>
+                  <li>Go to <strong class="text-foreground">Settings → Apps → Create app</strong></li>
+                  <li>Enter the name <strong class="text-foreground">Heym</strong> and paste the MCP Server URL above</li>
+                  <li>Choose <strong class="text-foreground">OAuth</strong> for authentication — ChatGPT will register automatically</li>
+                  <li>Click <strong class="text-foreground">Create</strong> and authorize with your Heym credentials</li>
+                </ol>
+              </div>
+
+              <div class="flex items-start gap-2 p-3 rounded-md bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/50 text-sm">
+                <Info class="w-4 h-4 shrink-0 mt-0.5" />
+                <span>ChatGPT uses OAuth 2.1 to securely authenticate. Your Heym credentials are used to authorize access and are never shared with ChatGPT. Developer mode is required to add custom MCP connectors.</span>
               </div>
             </div>
           </div>

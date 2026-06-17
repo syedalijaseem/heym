@@ -4,6 +4,34 @@ from app.services.chart_payload import build_chart_payload
 
 
 class TestBuildChartPayload(unittest.TestCase):
+    def test_url_passthrough_for_bar(self):
+        config = {
+            "chartType": "bar",
+            "labelField": "month",
+            "valueField": "revenue",
+            "url": "https://example.com/report",
+        }
+        data = [{"month": "Jan", "revenue": 120}]
+        payload = build_chart_payload(config, data)
+        self.assertEqual(payload["url"], "https://example.com/report")
+
+    def test_url_passthrough_for_numeric_and_is_trimmed(self):
+        config = {"chartType": "numeric", "valueField": "count", "url": "  https://example.com  "}
+        data = [{"count": 5}]
+        payload = build_chart_payload(config, data)
+        self.assertEqual(payload["url"], "https://example.com")
+
+    def test_no_url_key_when_missing_or_blank(self):
+        for url_val in (None, "", "   "):
+            config = {"chartType": "bar", "labelField": "m", "valueField": "v", "url": url_val}
+            payload = build_chart_payload(config, [{"m": "Jan", "v": 1}])
+            self.assertNotIn("url", payload)
+
+    def test_no_url_key_when_non_string(self):
+        config = {"chartType": "bar", "labelField": "m", "valueField": "v", "url": 123}
+        payload = build_chart_payload(config, [{"m": "Jan", "v": 1}])
+        self.assertNotIn("url", payload)
+
     def test_bar_vertical_single_series(self):
         config = {
             "chartType": "bar",
@@ -178,3 +206,40 @@ class TestBuildChartPayload(unittest.TestCase):
         self.assertEqual(payload["type"], "proportion")
         self.assertEqual(payload["labels"], ["Kotlin", "JavaScript"])
         self.assertEqual(payload["series"], [{"name": "value", "data": [49.64, 23.73]}])
+
+    def test_text_static_config(self):
+        config = {"chartType": "text", "text": "**Last execution** at `19:47`"}
+        payload = build_chart_payload(config, {})
+        self.assertEqual(payload["type"], "text")
+        self.assertEqual(payload["text"], "**Last execution** at `19:47`")
+        self.assertNotIn("series", payload)
+
+    def test_text_pulls_from_value_field(self):
+        config = {"chartType": "text", "valueField": "message"}
+        data = {"data": [{"message": "Last run at 19:47", "other": 1}]}
+        payload = build_chart_payload(config, data)
+        self.assertEqual(payload["type"], "text")
+        self.assertEqual(payload["text"], "Last run at 19:47")
+
+    def test_text_value_field_takes_precedence_over_static(self):
+        config = {"chartType": "text", "valueField": "message", "text": "static fallback"}
+        data = [{"message": "dynamic wins"}]
+        payload = build_chart_payload(config, data)
+        self.assertEqual(payload["text"], "dynamic wins")
+
+    def test_text_falls_back_to_first_string_field(self):
+        config = {"chartType": "text"}
+        data = [{"count": 5, "note": "hello world"}]
+        payload = build_chart_payload(config, data)
+        self.assertEqual(payload["text"], "hello world")
+
+    def test_text_empty_when_nothing_available(self):
+        config = {"chartType": "text"}
+        payload = build_chart_payload(config, {})
+        self.assertEqual(payload["type"], "text")
+        self.assertEqual(payload["text"], "")
+
+    def test_text_scalar_string_input(self):
+        config = {"chartType": "text"}
+        payload = build_chart_payload(config, "just a string")
+        self.assertEqual(payload["text"], "just a string")

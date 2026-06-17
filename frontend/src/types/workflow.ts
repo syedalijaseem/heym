@@ -234,6 +234,7 @@ export type GristOperation =
 export type DataTableOperation =
   | "find"
   | "getAll"
+  | "count"
   | "getById"
   | "insert"
   | "update"
@@ -547,7 +548,8 @@ export interface NodeData {
     | "gauge"
     | "scatter"
     | "proportion"
-    | "barGauge";
+    | "barGauge"
+    | "text";
   orientation?: "horizontal" | "vertical";
   dataPath?: string;
   labelField?: string;
@@ -559,7 +561,11 @@ export interface NodeData {
   series?: { name: string; field: string }[];
   columns?: string[];
   unit?: string;
+  // Static markdown body for the `text` chart type.
+  text?: string;
   title?: string;
+  // Optional external link for a chartOutput widget; surfaced as an icon in the dashboard widget title.
+  url?: string;
 }
 
 export interface WorkflowShare {

@@ -83,6 +83,92 @@ class WorkflowUpdateWebSocketSyncTests(unittest.IsolatedAsyncioTestCase):
         db.commit.assert_awaited_once()
         request_sync_mock.assert_called_once_with()
 
+    async def test_dashboard_widget_workflow_update_invalidates_widget_cache(self) -> None:
+        workflow_id = uuid.uuid4()
+        owner_id = uuid.uuid4()
+        workflow = SimpleNamespace(
+            id=workflow_id,
+            kind="dashboard_widget",
+            name="Widget workflow",
+            description=None,
+            nodes=[
+                {
+                    "id": "chart",
+                    "type": "chartOutput",
+                    "data": {"chartType": "bar"},
+                }
+            ],
+            edges=[],
+            auth_type=WorkflowAuthType.anonymous,
+            auth_header_key=None,
+            auth_header_value=None,
+            webhook_body_mode=WebhookBodyMode.generic,
+            cache_ttl_seconds=None,
+            rate_limit_requests=None,
+            rate_limit_window_seconds=None,
+            sse_enabled=False,
+            sse_node_config=None,
+            allow_anonymous=True,
+            owner_id=owner_id,
+            folder_id=None,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+        widget = SimpleNamespace(
+            workflow_id=workflow_id,
+            title="Widget workflow",
+            description=None,
+            chart_type="bar",
+            cached_payload={"type": "bar"},
+            cached_at=datetime.now(timezone.utc),
+            cached_workflow_version="old",
+        )
+        current_user = SimpleNamespace(id=owner_id)
+        db = AsyncMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                SimpleNamespace(scalar_one_or_none=lambda: widget),
+                SimpleNamespace(scalar=lambda: 0),
+            ]
+        )
+        db.add = lambda _row: None
+        db.flush = AsyncMock()
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+        payload = WorkflowUpdate(
+            nodes=[
+                {
+                    "id": "chart",
+                    "type": "chartOutput",
+                    "data": {"chartType": "line"},
+                }
+            ],
+            edges=[],
+        )
+
+        with (
+            patch(
+                "app.api.workflows.get_workflow_for_user",
+                AsyncMock(return_value=workflow),
+            ),
+            patch(
+                "app.api.workflows._build_workflow_response",
+                return_value={"id": str(workflow_id)},
+            ),
+            patch("app.services.websocket_trigger_service.websocket_trigger_manager.request_sync"),
+        ):
+            await update_workflow(
+                workflow_id=workflow_id,
+                workflow_data=payload,
+                current_user=current_user,
+                db=db,
+            )
+
+        self.assertEqual(widget.chart_type, "line")
+        self.assertIsNone(widget.cached_payload)
+        self.assertIsNone(widget.cached_at)
+        self.assertIsNone(widget.cached_workflow_version)
+
 
 if __name__ == "__main__":
     unittest.main()

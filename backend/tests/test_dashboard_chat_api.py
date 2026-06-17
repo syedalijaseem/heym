@@ -1,3 +1,4 @@
+import asyncio
 import json
 import unittest
 import uuid
@@ -460,6 +461,77 @@ class DashboardChatApiTests(unittest.IsolatedAsyncioTestCase):
                 'data: {"type":"done"}\n\n',
             ],
         )
+
+    async def test_dashboard_chat_emits_ping_while_waiting_for_sse_chunks(self) -> None:
+        credential = MagicMock()
+        credential.id = uuid.uuid4()
+        credential.type = CredentialType.openai
+        credential.encrypted_config = "encrypted-config"
+        current_user = MagicMock()
+        current_user.id = uuid.uuid4()
+        http_request = MagicMock()
+        http_request.is_disconnected = AsyncMock(return_value=False)
+        release_stream = asyncio.Event()
+
+        async def fake_stream_dashboard_chat(
+            _client: object,
+            _model: str,
+            _system_prompt: str,
+            _messages: list[dict],
+            _db: object,
+            _user: object,
+            _provider: str,
+            _public_base_url: str,
+            _trace_context: object,
+            _cancel_event: object,
+            _attachment: object = None,
+            _selected_credential: object = None,
+        ):
+            await release_stream.wait()
+            yield 'data: {"type":"done"}\n\n'
+
+        request = DashboardChatRequest(
+            credential_id=credential.id,
+            model="gpt-4o-mini",
+            message="Explain this page",
+        )
+
+        with (
+            patch(
+                "app.api.ai_assistant.get_credential_for_user",
+                AsyncMock(return_value=credential),
+            ),
+            patch("app.api.ai_assistant.decrypt_config", return_value={"api_key": "test"}),
+            patch("app.api.ai_assistant.get_openai_client", return_value=(MagicMock(), "openai")),
+            patch(
+                "app.api.ai_assistant.get_workflows_for_user_with_inputs",
+                AsyncMock(return_value=[]),
+            ),
+            patch("app.api.ai_assistant._load_agents_md_content", return_value=""),
+            patch("app.api.ai_assistant.build_public_base_url", return_value="http://localhost"),
+            patch(
+                "app.api.ai_assistant.stream_dashboard_chat", side_effect=fake_stream_dashboard_chat
+            ),
+            patch("app.api.ai_assistant.DASHBOARD_CHAT_SSE_HEARTBEAT_SECONDS", 0.001),
+        ):
+            response = await dashboard_chat_stream(
+                http_request=http_request,
+                request=request,
+                current_user=current_user,
+                db=AsyncMock(),
+            )
+            stream = response.body_iterator
+            self.assertEqual(await stream.__anext__(), ": ping\n\n")
+            release_stream.set()
+
+            while True:
+                chunk = await stream.__anext__()
+                if chunk == 'data: {"type":"done"}\n\n':
+                    break
+                self.assertEqual(chunk, ": ping\n\n")
+
+            with self.assertRaises(StopAsyncIteration):
+                await stream.__anext__()
 
 
 class DashboardChatWorkflowBuilderTests(unittest.IsolatedAsyncioTestCase):

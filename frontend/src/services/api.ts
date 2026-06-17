@@ -121,6 +121,7 @@ import type {
 } from "@/types/chat";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
+const AI_REQUEST_TIMEOUT_MS = 120_000;
 
 const api = axios.create({
   baseURL: `${API_URL}/api`,
@@ -1260,11 +1261,15 @@ export const dashboardApi = {
     credentialId: string,
     model: string,
   ): Promise<DashboardWidget> => {
-    const response = await api.post<DashboardWidget>("/dashboards/widgets/ai-generate", {
-      prompt,
-      credential_id: credentialId,
-      model,
-    });
+    const response = await api.post<DashboardWidget>(
+      "/dashboards/widgets/ai-generate",
+      {
+        prompt,
+        credential_id: credentialId,
+        model,
+      },
+      { timeout: AI_REQUEST_TIMEOUT_MS },
+    );
     return response.data;
   },
 
@@ -1274,11 +1279,15 @@ export const dashboardApi = {
     credentialId: string,
     model: string,
   ): Promise<DashboardWidget> => {
-    const response = await api.post<DashboardWidget>(`/dashboards/widgets/${id}/ai-refine`, {
-      prompt,
-      credential_id: credentialId,
-      model,
-    });
+    const response = await api.post<DashboardWidget>(
+      `/dashboards/widgets/${id}/ai-refine`,
+      {
+        prompt,
+        credential_id: credentialId,
+        model,
+      },
+      { timeout: AI_REQUEST_TIMEOUT_MS },
+    );
     return response.data;
   },
 };
@@ -2541,6 +2550,11 @@ export const dataTablesApi = {
     return response.data;
   },
 
+  clone: async (id: string): Promise<DataTable> => {
+    const response = await api.post<DataTable>(`/data-tables/${id}/clone`);
+    return response.data;
+  },
+
   generateSchema: async (payload: {
     credential_id: string;
     model: string;
@@ -2550,6 +2564,7 @@ export const dataTablesApi = {
     const response = await api.post<DataTableSchemaSuggestion>(
       "/data-tables/generate-schema",
       payload,
+      { timeout: AI_REQUEST_TIMEOUT_MS },
     );
     return response.data;
   },
@@ -2577,7 +2592,11 @@ export const dataTablesApi = {
   },
 
   createRow: async (id: string, data: Record<string, unknown>): Promise<DataTableRow> => {
-    const response = await api.post<DataTableRow>(`/data-tables/${id}/rows`, { data });
+    const response = await api.post<DataTableRow>(
+      `/data-tables/${id}/rows`,
+      { data },
+      { timeout: AI_REQUEST_TIMEOUT_MS },
+    );
     return response.data;
   },
 

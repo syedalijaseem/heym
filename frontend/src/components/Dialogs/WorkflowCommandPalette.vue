@@ -65,7 +65,14 @@ interface PaletteItem {
   type: PaletteItemType;
   id: string;
   label: string;
-  icon: (typeof TABS)[number]["icon"] | typeof Workflow | typeof BookOpen | typeof Trash2 | typeof LayoutTemplate;
+  icon:
+    | (typeof TABS)[number]["icon"]
+    | typeof Workflow
+    | typeof BookOpen
+    | typeof Trash2
+    | typeof LayoutTemplate
+    | typeof LifeBuoy
+    | typeof Play;
   workflow?: WorkflowListItem;
   folderPath?: string;
   categoryId?: string;
@@ -80,11 +87,13 @@ interface Props {
   workflows: WorkflowListItem[];
   context: "dashboard" | "editor";
   activeTab?: string;
+  hideTemplates?: boolean;
+  hideRunbook?: boolean;
 }
 
 const props = withDefaults(
   defineProps<Props>(),
-  { activeTab: "workflows" }
+  { activeTab: "workflows", hideTemplates: false, hideRunbook: false }
 );
 
 const emit = defineEmits<{
@@ -103,6 +112,11 @@ const workflowTemplates = ref<WorkflowTemplate[]>([]);
 const nodeTemplates = ref<NodeTemplate[]>([]);
 
 async function fetchTemplates(): Promise<void> {
+  if (props.hideTemplates) {
+    workflowTemplates.value = [];
+    nodeTemplates.value = [];
+    return;
+  }
   try {
     const res = await templatesApi.list();
     workflowTemplates.value = res.workflow_templates;
@@ -275,26 +289,28 @@ const categoryGroups = computed((): CategoryGroup[] => {
   }
 
   // 5. Templates (workflow + node)
-  const templateItems: PaletteItem[] = [
-    ...filteredTemplates.value.map((t) => ({
-      type: "template" as const,
-      id: t.id,
-      label: t.name,
-      icon: LayoutTemplate,
-      template: t,
-      categoryLabel: "Workflow Template",
-    })),
-    ...filteredNodeTemplates.value.map((t) => ({
-      type: "node-template" as const,
-      id: t.id,
-      label: t.name,
-      icon: LayoutTemplate,
-      nodeTemplate: t,
-      categoryLabel: "Node Template",
-    })),
-  ];
-  if (templateItems.length > 0) {
-    groups.push({ id: "templates", label: "Templates", items: templateItems });
+  if (!props.hideTemplates) {
+    const templateItems: PaletteItem[] = [
+      ...filteredTemplates.value.map((t) => ({
+        type: "template" as const,
+        id: t.id,
+        label: t.name,
+        icon: LayoutTemplate,
+        template: t,
+        categoryLabel: "Workflow Template",
+      })),
+      ...filteredNodeTemplates.value.map((t) => ({
+        type: "node-template" as const,
+        id: t.id,
+        label: t.name,
+        icon: LayoutTemplate,
+        nodeTemplate: t,
+        categoryLabel: "Node Template",
+      })),
+    ];
+    if (templateItems.length > 0) {
+      groups.push({ id: "templates", label: "Templates", items: templateItems });
+    }
   }
 
   // 5. Documentation (always last)
@@ -323,31 +339,34 @@ const categoryGroups = computed((): CategoryGroup[] => {
     "demo".includes(q) ||
     "tour".includes(q)
   ) {
+    const supportItems: PaletteItem[] = [
+      {
+        type: "documentation" as const,
+        id: "documentation",
+        label: "Documentation",
+        icon: BookOpen,
+        categoryId: "getting-started",
+        slug: "introduction",
+      },
+      {
+        type: "support" as const,
+        id: "support",
+        label: "Contact Support",
+        icon: LifeBuoy,
+      },
+    ];
+    if (!props.hideRunbook) {
+      supportItems.unshift({
+        type: "runbook" as const,
+        id: "runbook",
+        label: "Run the Runbook",
+        icon: Play,
+      });
+    }
     groups.push({
       id: "support",
       label: "Support",
-      items: [
-        {
-          type: "runbook" as const,
-          id: "runbook",
-          label: "Run the Runbook",
-          icon: Play,
-        },
-        {
-          type: "documentation" as const,
-          id: "documentation",
-          label: "Documentation",
-          icon: BookOpen,
-          categoryId: "getting-started",
-          slug: "introduction",
-        },
-        {
-          type: "support" as const,
-          id: "support",
-          label: "Contact Support",
-          icon: LifeBuoy,
-        },
-      ],
+      items: supportItems,
     });
   }
 
@@ -399,12 +418,14 @@ function handleKeyDown(event: KeyboardEvent): void {
 
   if (event.key === "Escape") {
     event.preventDefault();
+    event.stopPropagation();
     emit("close");
     return;
   }
 
   if (event.key === "ArrowDown" || (event.key === "Tab" && !event.shiftKey)) {
     event.preventDefault();
+    event.stopPropagation();
     if (allItems.value.length > 0) {
       selectedIndex.value =
         selectedIndex.value >= allItems.value.length - 1
@@ -417,6 +438,7 @@ function handleKeyDown(event: KeyboardEvent): void {
 
   if (event.key === "ArrowUp" || (event.key === "Tab" && event.shiftKey)) {
     event.preventDefault();
+    event.stopPropagation();
     if (allItems.value.length > 0) {
       selectedIndex.value =
         selectedIndex.value <= 0
@@ -429,6 +451,7 @@ function handleKeyDown(event: KeyboardEvent): void {
 
   if (event.key === "Enter") {
     event.preventDefault();
+    event.stopPropagation();
     const item = allItems.value[selectedIndex.value];
     if (item) {
       handleSelectItem(item, selectedIndex.value, event);
