@@ -864,7 +864,7 @@ async function loadSupabaseTablesForSelectedNode(): Promise<void> {
     const result = await credentialsApi.listSupabaseTables(selectedCredentialId, selectedSchema);
     const currentNode = workflowStore.selectedNode;
     if (
-      requestId != supabaseTablesRequestSequence ||
+      requestId !== supabaseTablesRequestSequence ||
       !currentNode ||
       currentNode.type !== "supabase" ||
       currentNode.id !== selectedNodeId ||
@@ -913,7 +913,7 @@ async function loadSupabaseColumnsForSelectedNode(): Promise<void> {
     );
     const currentNode = workflowStore.selectedNode;
     if (
-      requestId != supabaseColumnsRequestSequence ||
+      requestId !== supabaseColumnsRequestSequence ||
       !currentNode ||
       currentNode.type !== "supabase" ||
       currentNode.id !== selectedNodeId ||

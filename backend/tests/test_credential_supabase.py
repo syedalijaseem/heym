@@ -102,8 +102,7 @@ class SupabaseCredentialValidationTests(unittest.TestCase):
                 "api_key": "secret",
             },
         )
-        self.assertIsNone(public_fields["supabase_url"])
-        self.assertIsNone(public_fields["supabase_schema"])
+        self.assertEqual(public_fields, {})
 
 
 class SupabaseCredentialConnectionTests(unittest.TestCase):
@@ -354,8 +353,8 @@ class SupabaseCredentialConnectionApiTests(unittest.IsolatedAsyncioTestCase):
             }
         )
         self.assertEqual(credential.encrypted_config, "new-encrypted")
-        self.assertEqual(result.supabase_url, "https://new.example.supabase.co")
-        self.assertEqual(result.supabase_schema, "app")
+        self.assertEqual(result.public_fields["supabase_url"], "https://new.example.supabase.co")
+        self.assertEqual(result.public_fields["supabase_schema"], "app")
 
     async def test_test_connection_rejects_unsupported_type(self) -> None:
         with self.assertRaises(HTTPException) as ctx:

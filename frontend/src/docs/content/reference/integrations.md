@@ -165,7 +165,7 @@ The Supabase credential connects Heym to a Supabase project's PostgREST API so w
 
 ### Notes
 
-- The [Supabase node](../nodes/supabase-node.md) talks to `/rest/v1/<table>` and currently supports exact-match filters.
+- The [Supabase node](../nodes/supabase-node.md) talks to `/rest/v1/<table>` and supports operator filters (`eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `like`, `ilike`, `is`, `in`, and related PostgREST operators) plus nested `or` / `and` logical groups.
 - For write operations, prefer a key intended for trusted server-side use with the minimum required table permissions.
 - Nodes can override the schema per step even if the credential defines a default schema.
 

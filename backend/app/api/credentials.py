@@ -123,10 +123,7 @@ def get_public_credential_fields(
             "supabase_url": supabase_url,
             "supabase_schema": supabase_schema,
         }
-    return {
-        "supabase_url": None,
-        "supabase_schema": None,
-    }
+    return {}
 
 
 async def _get_accessible_credential(
@@ -583,7 +580,7 @@ async def create_credential(
         type=credential.type,
         masked_value=masked,
         header_key=header_key,
-        **get_public_credential_fields(credential.type, credential_data.config),
+        public_fields=get_public_credential_fields(credential.type, credential_data.config),
         created_at=credential.created_at,
         updated_at=credential.updated_at,
     )
@@ -745,7 +742,7 @@ async def get_credential(
         type=credential.type,
         masked_value=masked,
         header_key=header_key,
-        **get_public_credential_fields(credential.type, config),
+        public_fields=get_public_credential_fields(credential.type, config),
         created_at=credential.created_at,
         updated_at=credential.updated_at,
     )
@@ -809,7 +806,7 @@ async def update_credential(
         type=credential.type,
         masked_value=masked,
         header_key=header_key,
-        **get_public_credential_fields(credential.type, config),
+        public_fields=get_public_credential_fields(credential.type, config),
         created_at=credential.created_at,
         updated_at=credential.updated_at,
     )

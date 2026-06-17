@@ -16,6 +16,7 @@ class SupabaseService:
     _TABLE_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
     _FILTER_QUOTE_PATTERN = re.compile(r'[\s,.:()"\\\\-]')
     _SELECT_PAGE_SIZE = 1000
+    _SELECT_UNBOUNDED_MAX_ROWS = 10_000
     _SUPPORTED_FILTER_OPERATORS = {
         "eq",
         "neq",
@@ -47,7 +48,7 @@ class SupabaseService:
     def __init__(self, config: dict[str, Any]) -> None:
         """Initialise with decrypted credential config."""
         self._config = dict(config)
-        self._base_url = str(self._config.get("supabase_url", "")).rstrip("/")
+        self._base_url = str(self._config.get("supabase_url", "")).strip().rstrip("/")
         self._api_key = str(self._config.get("supabase_key", "")).strip()
         if not self._base_url:
             raise ValueError("Supabase credential requires supabase_url")
@@ -347,7 +348,7 @@ class SupabaseService:
                 prefix = f"{normalized_key}("
                 if not logical_group.startswith(prefix) or not logical_group.endswith(")"):
                     raise ValueError(f"Failed to compile Supabase '{normalized_key}' filter")
-                params.append((normalized_key, logical_group[len(prefix) : -1]))
+                params.append((normalized_key, logical_group[len(normalized_key) :]))
                 continue
             for fragment in cls._compile_field_filter_fragments(normalized_key, value):
                 field_name, encoded_value = fragment.split(".", 1)
@@ -459,8 +460,14 @@ class SupabaseService:
         all_rows: list[dict[str, Any]] = []
         total_count: int | None = None
         offset = 0
+        unbounded_max = self._SELECT_UNBOUNDED_MAX_ROWS
 
         while True:
+            if requested_limit == 0 and len(all_rows) >= unbounded_max:
+                raise ValueError(
+                    f"Supabase select with no row limit exceeds the maximum of "
+                    f"{unbounded_max} rows; set supabaseLimit to a positive value"
+                )
             page_limit = (
                 self._SELECT_PAGE_SIZE
                 if requested_limit == 0
@@ -488,6 +495,12 @@ class SupabaseService:
 
             if total_count is None:
                 total_count = self._normalize_count(response, rows)
+                if requested_limit == 0 and total_count > unbounded_max:
+                    raise ValueError(
+                        f"Supabase select with no row limit would fetch {total_count} rows, "
+                        f"which exceeds the maximum of {unbounded_max}; set supabaseLimit to a "
+                        f"positive value"
+                    )
 
             all_rows.extend(rows)
             fetched_count = len(rows)

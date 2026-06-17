@@ -29,8 +29,7 @@ export interface Credential {
   type: CredentialType;
   masked_value: string | null;
   header_key: string | null;
-  supabase_url?: string | null;
-  supabase_schema?: string | null;
+  public_fields?: Record<string, string | null>;
   created_at: string;
   updated_at?: string;
 }

@@ -127,14 +127,14 @@ const storedSupabaseUrl = computed((): string => {
   if (!props.credential || props.credential.type !== "supabase") {
     return "";
   }
-  return props.credential.supabase_url ?? "";
+  return props.credential.public_fields?.supabase_url ?? "";
 });
 
 const storedSupabaseSchema = computed((): string => {
   if (!props.credential || props.credential.type !== "supabase") {
     return "public";
   }
-  return props.credential.supabase_schema ?? "public";
+  return props.credential.public_fields?.supabase_schema ?? "public";
 });
 
 const hasSupabaseCredentialConfigChange = computed((): boolean => {
@@ -230,12 +230,12 @@ watch(
         bqConnectedCredential.value = null;
         supabaseUrl.value =
           props.credential.type === "supabase"
-            ? props.credential.supabase_url ?? ""
+            ? props.credential.public_fields?.supabase_url ?? ""
             : "";
         supabaseKey.value = "";
         supabaseSchema.value =
           props.credential.type === "supabase"
-            ? props.credential.supabase_schema ?? "public"
+            ? props.credential.public_fields?.supabase_schema ?? "public"
             : "public";
         s3AccessKeyId.value = "";
         s3SecretAccessKey.value = "";

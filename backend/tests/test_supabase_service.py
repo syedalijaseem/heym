@@ -232,7 +232,7 @@ class TestSupabaseService(unittest.TestCase):
         params = _params_to_dict(mock_request.call_args[1]["params"])
         self.assertEqual(
             params["or"],
-            "status.eq.active,and(status.eq.pending,score.gte.5)",
+            "(status.eq.active,and(status.eq.pending,score.gte.5))",
         )
 
     def test_select_rows_rejects_unsupported_filter_operator(self) -> None:
@@ -308,6 +308,38 @@ class TestSupabaseService(unittest.TestCase):
             svc.insert_rows("users", [{"id": 1}], upsert=True, on_conflict="tenant_id,email")
         params = _params_to_dict(mock_request.call_args[1]["params"])
         self.assertEqual(params["on_conflict"], "tenant_id,email")
+
+    def test_service_strips_whitespace_from_supabase_url(self) -> None:
+        from app.services.supabase_service import SupabaseService
+
+        svc = SupabaseService(
+            {
+                "supabase_url": "https://example.supabase.co/  ",
+                "supabase_key": "sb-secret-key",
+            }
+        )
+        with patch("httpx.get") as mock_get:
+            mock_response = MagicMock()
+            mock_response.is_success = True
+            mock_response.status_code = 200
+            mock_get.return_value = mock_response
+            svc.test_connection()
+        self.assertEqual(
+            mock_get.call_args[0][0],
+            "https://example.supabase.co/rest/v1/",
+        )
+
+    def test_select_rows_limit_zero_rejects_excessive_total(self) -> None:
+        svc = self._make_service()
+        mock_response = MagicMock()
+        mock_response.is_success = True
+        mock_response.headers = {"content-range": "0-999/15000"}
+        mock_response.json.return_value = [{"id": i} for i in range(1000)]
+        with patch("httpx.request", return_value=mock_response):
+            with self.assertRaises(ValueError) as ctx:
+                svc.select_rows("users", limit=0)
+        self.assertIn("15000 rows", str(ctx.exception))
+        self.assertIn("10000", str(ctx.exception))
 
     def test_service_requires_non_empty_supabase_url(self) -> None:
         from app.services.supabase_service import SupabaseService

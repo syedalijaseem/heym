@@ -561,8 +561,7 @@ class CredentialResponse(BaseModel):
     type: CredentialType
     masked_value: str | None = None
     header_key: str | None = None
-    supabase_url: str | None = None
-    supabase_schema: str | None = None
+    public_fields: dict[str, str | None] = Field(default_factory=dict)
     created_at: datetime
     updated_at: datetime
 
