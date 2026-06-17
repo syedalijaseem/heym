@@ -2324,6 +2324,90 @@ Each row object includes **`rowIndex`**: the 1-based sheet row number (useful fo
 - `$logEvent.insertedCount` — number of rows inserted
 - `$logEvent.success` — boolean success indicator
 
+### 24A. supabase (Supabase Table Operations)
+- **Purpose**: Query and mutate Supabase tables through the PostgREST API
+- **Inputs**: 1 | **Outputs**: 1
+- **Credential required**: `supabase` credential type (`supabase_url` + `supabase_key`, optional `supabase_schema`)
+- **Data fields**:
+  - `label`: Node identifier
+  - `credentialId`: UUID of the Supabase credential
+  - `supabaseOperation`: Operation type - `"select"` | `"insert"` | `"update"` | `"upsert"` | `"delete"`
+  - `supabaseSchema`: Schema name (falls back to the credential's `supabase_schema`, then `"public"`)
+  - `supabaseTable`: Table name (supports expressions)
+  - `supabaseSelectColumns`: PostgREST select list for `select`
+  - `supabaseFilter`: JSON object of filters. Exact matches use `{"status":"active"}`; operators use `{"score":{"gte":10}}`; logical groups use `{"or":[{"status":"active"},{"score":{"gte":10}}]}`
+  - `supabaseLimit`: Maximum rows to return for `select`; use `"0"` to fetch all rows with automatic pagination
+  - `supabaseOrderBy`: Optional order-by column for `select`
+  - `supabaseAscending`: Boolean sort direction for `select`
+  - `supabaseRowsInputMode`: `"raw"` (JSON array in `supabaseRows`) | `"auto"` (map the single upstream input automatically) for `insert` / `upsert`
+  - `supabaseRows`: JSON array of row objects for `insert` / `upsert`
+  - `supabaseOnConflict`: Optional comma-separated conflict target columns for `upsert`
+  - `supabaseDataInputMode`: `"raw"` (JSON object in `supabaseData`) | `"auto"` (map the single upstream object automatically) for `update`
+  - `supabaseData`: JSON object of updated column values for `update`
+  - `supabaseIgnoredInputFields`: Optional comma-separated field names to omit from auto-mapped insert/upsert/update payloads
+
+**Operations Reference**:
+| Operation | Required fields | Output |
+|---|---|---|
+| `select` | `supabaseTable` | `{rows, count, success}` |
+| `insert` (raw) | `supabaseTable`, `supabaseRows` | `{rows, count, success}` |
+| `insert` (auto) | `supabaseTable`, `supabaseRowsInputMode: "auto"` | `{rows, count, success}` |
+| `update` (raw) | `supabaseTable`, `supabaseData`, `supabaseFilter` | `{rows, count, success}` |
+| `update` (auto) | `supabaseTable`, `supabaseDataInputMode: "auto"`, `supabaseFilter` | `{rows, count, success}` |
+| `upsert` (raw) | `supabaseTable`, `supabaseRows` | `{rows, count, success}` |
+| `upsert` (auto) | `supabaseTable`, `supabaseRowsInputMode: "auto"` | `{rows, count, success}` |
+| `delete` | `supabaseTable`, `supabaseFilter` | `{rows, count, success}` |
+
+**Discovery**: The editor can discover tables and columns from the selected credential/schema. Prefer real table names and column names when known; otherwise use placeholders and let the user select them in the editor.
+
+**Filter rules**:
+- `supabaseFilter` must be a JSON object string.
+- Supported operators include `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `like`, `ilike`, `is`, `in`, `cs`, `cd`, and `ov`.
+- Use `{"column": null}` for `IS NULL`, or `{"column":{"is": null}}`.
+- Use `{"or":[...conditions...]}` / `{"and":[...conditions...]}` for logical groups.
+
+**Example — select**:
+```json
+{
+  "id": "supa1",
+  "type": "supabase",
+  "data": {
+    "label": "activeUsers",
+    "credentialId": "<credential-uuid>",
+    "supabaseOperation": "select",
+    "supabaseSchema": "public",
+    "supabaseTable": "users",
+    "supabaseSelectColumns": "id,email,status",
+    "supabaseFilter": "{\"or\":[{\"status\":\"active\"},{\"score\":{\"gte\":10}}]}",
+    "supabaseLimit": "100",
+    "supabaseOrderBy": "created_at",
+    "supabaseAscending": false
+  }
+}
+```
+
+**Example — insert with auto-map**:
+```json
+{
+  "id": "supa2",
+  "type": "supabase",
+  "data": {
+    "label": "createUser",
+    "credentialId": "<credential-uuid>",
+    "supabaseOperation": "insert",
+    "supabaseSchema": "public",
+    "supabaseTable": "users",
+    "supabaseRowsInputMode": "auto",
+    "supabaseIgnoredInputFields": "id,created_at"
+  }
+}
+```
+
+**Accessing Supabase Output**:
+- `$activeUsers.rows` — array of returned row objects
+- `$activeUsers.count` — number of returned or affected rows
+- `$activeUsers.success` — boolean success indicator
+
 ### 25. dataTable (DataTable Operations)
 - **Purpose**: Read, write, and manage data in Heym DataTables (first-party structured storage)
 - **Inputs**: 1 | **Outputs**: 1
@@ -3720,7 +3804,7 @@ Always include:
 21. **MULTIPLE INPUT FIELDS** - textInput nodes support multiple input fields via `inputFields` array. Define fields like `[{"key": "text"}, {"key": "base64"}]`. Access via `$nodeLabel.body.fieldKey`. Input values are sent in the `body` object.
 22. **⚠️ NO UNNECESSARY textInput!** - NEVER add textInput unless user explicitly needs to provide input data. For static URLs, scheduled tasks, or fixed operations, START DIRECTLY with http, cron, or other nodes. textInput is ONLY for workflows that receive dynamic data from users/API callers.
 23. **⚠️ PRESERVE CREDENTIALS & MODEL** - When modifying an existing workflow, ALWAYS preserve existing `credentialId` and `model` values in nodes. NEVER replace, remove, or change credential IDs or model names unless the user explicitly asks to use a different credential or model. If a node already has a `credentialId` or `model`, keep them exactly as is.
-23a. **⚠️ CREDENTIALS & INTEGRATIONS - OWNED ONLY (NO SHARED)** - For **every** node field that references a credential or secret (`credentialId`, `fallbackCredentialId`, `guardrailCredentialId`, Playwright `aiStep` credential, etc.), use ONLY credentials **owned** by the workflow owner. **NEVER** put shared credentials (shared with you by another user or via team share) in generated JSON—the UI labels these as shared; they must not appear in AI output. Use placeholders such as `YOUR_CREDENTIAL_ID`, `slack-credential-uuid`, `telegram-credential-uuid`, or `imap-credential-uuid` and let the user pick an owned credential in the editor. Applies to: `llm`, `agent`, `slack`, `telegram`, `slackTrigger`, `telegramTrigger`, `imapTrigger`, `sendEmail`, `redis`, `grist`, `rabbitmq`, `crawler`, `playwright` (including `aiStep`), and any other integration that stores a credential id. When modifying an existing workflow (rule 23), still preserve existing ids if they are already non-shared; when **adding** new nodes, never insert shared credential UUIDs.
+23a. **⚠️ CREDENTIALS & INTEGRATIONS - OWNED ONLY (NO SHARED)** - For **every** node field that references a credential or secret (`credentialId`, `fallbackCredentialId`, `guardrailCredentialId`, Playwright `aiStep` credential, etc.), use ONLY credentials **owned** by the workflow owner. **NEVER** put shared credentials (shared with you by another user or via team share) in generated JSON—the UI labels these as shared; they must not appear in AI output. Use placeholders such as `YOUR_CREDENTIAL_ID`, `slack-credential-uuid`, `telegram-credential-uuid`, or `imap-credential-uuid` and let the user pick an owned credential in the editor. Applies to: `llm`, `agent`, `slack`, `telegram`, `slackTrigger`, `telegramTrigger`, `imapTrigger`, `sendEmail`, `redis`, `grist`, `googleSheets`, `bigquery`, `supabase`, `rabbitmq`, `crawler`, `playwright` (including `aiStep`), and any other integration that stores a credential id. When modifying an existing workflow (rule 23), still preserve existing ids if they are already non-shared; when **adding** new nodes, never insert shared credential UUIDs.
 24. **EXECUTE NODE OUTPUT** - Execute node returns `{status, outputs, workflow_id, execution_time_ms}`. Access the called workflow's result via `$executeNodeLabel.outputs.output.result`. The `outputs.output` object contains the result from the executed workflow's output node.
 25. **EXECUTE NODE MULTIPLE INPUTS** - When calling a workflow that expects multiple input fields: (1) Add matching `inputFields` to your textInput node to collect all required data, (2) Use `executeInputMappings` array to map each field. Example: If target needs `text` and `imageUrl`, your textInput should have `inputFields: [{"key": "prompt"}, {"key": "image"}]`, then execute node uses `"executeInputMappings": [{"key": "text", "value": "$userInput.body.prompt"}, {"key": "imageUrl", "value": "$userInput.body.image"}]`
 26. **REQUEST BODY, HEADERS & QUERY** - When workflow is executed via API, textInput nodes receive `body`, `headers` and `query` objects. Access via `$textInputLabel.body.fieldName`, `$textInputLabel.headers.headerName` and `$textInputLabel.query.paramName`. Useful for accessing raw request data, authentication, and dynamic behavior.

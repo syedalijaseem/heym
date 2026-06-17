@@ -25,6 +25,7 @@ Credentials store API keys and secrets used by workflow nodes. You add them in t
 | [Grist](../nodes/grist-node.md) | Grist | API key + server URL |
 | [Google Sheets](../nodes/google-sheets-node.md) | Google Sheets (OAuth2) | Client ID + Client Secret + OAuth2 consent |
 | [BigQuery](../nodes/bigquery-node.md) | BigQuery (OAuth2) | Client ID + Client Secret + OAuth2 consent |
+| [Supabase](../nodes/supabase-node.md) | Supabase | Project URL + API key (+ optional default schema) |
 | [Amazon S3](../nodes/amazon-s3-node.md) | Amazon S3 | Access key, secret key, region |
 | [RabbitMQ](../nodes/rabbitmq-node.md) | RabbitMQ | AMQP URL |
 

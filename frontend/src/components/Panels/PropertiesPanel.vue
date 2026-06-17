@@ -98,6 +98,7 @@ const nodeIcons: Record<NodeType, ReturnType<typeof Type>> = {
   grist: Table2,
   googleSheets: Sheet,
   bigquery: Database,
+  supabase: Database,
   throwError: XCircle,
   rabbitmq: Rabbit,
   crawler: Bug,
@@ -144,6 +145,7 @@ const nodeColorMap: Record<NodeType, string> = {
   grist: "node-grist",
   googleSheets: "node-google-sheets",
   bigquery: "node-google-sheets",
+  supabase: "node-datatable",
   throwError: "node-throw-error",
   rabbitmq: "node-rabbitmq",
   crawler: "node-crawler",
@@ -190,6 +192,7 @@ const nodeDocSlugMap: Record<NodeType, string> = {
   grist: "grist-node",
   googleSheets: "google-sheets-node",
   bigquery: "bigquery-node",
+  supabase: "supabase-node",
   throwError: "throw-error-node",
   rabbitmq: "rabbitmq-node",
   crawler: "crawler-node",
@@ -388,6 +391,13 @@ const redisCredentials = ref<CredentialListItem[]>([]);
 const gristCredentials = ref<CredentialListItem[]>([]);
 const googleSheetsCredentials = ref<CredentialListItem[]>([]);
 const bigqueryCredentials = ref<CredentialListItem[]>([]);
+const supabaseCredentials = ref<CredentialListItem[]>([]);
+const supabaseDiscoveredTables = ref<string[]>([]);
+const supabaseDiscoveredColumns = ref<string[]>([]);
+const loadingSupabaseTables = ref(false);
+const loadingSupabaseColumns = ref(false);
+let supabaseTablesRequestSequence = 0;
+let supabaseColumnsRequestSequence = 0;
 const s3Credentials = ref<CredentialListItem[]>([]);
 const rabbitmqCredentials = ref<CredentialListItem[]>([]);
 const cohereCredentials = ref<CredentialListItem[]>([]);
@@ -468,6 +478,15 @@ const bqTableIdExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | n
 const bqRowsExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const bqMappingInputRefs = ref<Map<number, InstanceType<typeof ExpressionInput>>>(new Map());
 const currentBigQueryExpressionFieldIndex = ref(0);
+const supabaseSchemaExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const supabaseTableExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const supabaseSelectColumnsExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const supabaseFilterExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const supabaseOrderByExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const supabaseRowsExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const supabaseOnConflictExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const supabaseDataExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const currentSupabaseExpressionFieldIndex = ref(0);
 const dataTableRowIdExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const dataTableDataExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const dataTableFilterExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
@@ -744,6 +763,14 @@ watch(
       }
     }
 
+    if (type === "supabase") {
+      try {
+        supabaseCredentials.value = await credentialsApi.listByType("supabase");
+      } catch {
+        supabaseCredentials.value = [];
+      }
+    }
+
     if (type === "s3") {
       try {
         s3Credentials.value = await credentialsApi.listByType("s3");
@@ -812,6 +839,137 @@ watch(
     }
     await loadDataTableColumnsForSelectedNode();
     syncDataTableSelectiveUiFromNodeMode();
+  },
+);
+
+async function loadSupabaseTablesForSelectedNode(): Promise<void> {
+  const node = workflowStore.selectedNode;
+  if (!node || node.type !== "supabase") {
+    supabaseDiscoveredTables.value = [];
+    return;
+  }
+
+  const credentialId = String(node.data.credentialId || "").trim();
+  if (!credentialId) {
+    supabaseDiscoveredTables.value = [];
+    return;
+  }
+
+  const requestId = ++supabaseTablesRequestSequence;
+  const selectedNodeId = node.id;
+  const selectedCredentialId = credentialId;
+  const selectedSchema = String(node.data.supabaseSchema || "").trim() || undefined;
+  loadingSupabaseTables.value = true;
+  try {
+    const result = await credentialsApi.listSupabaseTables(selectedCredentialId, selectedSchema);
+    const currentNode = workflowStore.selectedNode;
+    if (
+      requestId !== supabaseTablesRequestSequence ||
+      !currentNode ||
+      currentNode.type !== "supabase" ||
+      currentNode.id !== selectedNodeId ||
+      String(currentNode.data.credentialId || "").trim() !== selectedCredentialId ||
+      (String(currentNode.data.supabaseSchema || "").trim() || undefined) !== selectedSchema
+    ) {
+      return;
+    }
+    supabaseDiscoveredTables.value = result.tables || [];
+  } catch {
+    if (requestId === supabaseTablesRequestSequence) {
+      supabaseDiscoveredTables.value = [];
+    }
+  } finally {
+    if (requestId === supabaseTablesRequestSequence) {
+      loadingSupabaseTables.value = false;
+    }
+  }
+}
+
+async function loadSupabaseColumnsForSelectedNode(): Promise<void> {
+  const node = workflowStore.selectedNode;
+  if (!node || node.type !== "supabase") {
+    supabaseDiscoveredColumns.value = [];
+    return;
+  }
+
+  const credentialId = String(node.data.credentialId || "").trim();
+  const table = String(node.data.supabaseTable || "").trim();
+  if (!credentialId || !table) {
+    supabaseDiscoveredColumns.value = [];
+    return;
+  }
+
+  const requestId = ++supabaseColumnsRequestSequence;
+  const selectedNodeId = node.id;
+  const selectedCredentialId = credentialId;
+  const selectedTable = table;
+  const selectedSchema = String(node.data.supabaseSchema || "").trim() || undefined;
+  loadingSupabaseColumns.value = true;
+  try {
+    const result = await credentialsApi.listSupabaseColumns(
+      selectedCredentialId,
+      selectedTable,
+      selectedSchema,
+    );
+    const currentNode = workflowStore.selectedNode;
+    if (
+      requestId !== supabaseColumnsRequestSequence ||
+      !currentNode ||
+      currentNode.type !== "supabase" ||
+      currentNode.id !== selectedNodeId ||
+      String(currentNode.data.credentialId || "").trim() !== selectedCredentialId ||
+      String(currentNode.data.supabaseTable || "").trim() !== selectedTable ||
+      (String(currentNode.data.supabaseSchema || "").trim() || undefined) !== selectedSchema
+    ) {
+      return;
+    }
+    supabaseDiscoveredColumns.value = result.columns || [];
+  } catch {
+    if (requestId === supabaseColumnsRequestSequence) {
+      supabaseDiscoveredColumns.value = [];
+    }
+  } finally {
+    if (requestId === supabaseColumnsRequestSequence) {
+      loadingSupabaseColumns.value = false;
+    }
+  }
+}
+
+watch(
+  () => workflowStore.selectedNode?.id,
+  async () => {
+    if (workflowStore.selectedNode?.type !== "supabase") {
+      supabaseDiscoveredTables.value = [];
+      supabaseDiscoveredColumns.value = [];
+      return;
+    }
+    await loadSupabaseTablesForSelectedNode();
+    await loadSupabaseColumnsForSelectedNode();
+  },
+);
+
+watch(
+  () => [
+    workflowStore.selectedNode?.data.credentialId,
+    workflowStore.selectedNode?.data.supabaseSchema,
+  ],
+  async () => {
+    if (workflowStore.selectedNode?.type !== "supabase") {
+      return;
+    }
+    await loadSupabaseTablesForSelectedNode();
+    await loadSupabaseColumnsForSelectedNode();
+  },
+  { immediate: true },
+);
+
+watch(
+  () => workflowStore.selectedNode?.data.supabaseTable,
+  async () => {
+    if (workflowStore.selectedNode?.type !== "supabase") {
+      return;
+    }
+    await loadSupabaseColumnsForSelectedNode();
   },
 );
 
@@ -1885,6 +2043,17 @@ function openPrimaryExpandDialogForSelectedNode(): void {
       }
     };
     nextTick(() => tryOpenDialog());
+  } else if (nodeType === "supabase") {
+    currentSupabaseExpressionFieldIndex.value = 0;
+    const tryOpenDialog = (attempts = 0): void => {
+      if (attempts > 20) return;
+      if (supabaseSchemaExpressionInputRef.value) {
+        nextTick(() => openSupabaseExpressionFieldAtIndex(0));
+      } else {
+        setTimeout(() => tryOpenDialog(attempts + 1), 100);
+      }
+    };
+    nextTick(() => tryOpenDialog());
   } else if (nodeType === "drive") {
     currentDriveExpressionFieldIndex.value = 0;
     const tryOpenDialog = (attempts = 0): void => {
@@ -1981,6 +2150,7 @@ function selectedNodeHasPrimaryEvaluateExpandTarget(): boolean {
     case "grist":
     case "googleSheets":
     case "bigquery":
+    case "supabase":
     case "dataTable":
     case "drive":
     case "s3":
@@ -2572,6 +2742,106 @@ function handleBigQueryExpressionFieldNavigate(direction: "prev" | "next"): void
 
 function onBigQueryRegisterExpressionFieldIndex(index: number): void {
   currentBigQueryExpressionFieldIndex.value = index;
+}
+
+const supabaseExpressionFieldCount = computed((): number => {
+  const n = workflowStore.selectedNode;
+  if (!n || n.type !== "supabase") return 1;
+  const op = (n.data.supabaseOperation as string | undefined) || "";
+  const rowsMode = (n.data.supabaseRowsInputMode as string | undefined) || "raw";
+  const dataMode = (n.data.supabaseDataInputMode as string | undefined) || "raw";
+  if (!op) return 2;
+  if (op === "select") {
+    return 5; // schema, table, select, filter, orderBy
+  }
+  if (op === "insert") return rowsMode === "auto" ? 2 : 3; // schema, table, rows
+  if (op === "upsert") return rowsMode === "auto" ? 3 : 4; // schema, table, rows, onConflict
+  if (op === "update") return dataMode === "auto" ? 3 : 4; // schema, table, data, filter
+  if (op === "delete") return 3; // schema, table, filter
+  return 2;
+});
+
+function openSupabaseExpressionFieldAtIndex(index: number): void {
+  const n = selectedNode.value;
+  if (!n || n.type !== "supabase") return;
+  currentSupabaseExpressionFieldIndex.value = index;
+  const op = (n.data.supabaseOperation as string | undefined) || "";
+  if (index === 0) {
+    supabaseSchemaExpressionInputRef.value?.openExpandDialog();
+    return;
+  }
+  if (index === 1) {
+    supabaseTableExpressionInputRef.value?.openExpandDialog();
+    return;
+  }
+  if (op === "select") {
+    if (index === 2) {
+      supabaseSelectColumnsExpressionInputRef.value?.openExpandDialog();
+      return;
+    }
+    if (index === 3) {
+      supabaseFilterExpressionInputRef.value?.openExpandDialog();
+      return;
+    }
+    if (index === 4) {
+      supabaseOrderByExpressionInputRef.value?.openExpandDialog();
+    }
+    return;
+  }
+  if (op === "insert" || op === "upsert") {
+    const rowsMode = (n.data.supabaseRowsInputMode as string | undefined) || "raw";
+    if (rowsMode === "raw" && index === 2) {
+      supabaseRowsExpressionInputRef.value?.openExpandDialog();
+      return;
+    }
+    if (op === "upsert" && index === (rowsMode === "raw" ? 3 : 2)) {
+      supabaseOnConflictExpressionInputRef.value?.openExpandDialog();
+    }
+    return;
+  }
+  if (op === "update") {
+    const dataMode = (n.data.supabaseDataInputMode as string | undefined) || "raw";
+    if (dataMode === "raw" && index === 2) {
+      supabaseDataExpressionInputRef.value?.openExpandDialog();
+      return;
+    }
+    if (index === (dataMode === "raw" ? 3 : 2)) {
+      supabaseFilterExpressionInputRef.value?.openExpandDialog();
+    }
+    return;
+  }
+  if (op === "delete" && index === 2) {
+    supabaseFilterExpressionInputRef.value?.openExpandDialog();
+  }
+}
+
+function closeSupabaseExpressionDialogs(): void {
+  supabaseSchemaExpressionInputRef.value?.closeExpandDialog();
+  supabaseTableExpressionInputRef.value?.closeExpandDialog();
+  supabaseSelectColumnsExpressionInputRef.value?.closeExpandDialog();
+  supabaseFilterExpressionInputRef.value?.closeExpandDialog();
+  supabaseOrderByExpressionInputRef.value?.closeExpandDialog();
+  supabaseRowsExpressionInputRef.value?.closeExpandDialog();
+  supabaseOnConflictExpressionInputRef.value?.closeExpandDialog();
+  supabaseDataExpressionInputRef.value?.closeExpandDialog();
+}
+
+function handleSupabaseExpressionFieldNavigate(direction: "prev" | "next"): void {
+  const total = supabaseExpressionFieldCount.value;
+  const newIndex =
+    direction === "prev"
+      ? currentSupabaseExpressionFieldIndex.value - 1
+      : currentSupabaseExpressionFieldIndex.value + 1;
+  if (newIndex < 0 || newIndex >= total) return;
+  closeSupabaseExpressionDialogs();
+  currentSupabaseExpressionFieldIndex.value = newIndex;
+  nextTick(() => {
+    openSupabaseExpressionFieldAtIndex(newIndex);
+  });
+}
+
+function onSupabaseRegisterExpressionFieldIndex(index: number): void {
+  currentSupabaseExpressionFieldIndex.value = index;
 }
 
 function bqMappingInputRef(index: number, el: InstanceType<typeof ExpressionInput> | null): void {
@@ -3492,6 +3762,68 @@ const bigQueryOperationOptions = [
   { value: "query", label: "Run Query" },
   { value: "insertRows", label: "Insert Rows" },
 ];
+
+const supabaseCredentialOptions = computed(() => {
+  const node = selectedNode.value;
+  const selectedCredentialId =
+    node && node.type === "supabase"
+      ? (node.data.credentialId as string | undefined)
+      : undefined;
+
+  return buildCredentialOptions(
+    supabaseCredentials.value,
+    selectedCredentialId,
+    "Select Supabase credential...",
+    "Shared Supabase credential (from owner)",
+  );
+});
+
+const supabaseOperationOptions = [
+  { value: "", label: "Select operation..." },
+  { value: "select", label: "Select Rows" },
+  { value: "insert", label: "Insert Rows" },
+  { value: "update", label: "Update Rows" },
+  { value: "upsert", label: "Upsert Rows" },
+  { value: "delete", label: "Delete Rows" },
+];
+
+const supabaseDiscoveredTableOptions = computed(() => {
+  return supabaseDiscoveredTables.value.map((tableName) => ({
+    value: tableName,
+    label: tableName,
+  }));
+});
+
+function parseSupabaseSelectedColumns(rawValue: string): string[] {
+  return rawValue
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function toggleSupabaseSelectedColumn(columnName: string): void {
+  const node = selectedNode.value;
+  if (!node || node.type !== "supabase") {
+    return;
+  }
+  const current = new Set(parseSupabaseSelectedColumns(String(node.data.supabaseSelectColumns || "*")));
+  if (current.has("*")) {
+    current.delete("*");
+  }
+  if (current.has(columnName)) {
+    current.delete(columnName);
+  } else {
+    current.add(columnName);
+  }
+  updateNodeData("supabaseSelectColumns", current.size > 0 ? Array.from(current).join(",") : "*");
+}
+
+function useAllDiscoveredSupabaseColumns(): void {
+  if (supabaseDiscoveredColumns.value.length === 0) {
+    return;
+  }
+  updateNodeData("supabaseSelectColumns", supabaseDiscoveredColumns.value.join(","));
+}
 
 const s3CredentialOptions = computed(() => {
   const node = selectedNode.value;
@@ -10547,6 +10879,456 @@ onUnmounted(() => {
                 <template v-else>
                   <div>Select an operation to see output fields</div>
                 </template>
+              </div>
+            </div>
+          </template>
+
+          <template v-if="selectedNode.type === 'supabase'">
+            <div class="space-y-2">
+              <Label>Supabase Credential</Label>
+              <Select
+                :model-value="selectedNode.data.credentialId || ''"
+                :options="supabaseCredentialOptions"
+                :disabled="!isWorkflowOwner"
+                @update:model-value="updateNodeData('credentialId', $event)"
+              />
+              <div v-if="!selectedNode.data.credentialId">
+                <p class="text-xs text-amber-500 flex items-center gap-1">
+                  <AlertTriangle class="h-3 w-3" />
+                  Credential is required.
+                </p>
+                <p class="text-xs text-muted-foreground mt-1">
+                  <a
+                    href="/?tab=credentials"
+                    class="text-primary hover:underline"
+                    @click.prevent="$router.push('/?tab=credentials')"
+                  >Add credentials</a> in Dashboard
+                </p>
+              </div>
+            </div>
+
+            <div class="space-y-2">
+              <Label>Operation</Label>
+              <Select
+                :model-value="selectedNode.data.supabaseOperation || ''"
+                :options="supabaseOperationOptions"
+                @update:model-value="updateNodeData('supabaseOperation', $event)"
+              />
+            </div>
+
+            <div class="space-y-2">
+              <Label>Schema</Label>
+              <ExpressionInput
+                ref="supabaseSchemaExpressionInputRef"
+                :model-value="selectedNode.data.supabaseSchema ?? 'public'"
+                placeholder="public"
+                single-line
+                :nodes="workflowStore.nodes"
+                :node-results="workflowStore.nodeResults"
+                :edges="workflowStore.edges"
+                :current-node-id="selectedNode.id"
+                :navigation-enabled="supabaseExpressionFieldCount > 1"
+                :navigation-index="0"
+                :navigation-total="supabaseExpressionFieldCount"
+                :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                dialog-key-label="Schema"
+                @update:model-value="updateNodeData('supabaseSchema', $event)"
+                @navigate="handleSupabaseExpressionFieldNavigate"
+                @register-field-index="onSupabaseRegisterExpressionFieldIndex"
+              />
+            </div>
+
+            <div class="space-y-2">
+              <Label>Table</Label>
+              <ExpressionInput
+                ref="supabaseTableExpressionInputRef"
+                :model-value="selectedNode.data.supabaseTable || ''"
+                placeholder="users"
+                single-line
+                :nodes="workflowStore.nodes"
+                :node-results="workflowStore.nodeResults"
+                :edges="workflowStore.edges"
+                :current-node-id="selectedNode.id"
+                :navigation-enabled="supabaseExpressionFieldCount > 1"
+                :navigation-index="1"
+                :navigation-total="supabaseExpressionFieldCount"
+                :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                dialog-key-label="Table"
+                @update:model-value="updateNodeData('supabaseTable', $event)"
+                @navigate="handleSupabaseExpressionFieldNavigate"
+                @register-field-index="onSupabaseRegisterExpressionFieldIndex"
+              />
+              <div class="flex items-center gap-2">
+                <Select
+                  :model-value="String(selectedNode.data.supabaseTable || '')"
+                  :options="supabaseDiscoveredTableOptions"
+                  placeholder="Discovered tables..."
+                  :disabled="loadingSupabaseTables || supabaseDiscoveredTableOptions.length === 0"
+                  @update:model-value="updateNodeData('supabaseTable', $event || '')"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  class="shrink-0"
+                  :loading="loadingSupabaseTables"
+                  :disabled="!selectedNode.data.credentialId"
+                  @click="loadSupabaseTablesForSelectedNode"
+                >
+                  Refresh
+                </Button>
+              </div>
+            </div>
+
+            <template v-if="selectedNode.data.supabaseOperation === 'select'">
+              <div class="space-y-2">
+                <Label>Select Columns</Label>
+                <ExpressionInput
+                  ref="supabaseSelectColumnsExpressionInputRef"
+                  :model-value="selectedNode.data.supabaseSelectColumns || '*'"
+                  placeholder="id,name,email"
+                  single-line
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  :navigation-enabled="supabaseExpressionFieldCount > 1"
+                  :navigation-index="2"
+                  :navigation-total="supabaseExpressionFieldCount"
+                  :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                  dialog-key-label="Select Columns"
+                  @update:model-value="updateNodeData('supabaseSelectColumns', $event)"
+                  @navigate="handleSupabaseExpressionFieldNavigate"
+                  @register-field-index="onSupabaseRegisterExpressionFieldIndex"
+                />
+                <div class="flex items-center justify-between gap-2">
+                  <p class="text-xs text-muted-foreground">
+                    Discover columns from the selected table, then click to add or remove them.
+                  </p>
+                  <div class="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      class="shrink-0"
+                      :loading="loadingSupabaseColumns"
+                      :disabled="!selectedNode.data.credentialId || !selectedNode.data.supabaseTable"
+                      @click="loadSupabaseColumnsForSelectedNode"
+                    >
+                      Refresh
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      class="shrink-0"
+                      :disabled="supabaseDiscoveredColumns.length === 0"
+                      @click="useAllDiscoveredSupabaseColumns"
+                    >
+                      Use all
+                    </Button>
+                  </div>
+                </div>
+                <div
+                  v-if="supabaseDiscoveredColumns.length > 0"
+                  class="flex flex-wrap gap-2"
+                >
+                  <button
+                    v-for="columnName in supabaseDiscoveredColumns"
+                    :key="columnName"
+                    type="button"
+                    :class="[
+                      'rounded-full border px-2 py-1 text-xs transition-colors',
+                      parseSupabaseSelectedColumns(String(selectedNode.data.supabaseSelectColumns || '*')).includes(columnName)
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-border text-muted-foreground hover:text-foreground hover:border-border/80'
+                    ]"
+                    @click="toggleSupabaseSelectedColumn(columnName)"
+                  >
+                    {{ columnName }}
+                  </button>
+                </div>
+              </div>
+
+              <div class="space-y-2">
+                <Label>Filter (JSON object)</Label>
+                <ExpressionInput
+                  ref="supabaseFilterExpressionInputRef"
+                  :model-value="selectedNode.data.supabaseFilter || '{}'"
+                  placeholder="{&quot;status&quot;:&quot;active&quot;}"
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  :navigation-enabled="supabaseExpressionFieldCount > 1"
+                  :navigation-index="3"
+                  :navigation-total="supabaseExpressionFieldCount"
+                  :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                  dialog-key-label="Filter"
+                  @update:model-value="updateNodeData('supabaseFilter', $event)"
+                  @navigate="handleSupabaseExpressionFieldNavigate"
+                  @register-field-index="onSupabaseRegisterExpressionFieldIndex"
+                />
+              </div>
+
+              <div class="space-y-2">
+                <Label>Limit <span class="text-muted-foreground font-normal">(0 = unlimited)</span></Label>
+                <input
+                  type="number"
+                  min="0"
+                  :value="selectedNode.data.supabaseLimit ?? '100'"
+                  placeholder="100"
+                  class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  @input="updateNodeData('supabaseLimit', String(($event.target as HTMLInputElement).value))"
+                >
+              </div>
+
+              <div class="space-y-2">
+                <Label>Order By</Label>
+                <ExpressionInput
+                  ref="supabaseOrderByExpressionInputRef"
+                  :model-value="selectedNode.data.supabaseOrderBy || ''"
+                  placeholder="created_at"
+                  single-line
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  :navigation-enabled="supabaseExpressionFieldCount > 1"
+                  :navigation-index="4"
+                  :navigation-total="supabaseExpressionFieldCount"
+                  :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                  dialog-key-label="Order By"
+                  @update:model-value="updateNodeData('supabaseOrderBy', $event)"
+                  @navigate="handleSupabaseExpressionFieldNavigate"
+                  @register-field-index="onSupabaseRegisterExpressionFieldIndex"
+                />
+                <label class="flex items-center gap-2 text-sm text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    class="rounded border-input"
+                    :checked="selectedNode.data.supabaseAscending !== false"
+                    @change="updateNodeData('supabaseAscending', ($event.target as HTMLInputElement).checked)"
+                  >
+                  Ascending sort
+                </label>
+              </div>
+            </template>
+
+            <template v-else-if="selectedNode.data.supabaseOperation === 'insert' || selectedNode.data.supabaseOperation === 'upsert'">
+              <div class="flex items-center gap-2 rounded-md border border-input p-1">
+                <button
+                  :class="[
+                    'flex-1 rounded text-xs py-1 transition-colors',
+                    (selectedNode.data.supabaseRowsInputMode || 'raw') === 'raw'
+                      ? 'bg-primary text-primary-foreground font-medium'
+                      : 'text-muted-foreground hover:text-foreground'
+                  ]"
+                  @click="updateNodeData('supabaseRowsInputMode', 'raw')"
+                >
+                  JSON array
+                </button>
+                <button
+                  :class="[
+                    'flex-1 rounded text-xs py-1 transition-colors',
+                    selectedNode.data.supabaseRowsInputMode === 'auto'
+                      ? 'bg-primary text-primary-foreground font-medium'
+                      : 'text-muted-foreground hover:text-foreground'
+                  ]"
+                  @click="updateNodeData('supabaseRowsInputMode', 'auto')"
+                >
+                  Auto-map input
+                </button>
+              </div>
+
+              <div class="space-y-2">
+                <template v-if="(selectedNode.data.supabaseRowsInputMode || 'raw') === 'raw'">
+                  <Label>Rows (JSON array)</Label>
+                  <ExpressionInput
+                    ref="supabaseRowsExpressionInputRef"
+                    :model-value="selectedNode.data.supabaseRows || '[]'"
+                    placeholder="[{&quot;name&quot;:&quot;$input.name&quot;}]"
+                    :nodes="workflowStore.nodes"
+                    :node-results="workflowStore.nodeResults"
+                    :edges="workflowStore.edges"
+                    :current-node-id="selectedNode.id"
+                    :navigation-enabled="supabaseExpressionFieldCount > 1"
+                    :navigation-index="2"
+                    :navigation-total="supabaseExpressionFieldCount"
+                    :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                    dialog-key-label="Rows"
+                    @update:model-value="updateNodeData('supabaseRows', $event)"
+                    @navigate="handleSupabaseExpressionFieldNavigate"
+                    @register-field-index="onSupabaseRegisterExpressionFieldIndex"
+                  />
+                </template>
+                <template v-else>
+                  <Label>Auto-map rows</Label>
+                  <p class="text-xs text-muted-foreground">
+                    Uses the single upstream input automatically. Objects become one row; arrays
+                    of objects or upstream <code class="font-mono">rows</code> arrays become many rows.
+                  </p>
+                  <div class="space-y-2">
+                    <Label class="text-xs text-muted-foreground">Ignore fields</Label>
+                    <Input
+                      :model-value="String(selectedNode.data.supabaseIgnoredInputFields || '')"
+                      placeholder="id, created_at"
+                      @input="updateNodeData('supabaseIgnoredInputFields', String(($event.target as HTMLInputElement).value))"
+                    />
+                  </div>
+                </template>
+              </div>
+
+              <div
+                v-if="selectedNode.data.supabaseOperation === 'upsert'"
+                class="space-y-2"
+              >
+                <Label>On Conflict</Label>
+                <ExpressionInput
+                  ref="supabaseOnConflictExpressionInputRef"
+                  :model-value="selectedNode.data.supabaseOnConflict || ''"
+                  placeholder="id or tenant_id,email"
+                  single-line
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  :navigation-enabled="supabaseExpressionFieldCount > 1"
+                  :navigation-index="(selectedNode.data.supabaseRowsInputMode || 'raw') === 'raw' ? 3 : 2"
+                  :navigation-total="supabaseExpressionFieldCount"
+                  :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                  dialog-key-label="On Conflict"
+                  @update:model-value="updateNodeData('supabaseOnConflict', $event)"
+                  @navigate="handleSupabaseExpressionFieldNavigate"
+                  @register-field-index="onSupabaseRegisterExpressionFieldIndex"
+                />
+                <p class="text-xs text-muted-foreground">
+                  Optional comma-separated conflict target columns passed to PostgREST
+                  `on_conflict`.
+                </p>
+              </div>
+            </template>
+
+            <template v-else-if="selectedNode.data.supabaseOperation === 'update'">
+              <div class="flex items-center gap-2 rounded-md border border-input p-1">
+                <button
+                  :class="[
+                    'flex-1 rounded text-xs py-1 transition-colors',
+                    (selectedNode.data.supabaseDataInputMode || 'raw') === 'raw'
+                      ? 'bg-primary text-primary-foreground font-medium'
+                      : 'text-muted-foreground hover:text-foreground'
+                  ]"
+                  @click="updateNodeData('supabaseDataInputMode', 'raw')"
+                >
+                  JSON object
+                </button>
+                <button
+                  :class="[
+                    'flex-1 rounded text-xs py-1 transition-colors',
+                    selectedNode.data.supabaseDataInputMode === 'auto'
+                      ? 'bg-primary text-primary-foreground font-medium'
+                      : 'text-muted-foreground hover:text-foreground'
+                  ]"
+                  @click="updateNodeData('supabaseDataInputMode', 'auto')"
+                >
+                  Auto-map input
+                </button>
+              </div>
+
+              <div class="space-y-2">
+                <template v-if="(selectedNode.data.supabaseDataInputMode || 'raw') === 'raw'">
+                  <Label>Data (JSON object)</Label>
+                  <ExpressionInput
+                    ref="supabaseDataExpressionInputRef"
+                    :model-value="selectedNode.data.supabaseData || '{}'"
+                    placeholder="{&quot;status&quot;:&quot;processed&quot;}"
+                    :nodes="workflowStore.nodes"
+                    :node-results="workflowStore.nodeResults"
+                    :edges="workflowStore.edges"
+                    :current-node-id="selectedNode.id"
+                    :navigation-enabled="supabaseExpressionFieldCount > 1"
+                    :navigation-index="2"
+                    :navigation-total="supabaseExpressionFieldCount"
+                    :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                    dialog-key-label="Data"
+                    @update:model-value="updateNodeData('supabaseData', $event)"
+                    @navigate="handleSupabaseExpressionFieldNavigate"
+                    @register-field-index="onSupabaseRegisterExpressionFieldIndex"
+                  />
+                </template>
+                <template v-else>
+                  <Label>Auto-map update data</Label>
+                  <p class="text-xs text-muted-foreground">
+                    Uses the single upstream object as the update payload. Ignore any fields you
+                    do not want to write.
+                  </p>
+                  <div class="space-y-2">
+                    <Label class="text-xs text-muted-foreground">Ignore fields</Label>
+                    <Input
+                      :model-value="String(selectedNode.data.supabaseIgnoredInputFields || '')"
+                      placeholder="id, created_at"
+                      @input="updateNodeData('supabaseIgnoredInputFields', String(($event.target as HTMLInputElement).value))"
+                    />
+                  </div>
+                </template>
+              </div>
+
+              <div class="space-y-2">
+                <Label>Filter (JSON object)</Label>
+                <ExpressionInput
+                  ref="supabaseFilterExpressionInputRef"
+                  :model-value="selectedNode.data.supabaseFilter || '{}'"
+                  placeholder="{&quot;id&quot;:123}"
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  :navigation-enabled="supabaseExpressionFieldCount > 1"
+                  :navigation-index="(selectedNode.data.supabaseDataInputMode || 'raw') === 'raw' ? 3 : 2"
+                  :navigation-total="supabaseExpressionFieldCount"
+                  :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                  dialog-key-label="Filter"
+                  @update:model-value="updateNodeData('supabaseFilter', $event)"
+                  @navigate="handleSupabaseExpressionFieldNavigate"
+                  @register-field-index="onSupabaseRegisterExpressionFieldIndex"
+                />
+                <p class="text-xs text-muted-foreground">
+                  Supports exact matches plus operator objects like
+                  <code class="font-mono">{&quot;created_at&quot;:{&quot;gte&quot;:&quot;2026-01-01&quot;}}</code>
+                  and logical groups like
+                  <code class="font-mono">{&quot;or&quot;:[{&quot;status&quot;:&quot;active&quot;},{&quot;score&quot;:{&quot;gte&quot;:10}}]}</code>.
+                </p>
+              </div>
+            </template>
+
+            <template v-else-if="selectedNode.data.supabaseOperation === 'delete'">
+              <div class="space-y-2">
+                <Label>Filter (JSON object)</Label>
+                <ExpressionInput
+                  ref="supabaseFilterExpressionInputRef"
+                  :model-value="selectedNode.data.supabaseFilter || '{}'"
+                  placeholder="{&quot;id&quot;:123}"
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  :navigation-enabled="supabaseExpressionFieldCount > 1"
+                  :navigation-index="2"
+                  :navigation-total="supabaseExpressionFieldCount"
+                  :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                  dialog-key-label="Filter"
+                  @update:model-value="updateNodeData('supabaseFilter', $event)"
+                  @navigate="handleSupabaseExpressionFieldNavigate"
+                  @register-field-index="onSupabaseRegisterExpressionFieldIndex"
+                />
+              </div>
+            </template>
+
+            <div class="rounded-md bg-muted/40 border p-3 space-y-1">
+              <p class="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Output
+              </p>
+              <div class="text-xs font-mono space-y-0.5">
+                <div>${{ selectedNode.data.label }}.rows - Returned row objects</div>
+                <div>${{ selectedNode.data.label }}.count - Number of affected rows</div>
+                <div>${{ selectedNode.data.label }}.success - Boolean success flag</div>
               </div>
             </div>
           </template>
