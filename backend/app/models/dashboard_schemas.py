@@ -46,6 +46,10 @@ class WidgetUpdateRequest(BaseModel):
     cache_ttl_seconds: int | None = None
 
 
+class MarkdownTaskToggleRequest(BaseModel):
+    line_index: int = Field(ge=0)
+
+
 class WidgetDataResponse(BaseModel):
     widget_id: uuid.UUID
     payload: dict[str, Any] | None

@@ -6,6 +6,8 @@ Keep this side-effect free so it stays trivially unit-testable.
 
 from typing import Any
 
+from app.services.markdown_task_list import has_task_items
+
 
 def _resolve_rows(data: Any, data_path: str | None) -> list:
     """Resolve a list of row dicts (or scalars) from arbitrary upstream output."""
@@ -31,6 +33,41 @@ def _resolve_rows(data: Any, data_path: str | None) -> list:
                 return value
         return [data]
     return []
+
+
+def resolve_text_payload(config: dict, data: Any) -> dict[str, Any]:
+    """Resolve markdown text and whether dashboard checkboxes may be toggled.
+
+    Checkboxes are interactive only when the message comes from the static
+    ``text`` config field (not from ``valueField`` or other upstream fallbacks).
+    """
+    rows = _resolve_rows(data, config.get("dataPath"))
+    text_val: Any = None
+    text_interactive = False
+    value_field = config.get("valueField")
+    static_text = config.get("text")
+
+    if rows and isinstance(rows[0], dict) and value_field:
+        upstream = rows[0].get(value_field)
+        if upstream is not None:
+            text_val = upstream
+    if text_val is None and isinstance(data, str):
+        text_val = data
+    if text_val is None and static_text is not None:
+        text_val = static_text
+        text_interactive = True
+    if text_val is None and rows and isinstance(rows[0], dict):
+        for candidate in rows[0].values():
+            if isinstance(candidate, str):
+                text_val = candidate
+                break
+    result_text = "" if text_val is None else str(text_val)
+    if not text_interactive and has_task_items(result_text):
+        text_interactive = True
+    return {
+        "text": result_text,
+        "text_interactive": text_interactive,
+    }
 
 
 def _coerce_number(value: Any) -> Any:
@@ -61,23 +98,9 @@ def build_chart_payload(config: dict, data: Any) -> dict:
         payload["url"] = url.strip()
 
     if chart_type == "text":
-        # A markdown message. Prefer a value pulled from upstream data (so the text can
-        # be dynamic, e.g. "Last execution at 19:47"), then a static `text` config, then
-        # the first string field of the first row.
-        text_val: Any = None
-        value_field = config.get("valueField")
-        if rows and isinstance(rows[0], dict) and value_field:
-            text_val = rows[0].get(value_field)
-        if text_val is None and isinstance(data, str):
-            text_val = data
-        if text_val is None:
-            text_val = config.get("text")
-        if text_val is None and rows and isinstance(rows[0], dict):
-            for candidate in rows[0].values():
-                if isinstance(candidate, str):
-                    text_val = candidate
-                    break
-        payload["text"] = "" if text_val is None else str(text_val)
+        text_meta = resolve_text_payload(config, data)
+        payload["text"] = text_meta["text"]
+        payload["text_interactive"] = text_meta["text_interactive"]
         return payload
 
     if chart_type == "table":

@@ -1256,6 +1256,14 @@ export const dashboardApi = {
     return response.data;
   },
 
+  toggleMarkdownTask: async (id: string, lineIndex: number): Promise<WidgetDataResponse> => {
+    const response = await api.patch<WidgetDataResponse>(
+      `/dashboards/widgets/${id}/markdown-task-toggle`,
+      { line_index: lineIndex },
+    );
+    return response.data;
+  },
+
   aiGenerateWidget: async (
     prompt: string,
     credentialId: string,

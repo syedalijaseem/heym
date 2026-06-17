@@ -3232,9 +3232,15 @@ Bar gauge (one horizontal gauge per row with a red→green gradient and a value,
 
 Text (a markdown message, e.g. a status note or "last execution at 19:47"; no upstream rows are
 needed — put the markdown straight in `text`. For a DYNAMIC message build the string upstream and
-set `valueField` to its row key instead):
+set `valueField` to its row key instead). For interactive dashboard checklists, use GFM task list
+syntax (`- [ ]` / `- [x]`) in `text` — do not use plain bullets for checkbox items:
 ```json
 {"type": "chartOutput", "data": {"label": "statusNote", "chartType": "text", "text": "**Last execution** at `19:47` — all checks passed ✅", "title": "Status"}}
+```
+
+Text checklist (three items, one checked — put markdown in `text` so dashboard toggles persist):
+```json
+{"type": "chartOutput", "data": {"label": "todoList", "chartType": "text", "text": "- [x] Option 1\\n- [ ] Option 2\\n- [ ] Option 3", "title": "Tasks"}}
 ```
 
 ## Expression Syntax

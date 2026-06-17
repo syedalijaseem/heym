@@ -48,7 +48,21 @@ When you only have example/sample data (no real source), produce these rows with
 - **scatter** — X/Y points from `xField` and `yField` for correlation plots.
 - **proportion** — a single horizontal bar split into shares with a percentage legend (e.g. a language breakdown). Uses `labelField` + `valueField`.
 - **barGauge** — one horizontal gauge per row with a red→green gradient and a value (e.g. free disk space). Uses `labelField` + `valueField`, optional `unit` and `max` (defaults to the largest row value).
-- **text** — a markdown message (e.g. a status note like "Last execution at 19:47"). Put the markdown in `text` for a static message, or leave `text` empty and set `valueField` to render a string produced upstream. Supports headings, bold/italic, lists, links, and inline code.
+- **text** — a markdown message (e.g. a status note like "Last execution at 19:47"). Put the markdown in `text` for a static message, or leave `text` empty and set `valueField` to render a string produced upstream. Supports headings, bold/italic, [lists](../nodes/chart-output-node.md#interactive-task-lists), links, and inline code.
+
+### Interactive task lists
+
+Use GitHub-flavored markdown task list syntax in the static `text` field:
+
+```markdown
+- [x] Option 1
+- [ ] Option 2
+- [ ] Option 3
+```
+
+On the [Dashboard](../tabs/dashboard-tab.md), checkboxes render as clickable controls (dark and light mode friendly). Toggling a checkbox updates the widget workflow's `text` field and persists across refreshes.
+
+**Static text only:** interactivity requires GFM task list syntax (`- [ ]` / `- [x]`). Plain dynamic status messages without task items stay read-only. When markdown comes from `valueField`, the first toggle copies it into the static `text` field so changes persist.
 
 ## How data is resolved
 
@@ -200,7 +214,7 @@ When generating a widget with **AI**, prompts like these map cleanly to each typ
 - **Proportion** — "Show my most used languages as a proportion bar: Kotlin 49.64%, JavaScript 23.73%, TypeScript 11.64%, Java 8.92%, Python 6.06%. Use example data."
 - **Area** — "Show memory and CPU usage over the last 24 hours as an area chart with two series. Use example data."
 - **Bar gauge** — "Show free disk space per volume (sda1 to sda7) as a bar gauge in GB. Use example data."
-- **Text** — "Add a text widget that shows a markdown status note: **Last execution** at `19:47`, with a short bullet list of what ran."
+- **Text** — "Add a text widget with a markdown checklist: one checked item and two unchecked options."
 
 ## Related
 

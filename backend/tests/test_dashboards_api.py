@@ -427,3 +427,185 @@ class TestAiRefineWidget(unittest.IsolatedAsyncioTestCase):
             [{"id": "old", "type": "chartOutput", "data": {"chartType": "bar"}}],
         )
         self.assertIs(kwargs["workflow"], workflow)
+
+
+class TestMarkdownTaskToggle(unittest.IsolatedAsyncioTestCase):
+    async def test_toggle_updates_static_text_and_returns_payload(self):
+        user = _User()
+        chart_id = str(uuid.uuid4())
+        markdown = "- [ ] Seçenek 2\n- [ ] Seçenek 3"
+        workflow = MagicMock()
+        workflow.id = uuid.uuid4()
+        workflow.nodes = [
+            {
+                "id": chart_id,
+                "type": "chartOutput",
+                "data": {"chartType": "text", "text": markdown},
+            }
+        ]
+
+        widget = MagicMock()
+        widget.id = uuid.uuid4()
+        widget.workflow_id = workflow.id
+        widget.cached_payload = {"type": "text", "text": markdown, "text_interactive": True}
+        widget.cached_at = datetime.datetime.now()
+        widget.cached_workflow_version = "v"
+
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                MagicMock(scalar_one_or_none=MagicMock(return_value=widget)),
+                MagicMock(scalar_one_or_none=MagicMock(return_value=workflow)),
+            ]
+        )
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+
+        updated_payload = {
+            "type": "text",
+            "text": "- [x] Seçenek 2\n- [ ] Seçenek 3",
+            "text_interactive": True,
+        }
+        compute = AsyncMock(
+            side_effect=[
+                MagicMock(payload={"type": "text", "text": markdown, "text_interactive": True}),
+                MagicMock(
+                    widget_id=widget.id,
+                    payload=updated_payload,
+                    cached=False,
+                    computed_at=datetime.datetime.now(),
+                    error=None,
+                ),
+            ]
+        )
+
+        from app.models.dashboard_schemas import MarkdownTaskToggleRequest
+
+        with patch.object(dash_api, "compute_widget_data", compute):
+            resp = await dash_api.toggle_markdown_task(
+                widget_id=widget.id,
+                body=MarkdownTaskToggleRequest(line_index=0),
+                current_user=user,
+                db=db,
+            )
+
+        self.assertEqual(resp.payload, updated_payload)
+        chart_node = workflow.nodes[0]
+        self.assertIn("[x]", chart_node["data"]["text"])
+        self.assertIsNone(widget.cached_payload)
+
+    async def test_toggle_rejects_plain_dynamic_text(self):
+        user = _User()
+        workflow = MagicMock()
+        workflow.id = uuid.uuid4()
+        workflow.nodes = [
+            {
+                "id": "c",
+                "type": "chartOutput",
+                "data": {
+                    "chartType": "text",
+                    "valueField": "message",
+                },
+            }
+        ]
+
+        widget = MagicMock()
+        widget.id = uuid.uuid4()
+        widget.workflow_id = workflow.id
+
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                MagicMock(scalar_one_or_none=MagicMock(return_value=widget)),
+                MagicMock(scalar_one_or_none=MagicMock(return_value=workflow)),
+            ]
+        )
+
+        compute = AsyncMock(
+            return_value=MagicMock(
+                payload={
+                    "type": "text",
+                    "text": "Last run at 19:47",
+                    "text_interactive": False,
+                }
+            )
+        )
+
+        from app.models.dashboard_schemas import MarkdownTaskToggleRequest
+
+        with patch.object(dash_api, "compute_widget_data", compute):
+            with self.assertRaises(Exception) as ctx:
+                await dash_api.toggle_markdown_task(
+                    widget_id=widget.id,
+                    body=MarkdownTaskToggleRequest(line_index=0),
+                    current_user=user,
+                    db=db,
+                )
+        self.assertEqual(ctx.exception.status_code, 400)
+
+    async def test_toggle_value_field_checklist_promotes_to_static_text(self):
+        user = _User()
+        checklist = "- [ ] Option 1\n- [ ] Option 2\n- [ ] Option 3"
+        workflow = MagicMock()
+        workflow.id = uuid.uuid4()
+        workflow.nodes = [
+            {
+                "id": "c",
+                "type": "chartOutput",
+                "data": {
+                    "chartType": "text",
+                    "valueField": "text",
+                },
+            }
+        ]
+
+        widget = MagicMock()
+        widget.id = uuid.uuid4()
+        widget.workflow_id = workflow.id
+        widget.cached_payload = None
+        widget.cached_at = None
+        widget.cached_workflow_version = None
+
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                MagicMock(scalar_one_or_none=MagicMock(return_value=widget)),
+                MagicMock(scalar_one_or_none=MagicMock(return_value=workflow)),
+            ]
+        )
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+
+        updated = "- [x] Option 1\n- [ ] Option 2\n- [ ] Option 3"
+        compute = AsyncMock(
+            side_effect=[
+                MagicMock(
+                    payload={
+                        "type": "text",
+                        "text": checklist,
+                        "text_interactive": True,
+                    }
+                ),
+                MagicMock(
+                    widget_id=widget.id,
+                    payload={"type": "text", "text": updated, "text_interactive": True},
+                    cached=False,
+                    computed_at=datetime.datetime.now(),
+                    error=None,
+                ),
+            ]
+        )
+
+        from app.models.dashboard_schemas import MarkdownTaskToggleRequest
+
+        with patch.object(dash_api, "compute_widget_data", compute):
+            await dash_api.toggle_markdown_task(
+                widget_id=widget.id,
+                body=MarkdownTaskToggleRequest(line_index=0),
+                current_user=user,
+                db=db,
+            )
+
+        chart_data = workflow.nodes[0]["data"]
+        self.assertEqual(chart_data["text"], updated)
+        self.assertNotIn("valueField", chart_data)
