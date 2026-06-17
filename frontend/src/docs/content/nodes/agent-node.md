@@ -264,6 +264,28 @@ Skills are SKILL.md instructions plus optional Python files. They extend the age
 Skills can be added by dropping a `.zip` or `.md` file onto the Skills area.
 Use the download button on a skill card to export that skill as a `.zip` archive for backup or reuse in another workflow.
 
+Each skill card has four actions on the row below the title:
+
+| Button | Description |
+|--------|-------------|
+| **Edit with AI** | Open Skill Builder to revise the skill from a chat prompt |
+| **Download** | Export the skill as a `.zip` archive |
+| **Remove** | Delete the skill from this agent node |
+| **History** | Open skill history derived from [Edit History](../reference/edit-history.md) |
+
+### Skill history
+
+Skill history is **not** stored separately. It is derived from workflow Edit History snapshots: each saved workflow version includes the full agent node `skills` array.
+
+From the History dialog you can:
+
+- **Preview** a past snapshot (SKILL.md and file list)
+- **Edit** — load a snapshot into the skill editor without reverting the whole workflow
+- **AI Fine-tune** — open Skill Builder with that snapshot as the starting point
+- **Revert** — restore only this skill from a past version (other nodes stay as they are)
+
+History follows the same 7-day retention as workflow Edit History. Saving the workflow after skill edits creates new history entries.
+
 The Skills section also includes **AI Build**:
 
 - Click **AI Build** to create a new skill from a chat prompt

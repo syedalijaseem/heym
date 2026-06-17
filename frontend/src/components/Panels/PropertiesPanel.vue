@@ -9,7 +9,7 @@ import {
   type ComponentPublicInstance,
 } from "vue";
 import { useRouter } from "vue-router";
-import { AlertTriangle, Ban, BarChart3, BookOpen, Bot, Braces, Brain, Bug, CalendarClock, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock, Copy, Database, Download, ExternalLink, FileArchive, FileJson, GitBranch, GitMerge, Globe, HardDrive, Inbox, Loader2, Mail, Maximize2, MessageSquare, Minus, Minimize2, MonitorPlay, MousePointerClick, Play, Plug, Plus, Power, Rabbit, Radio, Repeat, Search, Send, Server, Settings, Settings2, Sheet, ShieldAlert, Shuffle, Sparkles, StickyNote, Table2, Terminal, Trash2, Type, Variable, X, XCircle, Zap } from "lucide-vue-next";
+import { AlertTriangle, Ban, BarChart3, BookOpen, Bot, Braces, Brain, Bug, CalendarClock, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock, Copy, Database, ExternalLink, FileArchive, FileJson, GitBranch, GitMerge, Globe, HardDrive, Inbox, Loader2, Mail, Maximize2, MessageSquare, Minus, Minimize2, MonitorPlay, MousePointerClick, Play, Plug, Plus, Power, Rabbit, Radio, Repeat, Search, Send, Server, Settings, Settings2, Sheet, ShieldAlert, Shuffle, Sparkles, StickyNote, Table2, Terminal, Trash2, Type, Variable, X, XCircle, Zap } from "lucide-vue-next";
 
 import type { CredentialListItem, LLMModel } from "@/types/credential";
 import type {
@@ -29,6 +29,8 @@ import type {
 import { createAgentSkillZipBlob, getSkillZipFileName, parseSkillZip } from "@/lib/skillZipParser";
 
 import SelectorPickerDialog from "@/components/Dialogs/SelectorPickerDialog.vue";
+import SkillHistoryDialog from "@/components/Dialogs/SkillHistoryDialog.vue";
+import AgentSkillCard from "@/components/Panels/AgentSkillCard.vue";
 import SkillBuilderModal from "@/components/Panels/SkillBuilderModal.vue";
 import Button from "@/components/ui/Button.vue";
 import AgentFieldToggle from "@/components/ui/AgentFieldToggle.vue";
@@ -5127,6 +5129,8 @@ const skillZipError = ref("");
 const skillDownloadLoadingId = ref<string | null>(null);
 const skillBuilderOpen = ref(false);
 const skillBuilderTargetSkill = ref<AgentSkill | null>(null);
+const skillHistoryOpen = ref(false);
+const skillHistoryTarget = ref<{ skill: AgentSkill; skillIndex: number } | null>(null);
 
 function upsertAgentSkills(parsedSkills: AgentSkill[], replaceSkillId?: string): void {
   if (!selectedNode.value) return;
@@ -5242,21 +5246,6 @@ async function downloadAgentSkill(skill: AgentSkill): Promise<void> {
   }
 }
 
-function isTextSkillFile(file: AgentSkillFile): boolean {
-  return (file.encoding ?? "text") === "text";
-}
-
-function isImageSkillFile(file: AgentSkillFile): boolean {
-  return (file.mimeType || "").startsWith("image/");
-}
-
-function getSkillFilePreviewSrc(file: AgentSkillFile): string {
-  if (!isImageSkillFile(file) || (file.encoding ?? "text") !== "base64") {
-    return "";
-  }
-  return `data:${file.mimeType};base64,${file.content}`;
-}
-
 const expandedSkillIds = ref<Set<string>>(new Set());
 
 function toggleSkillExpanded(id: string): void {
@@ -5274,6 +5263,44 @@ function openSkillBuilderNew(): void {
 function openSkillBuilderEdit(skill: AgentSkill): void {
   skillBuilderTargetSkill.value = skill;
   skillBuilderOpen.value = true;
+}
+
+function openSkillHistory(skill: AgentSkill, skillIndex: number): void {
+  skillHistoryTarget.value = { skill, skillIndex };
+  skillHistoryOpen.value = true;
+}
+
+function applySkillHistorySnapshot(snapshot: AgentSkill, skillIndex: number): void {
+  if (!selectedNode.value) return;
+  const current = [...(selectedNode.value.data.skills || [])];
+  const existingId = current[skillIndex]?.id;
+  if (!existingId) return;
+  current[skillIndex] = {
+    ...snapshot,
+    id: existingId,
+  };
+  updateNodeData("skills", current);
+}
+
+function handleSkillHistoryEdit(snapshot: AgentSkill, skillIndex: number): void {
+  applySkillHistorySnapshot(snapshot, skillIndex);
+}
+
+function handleSkillHistoryRevert(snapshot: AgentSkill, skillIndex: number): void {
+  applySkillHistorySnapshot(snapshot, skillIndex);
+  showToast("Skill restored from history", "success");
+}
+
+function handleSkillHistoryFineTune(snapshot: AgentSkill): void {
+  openSkillBuilderEdit(snapshot);
+}
+
+function handleSkillHistoryExpandSkill(): void {
+  const skillId = skillHistoryTarget.value?.skill.id;
+  if (!skillId) return;
+  const next = new Set(expandedSkillIds.value);
+  next.add(skillId);
+  expandedSkillIds.value = next;
 }
 
 async function handleSkillBuilderSave(file: File): Promise<void> {
@@ -7820,158 +7847,25 @@ onUnmounted(() => {
               >
                 {{ skillZipError }}
               </p>
-              <div
+              <AgentSkillCard
                 v-for="(skill, idx) in (selectedNode.data.skills || [])"
                 :key="skill.id"
-                class="rounded border p-3 space-y-2"
-              >
-                <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-                  <button
-                    type="button"
-                    class="flex min-w-0 flex-1 items-center gap-1.5 self-center text-left text-sm font-medium hover:text-primary"
-                    :title="`Skill ${idx + 1}: ${skill.name || '(unnamed)'}`"
-                    @click="toggleSkillExpanded(skill.id)"
-                  >
-                    <ChevronRight
-                      v-if="!expandedSkillIds.has(skill.id)"
-                      class="w-3.5 h-3.5"
-                    />
-                    <ChevronDown
-                      v-else
-                      class="w-3.5 h-3.5"
-                    />
-                    <span class="break-words leading-tight">
-                      Skill {{ idx + 1 }}: {{ skill.name || '(unnamed)' }}
-                    </span>
-                  </button>
-                  <div class="flex shrink-0 items-center gap-1 rounded-lg border border-border/60 bg-muted/10 p-1">
-                    <button
-                      type="button"
-                      class="flex h-7 w-7 items-center justify-center rounded-md text-primary transition-colors hover:bg-primary/10 hover:text-primary disabled:pointer-events-none disabled:opacity-50"
-                      :disabled="!selectedNode?.data?.credentialId || !selectedNode?.data?.model"
-                      :title="'Edit with AI'"
-                      :aria-label="'Edit with AI'"
-                      @click="openSkillBuilderEdit(skill)"
-                    >
-                      <Sparkles class="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      class="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
-                      :disabled="skillDownloadLoadingId !== null"
-                      :title="'Download skill ZIP'"
-                      :aria-label="'Download skill ZIP'"
-                      @click="downloadAgentSkill(skill)"
-                    >
-                      <Loader2
-                        v-if="skillDownloadLoadingId === skill.id"
-                        class="w-3.5 h-3.5 animate-spin"
-                      />
-                      <Download
-                        v-else
-                        class="w-3.5 h-3.5"
-                      />
-                    </button>
-                    <button
-                      type="button"
-                      class="flex h-7 w-7 items-center justify-center rounded-md text-destructive transition-colors hover:bg-destructive/10 hover:text-destructive"
-                      :title="'Remove skill'"
-                      :aria-label="'Remove skill'"
-                      @click="removeAgentSkill(idx)"
-                    >
-                      <Trash2 class="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-                <div
-                  v-if="expandedSkillIds.has(skill.id)"
-                  class="space-y-2 pt-2 border-t"
-                >
-                  <div>
-                    <Label class="text-xs">Name</Label>
-                    <Input
-                      :model-value="skill.name"
-                      placeholder="skill-name"
-                      @update:model-value="updateAgentSkill(idx, 'name', $event)"
-                    />
-                  </div>
-                  <div>
-                    <Label class="text-xs">Timeout (seconds)</Label>
-                    <Input
-                      type="number"
-                      :model-value="String(skill.timeoutSeconds ?? 30)"
-                      min="1"
-                      max="3600"
-                      placeholder="30"
-                      @update:model-value="updateAgentSkill(idx, 'timeoutSeconds', parseInt($event, 10) || 30)"
-                    />
-                  </div>
-                  <div>
-                    <Label class="text-xs">SKILL.md Content</Label>
-                    <Textarea
-                      :model-value="skill.content"
-                      placeholder="---&#10;name: my-skill&#10;---&#10;&#10;Instructions..."
-                      :rows="6"
-                      class="font-mono text-xs"
-                      @update:model-value="updateAgentSkill(idx, 'content', $event)"
-                    />
-                  </div>
-                  <div
-                    v-if="skill.files?.length"
-                    class="space-y-1"
-                  >
-                    <Label class="text-xs">Files ({{ skill.files.length }})</Label>
-                    <div
-                      v-for="(f, fi) in skill.files"
-                      :key="fi"
-                      class="rounded border bg-muted/20 p-2 min-w-0"
-                    >
-                      <div class="flex justify-between items-center gap-2 mb-1 min-w-0">
-                        <span
-                          class="text-xs font-mono min-w-0 flex-1 truncate"
-                          :title="f.path"
-                        >{{ f.path }}</span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          class="gap-1 shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                          @click="removeAgentSkillFile(idx, fi)"
-                        >
-                          <Trash2 class="w-3.5 h-3.5" />
-                          Remove
-                        </Button>
-                      </div>
-                      <div
-                        v-if="isImageSkillFile(f)"
-                        class="space-y-2"
-                      >
-                        <img
-                          v-if="getSkillFilePreviewSrc(f)"
-                          :src="getSkillFilePreviewSrc(f)"
-                          :alt="f.path"
-                          class="max-h-56 w-auto max-w-full rounded border bg-background object-contain"
-                        >
-                        <p class="text-xs text-muted-foreground">
-                          Image preview stored as base64 to keep workflow saves UTF-8 safe.
-                        </p>
-                      </div>
-                      <Textarea
-                        v-else-if="isTextSkillFile(f)"
-                        :model-value="f.content"
-                        :rows="4"
-                        class="font-mono text-xs"
-                        @update:model-value="updateAgentSkillFile(idx, fi, 'content', $event)"
-                      />
-                      <p
-                        v-else
-                        class="text-xs text-muted-foreground"
-                      >
-                        Binary file stored as base64. Editing is disabled in the workflow editor.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
+                :skill="skill"
+                :index="idx"
+                :expanded="expandedSkillIds.has(skill.id)"
+                :ai-edit-disabled="!selectedNode?.data?.credentialId || !selectedNode?.data?.model"
+                :download-loading="skillDownloadLoadingId === skill.id"
+                @toggle-expand="toggleSkillExpanded(skill.id)"
+                @ai-edit="openSkillBuilderEdit(skill)"
+                @download="downloadAgentSkill(skill)"
+                @remove="removeAgentSkill(idx)"
+                @history="openSkillHistory(skill, idx)"
+                @update:name="updateAgentSkill(idx, 'name', $event)"
+                @update:timeout-seconds="updateAgentSkill(idx, 'timeoutSeconds', $event)"
+                @update:content="updateAgentSkill(idx, 'content', $event)"
+                @update:file-content="(fileIndex, value) => updateAgentSkillFile(idx, fileIndex, 'content', value)"
+                @remove-file="removeAgentSkillFile(idx, $event)"
+              />
               <p class="text-xs text-muted-foreground">
                 SKILL.md instructions and optional Python files. Optional. Drop zip or add manually.
               </p>
@@ -14582,6 +14476,20 @@ onUnmounted(() => {
     :model="selectedNode?.data?.model || ''"
     @save="handleSkillBuilderSave"
     @update:open="skillBuilderOpen = $event"
+  />
+
+  <SkillHistoryDialog
+    :open="skillHistoryOpen"
+    :workflow-id="workflowStore.currentWorkflow?.id ?? ''"
+    :agent-node-id="selectedNode?.id ?? ''"
+    :skill="skillHistoryTarget?.skill ?? null"
+    :skill-index="skillHistoryTarget?.skillIndex ?? -1"
+    :ai-edit-disabled="!selectedNode?.data?.credentialId || !selectedNode?.data?.model"
+    @edit-snapshot="handleSkillHistoryEdit"
+    @revert-snapshot="handleSkillHistoryRevert"
+    @fine-tune="handleSkillHistoryFineTune"
+    @expand-skill="handleSkillHistoryExpandSkill"
+    @update:open="skillHistoryOpen = $event"
   />
 </template>
 
