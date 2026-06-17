@@ -212,6 +212,7 @@ class TestBuildChartPayload(unittest.TestCase):
         payload = build_chart_payload(config, {})
         self.assertEqual(payload["type"], "text")
         self.assertEqual(payload["text"], "**Last execution** at `19:47`")
+        self.assertTrue(payload["text_interactive"])
         self.assertNotIn("series", payload)
 
     def test_text_pulls_from_value_field(self):
@@ -220,12 +221,22 @@ class TestBuildChartPayload(unittest.TestCase):
         payload = build_chart_payload(config, data)
         self.assertEqual(payload["type"], "text")
         self.assertEqual(payload["text"], "Last run at 19:47")
+        self.assertFalse(payload["text_interactive"])
 
     def test_text_value_field_takes_precedence_over_static(self):
         config = {"chartType": "text", "valueField": "message", "text": "static fallback"}
         data = [{"message": "dynamic wins"}]
         payload = build_chart_payload(config, data)
         self.assertEqual(payload["text"], "dynamic wins")
+        self.assertFalse(payload["text_interactive"])
+
+    def test_text_value_field_task_list_is_interactive(self):
+        checklist = "- [x] Option 1\n- [ ] Option 2\n- [ ] Option 3"
+        config = {"chartType": "text", "valueField": "message"}
+        data = [{"message": checklist}]
+        payload = build_chart_payload(config, data)
+        self.assertEqual(payload["text"], checklist)
+        self.assertTrue(payload["text_interactive"])
 
     def test_text_falls_back_to_first_string_field(self):
         config = {"chartType": "text"}

@@ -25,6 +25,8 @@ export interface ChartPayload {
   value?: number | string | null;
   // Markdown content for the `text` chart type.
   text?: string;
+  // When true, GFM task list checkboxes can be toggled from the dashboard.
+  text_interactive?: boolean;
   unit?: string;
   decimals?: number;
   min?: number;
