@@ -14,6 +14,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: "markdown-task-toggle", lineIndex: number): void;
+  (e: "markdown-task-update", payload: { lineIndex: number; text: string }): void;
 }>();
 
 const themeStore = useThemeStore();
@@ -193,6 +194,10 @@ function onMarkdownTaskToggle(lineIndex: number): void {
   emit("markdown-task-toggle", lineIndex);
 }
 
+function onMarkdownTaskUpdate(payload: { lineIndex: number; text: string }): void {
+  emit("markdown-task-update", payload);
+}
+
 const numericValue = computed((): string => {
   const p = chartPayload.value;
   if (!p || p.value === null || p.value === undefined) return "—";
@@ -363,6 +368,7 @@ const apexOptions = computed((): Record<string, unknown> => {
       :interactive="!!chartPayload.text_interactive"
       :saving="markdownTaskSaving"
       @toggle="onMarkdownTaskToggle"
+      @update="onMarkdownTaskUpdate"
     />
     <div
       v-else-if="chartPayload && chartPayload.type === 'text'"

@@ -1264,6 +1264,18 @@ export const dashboardApi = {
     return response.data;
   },
 
+  updateMarkdownTask: async (
+    id: string,
+    lineIndex: number,
+    text: string,
+  ): Promise<WidgetDataResponse> => {
+    const response = await api.patch<WidgetDataResponse>(
+      `/dashboards/widgets/${id}/markdown-task-update`,
+      { line_index: lineIndex, text },
+    );
+    return response.data;
+  },
+
   aiGenerateWidget: async (
     prompt: string,
     credentialId: string,

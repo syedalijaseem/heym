@@ -78,3 +78,52 @@ export function toggleTaskItemLocal(markdown: string, lineIndex: number): string
   lines[lineIndex] = `${indent}${bullet} [${newCheck}] ${rest}`;
   return lines.join("\n");
 }
+
+export function updateTaskItemLocal(markdown: string, lineIndex: number, text: string): string {
+  const lines = markdown.split("\n");
+  const line = lines[lineIndex];
+  if (line === undefined) {
+    throw new Error(`Invalid line_index: ${lineIndex}`);
+  }
+  const match = TASK_ITEM_RE.exec(line);
+  if (!match) {
+    throw new Error(`Line ${lineIndex} is not a task list item`);
+  }
+  const indent = match[1] ?? "";
+  const bullet = match[2] ?? "-";
+  const check = match[3] ?? " ";
+  lines[lineIndex] = `${indent}${bullet} [${check}] ${text}`;
+  return lines.join("\n");
+}
+
+export function removeTaskItemLocal(markdown: string, lineIndex: number): string {
+  const lines = markdown.split("\n");
+  const line = lines[lineIndex];
+  if (line === undefined) {
+    throw new Error(`Invalid line_index: ${lineIndex}`);
+  }
+  if (!TASK_ITEM_RE.test(line)) {
+    throw new Error(`Line ${lineIndex} is not a task list item`);
+  }
+  lines.splice(lineIndex, 1);
+  if (
+    lineIndex < lines.length
+    && (lines[lineIndex] ?? "").trim() === ""
+    && lineIndex > 0
+    && (lines[lineIndex - 1] ?? "").trim() === ""
+  ) {
+    lines.splice(lineIndex, 1);
+  }
+  return lines.join("\n");
+}
+
+export function updateOrRemoveTaskItemLocal(
+  markdown: string,
+  lineIndex: number,
+  text: string,
+): string {
+  if (text.trim() === "") {
+    return removeTaskItemLocal(markdown, lineIndex);
+  }
+  return updateTaskItemLocal(markdown, lineIndex, text);
+}
