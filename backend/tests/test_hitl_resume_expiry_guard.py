@@ -40,7 +40,7 @@ class TestResumeHitlExpiryGuard(IsolatedAsyncioTestCase):
         return mock_db
 
     async def test_resolved_with_decision_passes_guard(self) -> None:
-        mock_db = await self._run(_make_request("resolved", "approve"))
+        mock_db = await self._run(_make_request("resolved", "accept"))
         mock_db.get.assert_called()  # guard passed; function proceeded to workflow lookup
 
     async def test_pending_is_blocked(self) -> None:
