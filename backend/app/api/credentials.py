@@ -23,8 +23,12 @@ from app.models.schemas import (
     CredentialResponse,
     CredentialShareRequest,
     CredentialShareResponse,
+    CredentialTestRequest,
+    CredentialTestResponse,
     CredentialUpdate,
     LLMModel,
+    SupabaseColumnsResponse,
+    SupabaseTablesResponse,
     TeamShareRequest,
     TeamShareResponse,
 )
@@ -112,6 +116,12 @@ def get_masked_value(credential_type: CredentialType, config: dict) -> str | Non
             return "connected"
         client_id = config.get("client_id", "")
         return mask_api_key(client_id) if client_id else None
+    elif credential_type == CredentialType.supabase:
+        supabase_url = str(config.get("supabase_url", "")).strip()
+        supabase_schema = str(config.get("supabase_schema", "public")).strip() or "public"
+        if supabase_url:
+            return f"{supabase_url} ({supabase_schema})"
+        return None
     elif credential_type == CredentialType.s3:
         access_key = str(config.get("aws_access_key_id", "")).strip()
         region = str(config.get("aws_region", "")).strip()
@@ -125,6 +135,89 @@ def get_header_key(credential_type: CredentialType, config: dict) -> str | None:
     if credential_type == CredentialType.header:
         return config.get("header_key")
     return None
+
+
+def get_public_credential_fields(
+    credential_type: CredentialType, config: dict
+) -> dict[str, str | None]:
+    """Return non-secret credential fields that the UI may safely hydrate for editing."""
+    if credential_type == CredentialType.supabase:
+        supabase_url = str(config.get("supabase_url", "")).strip() or None
+        supabase_schema = str(config.get("supabase_schema", "public")).strip() or "public"
+        return {
+            "supabase_url": supabase_url,
+            "supabase_schema": supabase_schema,
+        }
+    return {}
+
+
+async def _get_accessible_credential(
+    db: AsyncSession,
+    credential_id: uuid.UUID,
+    current_user: User,
+) -> Credential | None:
+    """Return a credential the user owns or has been shared."""
+    result = await db.execute(
+        select(Credential).where(
+            Credential.id == credential_id,
+            Credential.owner_id == current_user.id,
+        )
+    )
+    credential = result.scalar_one_or_none()
+    if credential is not None:
+        return credential
+
+    shared_result = await db.execute(
+        select(Credential)
+        .join(CredentialShare, CredentialShare.credential_id == Credential.id)
+        .where(Credential.id == credential_id, CredentialShare.user_id == current_user.id)
+    )
+    credential = shared_result.scalar_one_or_none()
+    if credential is not None:
+        return credential
+
+    team_result = await db.execute(
+        select(Credential)
+        .join(CredentialTeamShare, CredentialTeamShare.credential_id == Credential.id)
+        .join(TeamMember, TeamMember.team_id == CredentialTeamShare.team_id)
+        .where(
+            Credential.id == credential_id,
+            TeamMember.user_id == current_user.id,
+        )
+    )
+    return team_result.scalar_one_or_none()
+
+
+def _merge_supabase_test_config(
+    inline_config: dict,
+    stored_config: dict,
+) -> dict[str, str]:
+    """Merge inline form values with stored secrets for connection tests."""
+    merged = dict(stored_config)
+    for key in ("supabase_url", "supabase_key", "supabase_schema"):
+        inline_value = str(inline_config.get(key, "")).strip()
+        if inline_value:
+            merged[key] = inline_value
+    return merged
+
+
+def _merge_supabase_update_config(
+    inline_config: dict,
+    stored_config: dict,
+) -> dict[str, str]:
+    """Merge edited Supabase fields while preserving the stored API key when left blank."""
+    merged = dict(stored_config)
+    if "supabase_url" in inline_config:
+        merged["supabase_url"] = str(inline_config.get("supabase_url", "")).strip()
+    if "supabase_schema" in inline_config:
+        merged["supabase_schema"] = (
+            str(inline_config.get("supabase_schema", "")).strip() or "public"
+        )
+
+    inline_key = str(inline_config.get("supabase_key", "")).strip()
+    if inline_key:
+        merged["supabase_key"] = inline_key
+    return merged
 
 
 @router.get("", response_model=list[CredentialListResponse])
@@ -512,9 +605,117 @@ async def create_credential(
         type=credential.type,
         masked_value=masked,
         header_key=header_key,
+        public_fields=get_public_credential_fields(credential.type, credential_data.config),
         created_at=credential.created_at,
         updated_at=credential.updated_at,
     )
+
+
+@router.post("/test", response_model=CredentialTestResponse)
+async def run_credential_connection_test(
+    test_data: CredentialTestRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> CredentialTestResponse:
+    """Test whether a credential configuration can reach the external service."""
+    if test_data.type != CredentialType.supabase:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Connection test is not supported for this credential type",
+        )
+
+    config = dict(test_data.config or {})
+    if test_data.credential_id is not None:
+        credential = await _get_accessible_credential(db, test_data.credential_id, current_user)
+        if credential is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Credential not found",
+            )
+        if credential.type != CredentialType.supabase:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Credential type does not match the requested test",
+            )
+        stored_config = decrypt_config(credential.encrypted_config)
+        config = _merge_supabase_test_config(config, stored_config)
+
+    validate_credential_config(CredentialType.supabase, config)
+
+    from app.services.supabase_service import SupabaseService
+
+    try:
+        SupabaseService(config).test_connection()
+    except ValueError as exc:
+        return CredentialTestResponse(success=False, message=str(exc))
+
+    return CredentialTestResponse(success=True, message="Connection successful")
+
+
+@router.get("/{credential_id}/supabase/tables", response_model=SupabaseTablesResponse)
+async def list_supabase_tables(
+    credential_id: uuid.UUID,
+    schema: str | None = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> SupabaseTablesResponse:
+    credential = await _get_accessible_credential(db, credential_id, current_user)
+    if credential is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Credential not found",
+        )
+    if credential.type != CredentialType.supabase:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Credential type does not support Supabase table discovery",
+        )
+
+    config = decrypt_config(credential.encrypted_config)
+    from app.services.supabase_service import SupabaseService
+
+    try:
+        result = SupabaseService(config).list_tables(
+            schema=schema or config.get("supabase_schema", "public")
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    return SupabaseTablesResponse(**result)
+
+
+@router.get("/{credential_id}/supabase/columns", response_model=SupabaseColumnsResponse)
+async def list_supabase_columns(
+    credential_id: uuid.UUID,
+    table: str,
+    schema: str | None = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> SupabaseColumnsResponse:
+    credential = await _get_accessible_credential(db, credential_id, current_user)
+    if credential is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Credential not found",
+        )
+    if credential.type != CredentialType.supabase:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Credential type does not support Supabase column discovery",
+        )
+
+    config = decrypt_config(credential.encrypted_config)
+    from app.services.supabase_service import SupabaseService
+
+    try:
+        result = SupabaseService(config).list_columns(
+            table,
+            schema=schema or config.get("supabase_schema", "public"),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    return SupabaseColumnsResponse(**result)
 
 
 @router.get("/{credential_id}", response_model=CredentialResponse)
@@ -566,6 +767,7 @@ async def get_credential(
         type=credential.type,
         masked_value=masked,
         header_key=header_key,
+        public_fields=get_public_credential_fields(credential.type, config),
         created_at=credential.created_at,
         updated_at=credential.updated_at,
     )
@@ -609,10 +811,14 @@ async def update_credential(
     config = decrypt_config(credential.encrypted_config)
 
     if credential_data.config is not None:
-        config = merge_credential_config_for_update(
-            credential.type,
-            config,
-            credential_data.config,
+        config = (
+            _merge_supabase_update_config(credential_data.config, config)
+            if credential.type == CredentialType.supabase
+            else merge_credential_config_for_update(
+                credential.type,
+                config,
+                credential_data.config,
+            )
         )
         validate_credential_config(credential.type, config)
         credential.encrypted_config = encrypt_config(config)
@@ -629,6 +835,7 @@ async def update_credential(
         type=credential.type,
         masked_value=masked,
         header_key=header_key,
+        public_fields=get_public_credential_fields(credential.type, config),
         created_at=credential.created_at,
         updated_at=credential.updated_at,
     )
@@ -876,6 +1083,17 @@ def validate_credential_config(credential_type: CredentialType, config: dict) ->
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="BigQuery credential requires client_secret",
+            )
+    elif credential_type == CredentialType.supabase:
+        if "supabase_url" not in config or not str(config["supabase_url"]).strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Supabase credential requires supabase_url",
+            )
+        if "supabase_key" not in config or not str(config["supabase_key"]).strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Supabase credential requires supabase_key",
             )
     elif credential_type == CredentialType.s3:
         if "aws_access_key_id" not in config or not str(config["aws_access_key_id"]).strip():

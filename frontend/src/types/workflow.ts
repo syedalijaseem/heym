@@ -155,6 +155,7 @@ export type NodeType =
   | "github"
   | "googleSheets"
   | "bigquery"
+  | "supabase"
   | "throwError"
   | "rabbitmq"
   | "imapTrigger"
@@ -423,16 +424,29 @@ export interface NodeData {
   gristColumns?: Array<{ id: string; name: string; type: string }>;
   githubOperation?:
     | "getRepository"
+    | "getRepositoryLicense"
+    | "getRepositoryProfile"
+    | "listPopularPaths"
+    | "listReferrers"
     | "listOrganizationRepositories"
     | "listUserRepositories"
+    | "getUserRepositories"
+    | "getUserIssues"
+    | "inviteUser"
     | "getIssue"
     | "listIssues"
+    | "getRepositoryIssues"
     | "createComment"
     | "createIssue"
     | "updateIssue"
     | "lockIssue"
     | "listPullRequests"
+    | "getRepositoryPullRequests"
     | "createPullRequest"
+    | "createReview"
+    | "getReview"
+    | "listReviews"
+    | "updateReview"
     | "listReleases"
     | "getRelease"
     | "createRelease"
@@ -440,23 +454,42 @@ export interface NodeData {
     | "deleteRelease"
     | "listWorkflows"
     | "getWorkflow"
+    | "enableWorkflow"
+    | "disableWorkflow"
+    | "getWorkflowUsage"
     | "dispatchWorkflow"
+    | "dispatchWorkflowAndWait"
     | "getFile"
     | "listFiles"
     | "upsertFile"
     | "deleteFile";
   githubOwner?: string;
   githubRepo?: string;
+  githubOrganization?: string;
+  githubInviteEmail?: string;
   githubIssueNumber?: string;
   githubTitle?: string;
   githubBody?: string;
   githubCommentBody?: string;
   githubState?: string;
+  githubStateReason?: string;
+  githubAssignee?: string;
+  githubCreator?: string;
+  githubMentioned?: string;
+  githubLabelsFilter?: string;
+  githubSince?: string;
+  githubSort?: string;
+  githubDirection?: string;
   githubLabels?: string;
   githubAssignees?: string;
   githubLockReason?: string;
   githubHead?: string;
   githubBase?: string;
+  githubPullRequestNumber?: string;
+  githubReviewId?: string;
+  githubReviewEvent?: "APPROVE" | "REQUEST_CHANGES" | "COMMENT" | "PENDING";
+  githubReviewBody?: string;
+  githubCommitId?: string;
   githubDraft?: boolean;
   githubPrerelease?: boolean;
   githubFilePath?: string;
@@ -468,6 +501,8 @@ export interface NodeData {
   githubReleaseId?: string;
   githubWorkflowId?: string;
   githubWorkflowInputs?: string;
+  githubWaitTimeoutSeconds?: string;
+  githubPollIntervalSeconds?: string;
   errorMessage?: string;
   httpStatusCode?: number;
   retryEnabled?: boolean;
@@ -551,6 +586,20 @@ export interface NodeData {
   bqRowsInputMode?: "raw" | "selective";
   bqRows?: string;
   bqMappings?: Array<{ key: string; value: string }>;
+  supabaseOperation?: "select" | "insert" | "update" | "upsert" | "delete";
+  supabaseSchema?: string;
+  supabaseTable?: string;
+  supabaseSelectColumns?: string;
+  supabaseFilter?: string;
+  supabaseLimit?: string;
+  supabaseOrderBy?: string;
+  supabaseAscending?: boolean;
+  supabaseRowsInputMode?: "raw" | "auto";
+  supabaseDataInputMode?: "raw" | "auto";
+  supabaseIgnoredInputFields?: string;
+  supabaseRows?: string;
+  supabaseOnConflict?: string;
+  supabaseData?: string;
   gsOperation?: string;
   gsSpreadsheetId?: string;
   gsSheetName?: string;

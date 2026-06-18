@@ -178,6 +178,7 @@ const icons = {
   github: Github,
   googleSheets: Sheet,
   bigquery: Database,
+  supabase: Database,
   throwError: XCircle,
   rabbitmq: Rabbit,
   crawler: Bug,

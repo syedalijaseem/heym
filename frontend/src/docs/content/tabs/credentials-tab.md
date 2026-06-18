@@ -53,7 +53,7 @@ Reference credentials by name in node configuration. For example:
 - [LLM node](../nodes/llm-node.md) – Select credential for the model API
 - [HTTP node](../nodes/http-node.md) – Use Bearer or Header credentials for auth
 - [Agent node](../nodes/agent-node.md) – Pass GitHub tokens into MCP server env vars such as `GITHUB_PERSONAL_ACCESS_TOKEN`
-- [GitHub node](../nodes/github-node.md) – Run native GitHub repository, issue, release, workflow, and file operations
+- [GitHub node](../nodes/github-node.md) – Run native GitHub repository, user, issue, review, release, workflow, traffic, and file operations
 - [RAG node](../nodes/rag-node.md) – Use Qdrant credential for the vector store
 - [Telegram Trigger node](../nodes/telegram-trigger-node.md) – Receive Telegram bot webhooks
 - [Telegram node](../nodes/telegram-node.md) – Send Telegram bot messages

@@ -8773,8 +8773,15 @@ class WorkflowExecutor:
                 repo = self.evaluate_message_template(
                     str(node_data.get("githubRepo", "") or ""), inputs, node_id
                 ).strip()
-                repo_optional_operations = {"listOrganizationRepositories", "listUserRepositories"}
-                if not owner:
+                owner_optional_operations = {"getUserIssues", "inviteUser"}
+                repo_optional_operations = {
+                    "listOrganizationRepositories",
+                    "listUserRepositories",
+                    "getUserRepositories",
+                    "getUserIssues",
+                    "inviteUser",
+                }
+                if operation not in owner_optional_operations and not owner:
                     raise ValueError("GitHub node requires an owner or organization")
                 if operation not in repo_optional_operations and not repo:
                     raise ValueError("GitHub node requires owner and repository")
@@ -8808,8 +8815,6 @@ class WorkflowExecutor:
                         return True, None
                     if not isinstance(parsed, list):
                         raise ValueError(f"GitHub {label} must be a JSON array of strings")
-                    if operation == "updateIssue" and parsed == []:
-                        return False, None
                     return True, [str(item) for item in parsed]
 
                 def _parse_optional_object(
@@ -8850,6 +8855,41 @@ class WorkflowExecutor:
                             "private": repo_data.get("private"),
                             "url": repo_data.get("html_url"),
                         }
+                    elif operation == "getRepositoryLicense":
+                        license_data = service.get_repository_license(owner, repo)
+                        output = {
+                            "success": True,
+                            "operation": operation,
+                            "license": license_data,
+                            "name": (license_data.get("license") or {}).get("name"),
+                            "spdx_id": (license_data.get("license") or {}).get("spdx_id"),
+                            "content": license_data.get("decoded_content"),
+                        }
+                    elif operation == "getRepositoryProfile":
+                        profile = service.get_repository_profile(owner, repo)
+                        output = {
+                            "success": True,
+                            "operation": operation,
+                            "profile": profile,
+                            "health_percentage": profile.get("health_percentage"),
+                            "description": profile.get("description"),
+                        }
+                    elif operation == "listPopularPaths":
+                        paths = service.list_popular_paths(owner, repo)
+                        output = {
+                            "success": True,
+                            "operation": operation,
+                            "paths": paths,
+                            "count": len(paths),
+                        }
+                    elif operation == "listReferrers":
+                        referrers = service.list_referrers(owner, repo)
+                        output = {
+                            "success": True,
+                            "operation": operation,
+                            "referrers": referrers,
+                            "count": len(referrers),
+                        }
                     elif operation == "getIssue":
                         issue_number_value = self.evaluate_message_template(
                             str(node_data.get("githubIssueNumber", "") or ""), inputs, node_id
@@ -8867,7 +8907,7 @@ class WorkflowExecutor:
                             "state": issue.get("state"),
                             "url": issue.get("html_url"),
                         }
-                    elif operation == "listIssues":
+                    elif operation in {"listIssues", "getRepositoryIssues"}:
                         state = (
                             self.evaluate_message_template(
                                 str(node_data.get("githubState", "open") or "open"), inputs, node_id
@@ -8878,7 +8918,41 @@ class WorkflowExecutor:
                             str(node_data.get("githubPerPage", "30") or "30"), inputs, node_id
                         ).strip()
                         per_page = int(float(per_page_value or "30"))
-                        issues = service.list_issues(owner, repo, state=state, per_page=per_page)
+                        assignee = self.evaluate_nonempty_message_template(
+                            str(node_data.get("githubAssignee", "") or ""), inputs, node_id
+                        ).strip()
+                        creator = self.evaluate_nonempty_message_template(
+                            str(node_data.get("githubCreator", "") or ""), inputs, node_id
+                        ).strip()
+                        mentioned = self.evaluate_nonempty_message_template(
+                            str(node_data.get("githubMentioned", "") or ""), inputs, node_id
+                        ).strip()
+                        labels_filter = self.evaluate_nonempty_message_template(
+                            str(node_data.get("githubLabelsFilter", "") or ""), inputs, node_id
+                        ).strip()
+                        since = self.evaluate_nonempty_message_template(
+                            str(node_data.get("githubSince", "") or ""), inputs, node_id
+                        ).strip()
+                        sort = str(node_data.get("githubSort", "") or "").strip()
+                        direction = str(node_data.get("githubDirection", "") or "").strip()
+                        list_issues_method = (
+                            service.get_repository_issues
+                            if operation == "getRepositoryIssues"
+                            else service.list_issues
+                        )
+                        issues = list_issues_method(
+                            owner,
+                            repo,
+                            state=state,
+                            per_page=per_page,
+                            assignee=assignee or None,
+                            creator=creator or None,
+                            mentioned=mentioned or None,
+                            labels=labels_filter or None,
+                            since=since or None,
+                            sort=sort or None,
+                            direction=direction or None,
+                        )
                         output = {
                             "success": True,
                             "operation": operation,
@@ -8942,8 +9016,12 @@ class WorkflowExecutor:
                         title_provided, title_raw = _resolve_optional_template("githubTitle")
                         body_provided, body = _resolve_optional_template("githubBody")
                         state_provided, state_raw = _resolve_optional_template("githubState")
+                        state_reason_provided, state_reason_raw = _resolve_optional_template(
+                            "githubStateReason"
+                        )
                         title = title_raw.strip()
                         state = state_raw.strip()
+                        state_reason = state_reason_raw.strip()
                         issue = service.update_issue(
                             owner,
                             repo,
@@ -8951,6 +9029,7 @@ class WorkflowExecutor:
                             title=title if title_provided else None,
                             body=body if body_provided else None,
                             state=state or None if state_provided else None,
+                            state_reason=(state_reason or None if state_reason_provided else None),
                             labels=labels if labels_provided else None,
                             assignees=assignees if assignees_provided else None,
                         )
@@ -8972,6 +9051,12 @@ class WorkflowExecutor:
                         lock_reason = self.evaluate_message_template(
                             str(node_data.get("githubLockReason", "") or ""), inputs, node_id
                         ).strip()
+                        allowed_lock_reasons = {"off-topic", "too heated", "resolved", "spam"}
+                        if lock_reason and lock_reason not in allowed_lock_reasons:
+                            raise ValueError(
+                                "GitHub lockIssue lock reason must be one of: "
+                                "off-topic, too heated, resolved, spam"
+                            )
                         issue_number = int(float(issue_number_value))
                         lock_result = service.lock_issue(
                             owner,
@@ -8984,7 +9069,7 @@ class WorkflowExecutor:
                             "operation": operation,
                             **lock_result,
                         }
-                    elif operation == "listPullRequests":
+                    elif operation in {"listPullRequests", "getRepositoryPullRequests"}:
                         state = (
                             self.evaluate_message_template(
                                 str(node_data.get("githubState", "open") or "open"), inputs, node_id
@@ -8995,8 +9080,20 @@ class WorkflowExecutor:
                             str(node_data.get("githubPerPage", "30") or "30"), inputs, node_id
                         ).strip()
                         per_page = int(float(per_page_value or "30"))
-                        pull_requests = service.list_pull_requests(
-                            owner, repo, state=state, per_page=per_page
+                        list_pull_requests_method = (
+                            service.get_repository_pull_requests
+                            if operation == "getRepositoryPullRequests"
+                            else service.list_pull_requests
+                        )
+                        pull_requests = list_pull_requests_method(
+                            owner,
+                            repo,
+                            state=state,
+                            per_page=per_page,
+                            sort=str(node_data.get("githubSort", "") or "").strip() or None,
+                            direction=(
+                                str(node_data.get("githubDirection", "") or "").strip() or None
+                            ),
                         )
                         output = {
                             "success": True,
@@ -9039,6 +9136,122 @@ class WorkflowExecutor:
                             "title": pull_request.get("title"),
                             "url": pull_request.get("html_url"),
                         }
+                    elif operation in {"createReview", "getReview", "listReviews", "updateReview"}:
+                        pull_request_number_value = self.evaluate_nonempty_message_template(
+                            str(node_data.get("githubPullRequestNumber", "") or ""),
+                            inputs,
+                            node_id,
+                        ).strip()
+                        if not pull_request_number_value:
+                            raise ValueError(f"GitHub {operation} requires a pull request number")
+                        pull_request_number = int(float(pull_request_number_value))
+
+                        if operation == "createReview":
+                            raw_event = self.evaluate_nonempty_message_template(
+                                str(node_data.get("githubReviewEvent", "APPROVE") or "APPROVE"),
+                                inputs,
+                                node_id,
+                            ).strip()
+                            event = raw_event.upper()
+                            allowed_review_events = {
+                                "APPROVE",
+                                "REQUEST_CHANGES",
+                                "COMMENT",
+                                "PENDING",
+                            }
+                            if event not in allowed_review_events:
+                                raise ValueError(
+                                    "GitHub createReview event must be one of: "
+                                    "APPROVE, REQUEST_CHANGES, COMMENT, PENDING"
+                                )
+                            body = self.evaluate_nonempty_message_template(
+                                str(node_data.get("githubReviewBody", "") or ""),
+                                inputs,
+                                node_id,
+                            )
+                            if event in {"REQUEST_CHANGES", "COMMENT"} and not body.strip():
+                                raise ValueError(
+                                    f"GitHub createReview requires a body for event {event}"
+                                )
+                            commit_id = self.evaluate_nonempty_message_template(
+                                str(node_data.get("githubCommitId", "") or ""),
+                                inputs,
+                                node_id,
+                            ).strip()
+                            review = service.create_review(
+                                owner,
+                                repo,
+                                pull_request_number,
+                                event,
+                                body=body or None,
+                                commit_id=commit_id or None,
+                            )
+                            output = {
+                                "success": True,
+                                "operation": operation,
+                                "review": review,
+                                "id": review.get("id"),
+                                "state": review.get("state"),
+                                "url": review.get("html_url"),
+                            }
+                        elif operation == "listReviews":
+                            per_page_value = self.evaluate_message_template(
+                                str(node_data.get("githubPerPage", "30") or "30"),
+                                inputs,
+                                node_id,
+                            ).strip()
+                            per_page = int(float(per_page_value or "30"))
+                            reviews = service.list_reviews(
+                                owner,
+                                repo,
+                                pull_request_number,
+                                per_page=per_page,
+                            )
+                            output = {
+                                "success": True,
+                                "operation": operation,
+                                "reviews": reviews,
+                                "count": len(reviews),
+                            }
+                        else:
+                            review_id_value = self.evaluate_nonempty_message_template(
+                                str(node_data.get("githubReviewId", "") or ""),
+                                inputs,
+                                node_id,
+                            ).strip()
+                            if not review_id_value:
+                                raise ValueError(f"GitHub {operation} requires a review id")
+                            review_id = int(float(review_id_value))
+                            if operation == "getReview":
+                                review = service.get_review(
+                                    owner,
+                                    repo,
+                                    pull_request_number,
+                                    review_id,
+                                )
+                            else:
+                                body = self.evaluate_nonempty_message_template(
+                                    str(node_data.get("githubReviewBody", "") or ""),
+                                    inputs,
+                                    node_id,
+                                )
+                                if not body.strip():
+                                    raise ValueError("GitHub updateReview requires a review body")
+                                review = service.update_review(
+                                    owner,
+                                    repo,
+                                    pull_request_number,
+                                    review_id,
+                                    body,
+                                )
+                            output = {
+                                "success": True,
+                                "operation": operation,
+                                "review": review,
+                                "id": review.get("id"),
+                                "state": review.get("state"),
+                                "url": review.get("html_url"),
+                            }
                     elif operation == "listReleases":
                         per_page_value = self.evaluate_message_template(
                             str(node_data.get("githubPerPage", "30") or "30"), inputs, node_id
@@ -9184,15 +9397,41 @@ class WorkflowExecutor:
                             "name": workflow.get("name"),
                             "path": workflow.get("path"),
                         }
+                    elif operation in {"enableWorkflow", "disableWorkflow", "getWorkflowUsage"}:
+                        workflow_id = self.evaluate_nonempty_message_template(
+                            str(node_data.get("githubWorkflowId", "") or ""),
+                            inputs,
+                            node_id,
+                        ).strip()
+                        if not workflow_id:
+                            raise ValueError(
+                                f"GitHub {operation} requires a workflow id or file name"
+                            )
+                        if operation == "enableWorkflow":
+                            workflow_result = service.enable_workflow(owner, repo, workflow_id)
+                        elif operation == "disableWorkflow":
+                            workflow_result = service.disable_workflow(owner, repo, workflow_id)
+                        else:
+                            usage = service.get_workflow_usage(owner, repo, workflow_id)
+                            workflow_result = {
+                                "workflow_id": workflow_id,
+                                "usage": usage,
+                                "billable": usage.get("billable"),
+                            }
+                        output = {
+                            "success": True,
+                            "operation": operation,
+                            **workflow_result,
+                        }
                     elif operation == "dispatchWorkflow":
-                        workflow_id = self.evaluate_message_template(
+                        workflow_id = self.evaluate_nonempty_message_template(
                             str(node_data.get("githubWorkflowId", "") or ""), inputs, node_id
                         ).strip()
                         if not workflow_id:
                             raise ValueError(
                                 "GitHub dispatchWorkflow requires a workflow id or file name"
                             )
-                        ref = self.evaluate_message_template(
+                        ref = self.evaluate_nonempty_message_template(
                             str(node_data.get("githubBranch", "") or ""), inputs, node_id
                         ).strip()
                         if not ref:
@@ -9209,6 +9448,45 @@ class WorkflowExecutor:
                             inputs=workflow_inputs,
                         )
                         output = {"success": True, "operation": operation, **dispatch_result}
+                    elif operation == "dispatchWorkflowAndWait":
+                        workflow_id = self.evaluate_nonempty_message_template(
+                            str(node_data.get("githubWorkflowId", "") or ""), inputs, node_id
+                        ).strip()
+                        if not workflow_id:
+                            raise ValueError(
+                                "GitHub dispatchWorkflowAndWait requires a workflow id or file name"
+                            )
+                        ref = self.evaluate_nonempty_message_template(
+                            str(node_data.get("githubBranch", "") or ""), inputs, node_id
+                        ).strip()
+                        if not ref:
+                            raise ValueError(
+                                "GitHub dispatchWorkflowAndWait requires a branch or ref"
+                            )
+                        _, workflow_inputs = _parse_optional_object(
+                            "githubWorkflowInputs",
+                            "workflow inputs",
+                        )
+                        timeout_value = self.evaluate_nonempty_message_template(
+                            str(node_data.get("githubWaitTimeoutSeconds", "600") or "600"),
+                            inputs,
+                            node_id,
+                        ).strip()
+                        interval_value = self.evaluate_nonempty_message_template(
+                            str(node_data.get("githubPollIntervalSeconds", "5") or "5"),
+                            inputs,
+                            node_id,
+                        ).strip()
+                        wait_result = service.dispatch_workflow_and_wait(
+                            owner,
+                            repo,
+                            workflow_id,
+                            ref,
+                            inputs=workflow_inputs,
+                            timeout_seconds=int(float(timeout_value or "600")),
+                            poll_interval_seconds=float(interval_value or "5"),
+                        )
+                        output = {"success": True, "operation": operation, **wait_result}
                     elif operation == "getFile":
                         path = self.evaluate_message_template(
                             str(node_data.get("githubFilePath", "") or ""), inputs, node_id
@@ -9318,10 +9596,273 @@ class WorkflowExecutor:
                             "repositories": repositories,
                             "count": len(repositories),
                         }
+                    elif operation == "getUserRepositories":
+                        per_page_value = self.evaluate_message_template(
+                            str(node_data.get("githubPerPage", "30") or "30"), inputs, node_id
+                        ).strip()
+                        per_page = int(float(per_page_value or "30"))
+                        repositories = service.get_user_repositories(owner, per_page=per_page)
+                        output = {
+                            "success": True,
+                            "operation": operation,
+                            "repositories": repositories,
+                            "count": len(repositories),
+                        }
+                    elif operation == "getUserIssues":
+                        state = (
+                            str(node_data.get("githubState", "open") or "open").strip() or "open"
+                        )
+                        per_page_value = self.evaluate_message_template(
+                            str(node_data.get("githubPerPage", "30") or "30"), inputs, node_id
+                        ).strip()
+                        issues = service.get_user_issues(
+                            state=state,
+                            per_page=int(float(per_page_value or "30")),
+                            mentioned=self.evaluate_nonempty_message_template(
+                                str(node_data.get("githubMentioned", "") or ""), inputs, node_id
+                            ).strip()
+                            or None,
+                            labels=self.evaluate_nonempty_message_template(
+                                str(node_data.get("githubLabelsFilter", "") or ""), inputs, node_id
+                            ).strip()
+                            or None,
+                            since=self.evaluate_nonempty_message_template(
+                                str(node_data.get("githubSince", "") or ""), inputs, node_id
+                            ).strip()
+                            or None,
+                            sort=str(node_data.get("githubSort", "") or "").strip() or None,
+                            direction=(
+                                str(node_data.get("githubDirection", "") or "").strip() or None
+                            ),
+                        )
+                        output = {
+                            "success": True,
+                            "operation": operation,
+                            "issues": issues,
+                            "count": len(issues),
+                        }
+                    elif operation == "inviteUser":
+                        organization = self.evaluate_nonempty_message_template(
+                            str(node_data.get("githubOrganization", "") or ""), inputs, node_id
+                        ).strip()
+                        email = self.evaluate_nonempty_message_template(
+                            str(node_data.get("githubInviteEmail", "") or ""), inputs, node_id
+                        ).strip()
+                        if not organization or not email:
+                            raise ValueError("GitHub inviteUser requires an organization and email")
+                        invitation = service.invite_user(organization, email)
+                        output = {
+                            "success": True,
+                            "operation": operation,
+                            "invitation": invitation,
+                            "id": invitation.get("id"),
+                            "email": invitation.get("email") or email,
+                        }
                     else:
                         raise ValueError(f"Unknown GitHub operation: {operation}")
                 finally:
                     service.close()
+
+            elif node_type == "supabase":
+                from app.db.session import SessionLocal
+                from app.services.encryption import decrypt_config
+                from app.services.supabase_service import SupabaseService
+
+                credential_id = node_data.get("credentialId")
+                if not credential_id:
+                    raise ValueError("Supabase node requires a credential")
+
+                supabase_config: dict = {}
+                with SessionLocal() as db:
+                    cred = self._get_accessible_credential(db, credential_id)
+                    if cred:
+                        supabase_config = decrypt_config(cred.encrypted_config)
+
+                if not supabase_config:
+                    raise ValueError("Supabase credential not found or invalid")
+                if not str(supabase_config.get("supabase_url", "")).strip():
+                    raise ValueError("Supabase credential requires supabase_url")
+                if not str(supabase_config.get("supabase_key", "")).strip():
+                    raise ValueError("Supabase credential requires supabase_key")
+
+                operation = str(node_data.get("supabaseOperation", "") or "").strip()
+                if not operation:
+                    raise ValueError("Supabase node requires an operation")
+
+                raw_schema_template = str(node_data.get("supabaseSchema", "") or "").strip()
+                raw_schema = (
+                    self.evaluate_message_template(
+                        raw_schema_template,
+                        inputs,
+                        node_id,
+                    ).strip()
+                    if raw_schema_template
+                    else ""
+                )
+                schema = (
+                    raw_schema
+                    or str(supabase_config.get("supabase_schema", "public")).strip()
+                    or "public"
+                )
+                table = self.evaluate_message_template(
+                    str(node_data.get("supabaseTable", "") or ""),
+                    inputs,
+                    node_id,
+                ).strip()
+                if not table:
+                    raise ValueError("Supabase table is required")
+
+                service = SupabaseService(supabase_config)
+
+                def _resolve_supabase_auto_map_source() -> object:
+                    upstream_inputs = {
+                        key: value
+                        for key, value in inputs.items()
+                        if key != _EXECUTION_CONTEXT_INPUT_KEY
+                    }
+                    if not upstream_inputs:
+                        raise ValueError(
+                            "Supabase auto-map requires exactly one upstream input object"
+                        )
+                    if len(upstream_inputs) != 1:
+                        raise ValueError(
+                            "Supabase auto-map requires exactly one upstream input source"
+                        )
+                    return next(iter(upstream_inputs.values()))
+
+                def _parse_ignored_fields(field_name: str) -> set[str]:
+                    raw_value = str(node_data.get(field_name, "") or "").strip()
+                    if not raw_value:
+                        return set()
+                    return {part.strip() for part in raw_value.split(",") if part.strip()}
+
+                if operation == "select":
+                    columns = (
+                        self.evaluate_message_template(
+                            str(node_data.get("supabaseSelectColumns", "*") or "*"),
+                            inputs,
+                            node_id,
+                        ).strip()
+                        or "*"
+                    )
+                    raw_filters = self.evaluate_message_template(
+                        str(node_data.get("supabaseFilter", "{}") or "{}"),
+                        inputs,
+                        node_id,
+                    )
+                    filters = SupabaseService.parse_json_object(raw_filters, "supabaseFilter")
+                    raw_limit = self.evaluate_message_template(
+                        str(node_data.get("supabaseLimit", "100") or "100"),
+                        inputs,
+                        node_id,
+                    ).strip()
+                    try:
+                        limit = int(float(raw_limit or "100"))
+                    except (TypeError, ValueError):
+                        limit = 100
+                    if limit < 0:
+                        limit = 100
+                    raw_order_by_template = str(node_data.get("supabaseOrderBy", "") or "").strip()
+                    raw_order_by = (
+                        self.evaluate_message_template(
+                            raw_order_by_template,
+                            inputs,
+                            node_id,
+                        )
+                        if raw_order_by_template
+                        else ""
+                    )
+                    ascending = bool(node_data.get("supabaseAscending", True))
+                    output = service.select_rows(
+                        table,
+                        schema=schema,
+                        columns=columns,
+                        filters=filters,
+                        limit=limit,
+                        order_by=raw_order_by,
+                        ascending=ascending,
+                    )
+                elif operation == "insert":
+                    input_mode = str(node_data.get("supabaseRowsInputMode", "raw") or "raw").strip()
+                    if input_mode == "auto":
+                        rows = SupabaseService.normalize_auto_map_rows(
+                            _resolve_supabase_auto_map_source(),
+                            ignored_fields=_parse_ignored_fields("supabaseIgnoredInputFields"),
+                        )
+                    else:
+                        raw_rows = self.evaluate_message_template(
+                            str(node_data.get("supabaseRows", "[]") or "[]"),
+                            inputs,
+                            node_id,
+                        )
+                        rows = SupabaseService.parse_json_rows(raw_rows, "supabaseRows")
+                    output = service.insert_rows(table, rows, schema=schema, upsert=False)
+                elif operation == "upsert":
+                    input_mode = str(node_data.get("supabaseRowsInputMode", "raw") or "raw").strip()
+                    if input_mode == "auto":
+                        rows = SupabaseService.normalize_auto_map_rows(
+                            _resolve_supabase_auto_map_source(),
+                            ignored_fields=_parse_ignored_fields("supabaseIgnoredInputFields"),
+                        )
+                    else:
+                        raw_rows = self.evaluate_message_template(
+                            str(node_data.get("supabaseRows", "[]") or "[]"),
+                            inputs,
+                            node_id,
+                        )
+                        rows = SupabaseService.parse_json_rows(raw_rows, "supabaseRows")
+                    raw_on_conflict_template = str(
+                        node_data.get("supabaseOnConflict", "") or ""
+                    ).strip()
+                    raw_on_conflict = (
+                        self.evaluate_message_template(
+                            raw_on_conflict_template,
+                            inputs,
+                            node_id,
+                        )
+                        if raw_on_conflict_template
+                        else ""
+                    )
+                    output = service.insert_rows(
+                        table,
+                        rows,
+                        schema=schema,
+                        upsert=True,
+                        on_conflict=raw_on_conflict,
+                    )
+                elif operation == "update":
+                    raw_filters = self.evaluate_message_template(
+                        str(node_data.get("supabaseFilter", "{}") or "{}"),
+                        inputs,
+                        node_id,
+                    )
+                    data_input_mode = str(
+                        node_data.get("supabaseDataInputMode", "raw") or "raw"
+                    ).strip()
+                    if data_input_mode == "auto":
+                        data = SupabaseService.normalize_auto_map_object(
+                            _resolve_supabase_auto_map_source(),
+                            ignored_fields=_parse_ignored_fields("supabaseIgnoredInputFields"),
+                        )
+                    else:
+                        raw_data = self.evaluate_message_template(
+                            str(node_data.get("supabaseData", "{}") or "{}"),
+                            inputs,
+                            node_id,
+                        )
+                        data = SupabaseService.parse_json_object(raw_data, "supabaseData")
+                    filters = SupabaseService.parse_json_object(raw_filters, "supabaseFilter")
+                    output = service.update_rows(table, data, schema=schema, filters=filters)
+                elif operation == "delete":
+                    raw_filters = self.evaluate_message_template(
+                        str(node_data.get("supabaseFilter", "{}") or "{}"),
+                        inputs,
+                        node_id,
+                    )
+                    filters = SupabaseService.parse_json_object(raw_filters, "supabaseFilter")
+                    output = service.delete_rows(table, schema=schema, filters=filters)
+                else:
+                    raise ValueError(f"Unknown Supabase operation: {operation}")
 
             elif node_type == "s3":
                 from app.db.session import SessionLocal

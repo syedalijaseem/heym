@@ -4,9 +4,10 @@ import type { Component } from "vue";
 import { onClickOutside } from "@vueuse/core";
 import { ExternalLink, Loader2, MoreVertical, Pencil, RefreshCw, Settings, Sparkles, Trash2 } from "lucide-vue-next";
 
-import ChartRenderer from "@/components/Dashboards/ChartRenderer.vue";
-import { dashboardApi } from "@/services/api";
 import type { ChartPayload, DashboardWidget } from "@/types/dashboard";
+import ChartRenderer from "@/components/Dashboards/ChartRenderer.vue";
+import { toggleTaskItemLocal } from "@/lib/markdownTaskList";
+import { dashboardApi } from "@/services/api";
 
 const props = defineProps<{
   widget: DashboardWidget;
@@ -22,6 +23,7 @@ const emit = defineEmits<{
 }>();
 
 const payload = ref<ChartPayload | null>(null);
+const markdownTaskSaving = ref(false);
 // Only surface http(s) links. The url can come from a dynamic expression over upstream
 // data, so reject javascript:/data:/relative values to avoid an injected-link XSS.
 const externalUrl = computed<string | null>(() => {
@@ -119,6 +121,29 @@ async function loadData(force = false): Promise<void> {
     error.value = e instanceof Error ? e.message : "Failed to load widget";
   } finally {
     loading.value = false;
+  }
+}
+
+async function onMarkdownTaskToggle(lineIndex: number): Promise<void> {
+  if (!payload.value || payload.value.type !== "text" || !payload.value.text_interactive) {
+    return;
+  }
+  const previousPayload = payload.value;
+  const previousText = previousPayload.text ?? "";
+  markdownTaskSaving.value = true;
+  try {
+    payload.value = {
+      ...previousPayload,
+      text: toggleTaskItemLocal(previousText, lineIndex),
+    };
+    const response = await dashboardApi.toggleMarkdownTask(props.widget.id, lineIndex);
+    payload.value = response.payload;
+    error.value = response.error ?? null;
+  } catch (e) {
+    payload.value = previousPayload;
+    error.value = e instanceof Error ? e.message : "Failed to update checkbox";
+  } finally {
+    markdownTaskSaving.value = false;
   }
 }
 
@@ -260,6 +285,8 @@ onBeforeUnmount(() => {
       <ChartRenderer
         v-else
         :payload="payload"
+        :markdown-task-saving="markdownTaskSaving"
+        @markdown-task-toggle="onMarkdownTaskToggle"
       />
     </div>
   </div>

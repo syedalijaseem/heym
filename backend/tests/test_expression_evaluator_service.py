@@ -1196,6 +1196,31 @@ class TestExpressionEvaluatorServiceEvaluate(unittest.TestCase):
         self.assertTrue(response.preserved_type)
         self.assertIsNone(response.error)
 
+    def test_supabase_node_config_refs_match_executor(self) -> None:
+        """Supabase node table/schema/filter fields use evaluate_message_template at runtime."""
+        ctx = {
+            "config": {
+                "table": "orders",
+                "schema": "app",
+                "columns": "id,status",
+                "filter": '{"status": "active"}',
+            }
+        }
+        cases = [
+            ("$config.table", "orders"),
+            ("$config.schema", "app"),
+            ("$config.columns", "id,status"),
+            ("$config.filter", '{"status": "active"}'),
+        ]
+        ex = WorkflowExecutor(nodes=[], edges=[])
+        service = self._service()
+        for expr, expected in cases:
+            executor_result = ex.evaluate_message_template(expr, ctx, None)
+            response = service.evaluate(expr, ctx)
+            self.assertEqual(executor_result, expected, msg=expr)
+            self.assertEqual(response.result, expected, msg=expr)
+            self.assertIsNone(response.error, msg=expr)
+
     def test_credentials_context(self) -> None:
         response = self._service(credentials_context={"MyToken": "Bearer abc"}).evaluate(
             "$credentials.MyToken",

@@ -1,4 +1,5 @@
 import base64
+import time
 from typing import Any
 from urllib.parse import quote
 
@@ -35,6 +36,38 @@ class GitHubService:
         """Fetch repository metadata."""
         return self._request_json("GET", f"/repos/{owner}/{repo}")
 
+    def get_repository_license(self, owner: str, repo: str) -> dict[str, Any]:
+        """Fetch the detected repository license and decoded file content."""
+        response = self._request_json("GET", f"/repos/{owner}/{repo}/license")
+        if not isinstance(response, dict):
+            raise ValueError("GitHub getRepositoryLicense returned an unexpected response")
+        decoded_content: str | None = None
+        if str(response.get("encoding") or "").lower() == "base64" and response.get("content"):
+            try:
+                decoded_content = base64.b64decode(str(response["content"]).encode("utf-8")).decode(
+                    "utf-8"
+                )
+            except Exception:
+                decoded_content = None
+        return {**response, "decoded_content": decoded_content}
+
+    def get_repository_profile(self, owner: str, repo: str) -> dict[str, Any]:
+        """Fetch repository community profile metrics."""
+        response = self._request_json("GET", f"/repos/{owner}/{repo}/community/profile")
+        if not isinstance(response, dict):
+            raise ValueError("GitHub getRepositoryProfile returned an unexpected response")
+        return response
+
+    def list_popular_paths(self, owner: str, repo: str) -> list[dict[str, Any]]:
+        """List the repository's popular content paths."""
+        response = self._request_json("GET", f"/repos/{owner}/{repo}/traffic/popular/paths")
+        return response if isinstance(response, list) else []
+
+    def list_referrers(self, owner: str, repo: str) -> list[dict[str, Any]]:
+        """List the repository's top referring domains."""
+        response = self._request_json("GET", f"/repos/{owner}/{repo}/traffic/popular/referrers")
+        return response if isinstance(response, list) else []
+
     def get_issue(self, owner: str, repo: str, issue_number: int) -> dict[str, Any]:
         """Fetch one issue by number."""
         return self._request_json("GET", f"/repos/{owner}/{repo}/issues/{issue_number}")
@@ -45,12 +78,34 @@ class GitHubService:
         repo: str,
         state: str = "open",
         per_page: int = 30,
+        assignee: str | None = None,
+        creator: str | None = None,
+        mentioned: str | None = None,
+        labels: str | None = None,
+        since: str | None = None,
+        sort: str | None = None,
+        direction: str | None = None,
     ) -> list[dict[str, Any]]:
         """List repository issues."""
+        params: dict[str, Any] = {
+            "state": state or "open",
+            "per_page": max(1, min(per_page, 100)),
+        }
+        for key, value in {
+            "assignee": assignee,
+            "creator": creator,
+            "mentioned": mentioned,
+            "labels": labels,
+            "since": since,
+            "sort": sort,
+            "direction": direction,
+        }.items():
+            if value:
+                params[key] = value
         response = self._request_json(
             "GET",
             f"/repos/{owner}/{repo}/issues",
-            params={"state": state or "open", "per_page": max(1, min(per_page, 100))},
+            params=params,
         )
         if not isinstance(response, list):
             return []
@@ -118,6 +173,7 @@ class GitHubService:
         title: str | None = None,
         body: str | None = None,
         state: str | None = None,
+        state_reason: str | None = None,
         labels: list[str] | None = None,
         assignees: list[str] | None = None,
     ) -> dict[str, Any]:
@@ -129,6 +185,8 @@ class GitHubService:
             payload["body"] = body
         if state:
             payload["state"] = state
+        if state_reason:
+            payload["state_reason"] = state_reason
         if labels is not None:
             payload["labels"] = labels
         if assignees is not None:
@@ -147,14 +205,42 @@ class GitHubService:
         repo: str,
         state: str = "open",
         per_page: int = 30,
+        sort: str | None = None,
+        direction: str | None = None,
     ) -> list[dict[str, Any]]:
         """List repository pull requests."""
+        params: dict[str, Any] = {
+            "state": state or "open",
+            "per_page": max(1, min(per_page, 100)),
+        }
+        if sort:
+            params["sort"] = sort
+        if direction:
+            params["direction"] = direction
         response = self._request_json(
             "GET",
             f"/repos/{owner}/{repo}/pulls",
-            params={"state": state or "open", "per_page": max(1, min(per_page, 100))},
+            params=params,
         )
         return response if isinstance(response, list) else []
+
+    def get_repository_issues(
+        self,
+        owner: str,
+        repo: str,
+        **kwargs: Any,
+    ) -> list[dict[str, Any]]:
+        """Get repository issues using the repository-resource action semantics."""
+        return self.list_issues(owner, repo, **kwargs)
+
+    def get_repository_pull_requests(
+        self,
+        owner: str,
+        repo: str,
+        **kwargs: Any,
+    ) -> list[dict[str, Any]]:
+        """Get repository pull requests using the repository-resource action semantics."""
+        return self.list_pull_requests(owner, repo, **kwargs)
 
     def create_pull_request(
         self,
@@ -176,6 +262,70 @@ class GitHubService:
         if body:
             payload["body"] = body
         return self._request_json("POST", f"/repos/{owner}/{repo}/pulls", json=payload)
+
+    def get_review(
+        self,
+        owner: str,
+        repo: str,
+        pull_request_number: int,
+        review_id: int,
+    ) -> dict[str, Any]:
+        """Fetch one pull request review."""
+        return self._request_json(
+            "GET",
+            f"/repos/{owner}/{repo}/pulls/{pull_request_number}/reviews/{review_id}",
+        )
+
+    def list_reviews(
+        self,
+        owner: str,
+        repo: str,
+        pull_request_number: int,
+        per_page: int = 30,
+    ) -> list[dict[str, Any]]:
+        """List reviews for a pull request."""
+        response = self._request_json(
+            "GET",
+            f"/repos/{owner}/{repo}/pulls/{pull_request_number}/reviews",
+            params={"per_page": max(1, min(per_page, 100))},
+        )
+        return response if isinstance(response, list) else []
+
+    def create_review(
+        self,
+        owner: str,
+        repo: str,
+        pull_request_number: int,
+        event: str,
+        body: str | None = None,
+        commit_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a pull request review."""
+        payload: dict[str, Any] = {"event": event}
+        if body is not None:
+            payload["body"] = body
+        if commit_id:
+            payload["commit_id"] = commit_id
+        return self._request_json(
+            "POST",
+            f"/repos/{owner}/{repo}/pulls/{pull_request_number}/reviews",
+            json=payload,
+        )
+
+    def update_review(
+        self,
+        owner: str,
+        repo: str,
+        pull_request_number: int,
+        review_id: int,
+        body: str,
+    ) -> dict[str, Any]:
+        """Update a pull request review body."""
+        return self._request_json(
+            "PUT",
+            f"/repos/{owner}/{repo}/pulls/{pull_request_number}/reviews/{review_id}",
+            json={"body": body},
+        )
 
     def list_releases(
         self,
@@ -282,6 +432,39 @@ class GitHubService:
         """Fetch a workflow by numeric id or file name."""
         return self._request_json("GET", f"/repos/{owner}/{repo}/actions/workflows/{workflow_id}")
 
+    def enable_workflow(self, owner: str, repo: str, workflow_id: str) -> dict[str, Any]:
+        """Enable a GitHub Actions workflow."""
+        self._request_no_content(
+            "PUT",
+            f"/repos/{owner}/{repo}/actions/workflows/{workflow_id}/enable",
+            success_codes=(204,),
+        )
+        return {"workflow_id": workflow_id, "enabled": True}
+
+    def disable_workflow(self, owner: str, repo: str, workflow_id: str) -> dict[str, Any]:
+        """Disable a GitHub Actions workflow."""
+        self._request_no_content(
+            "PUT",
+            f"/repos/{owner}/{repo}/actions/workflows/{workflow_id}/disable",
+            success_codes=(204,),
+        )
+        return {"workflow_id": workflow_id, "disabled": True}
+
+    def get_workflow_usage(
+        self,
+        owner: str,
+        repo: str,
+        workflow_id: str,
+    ) -> dict[str, Any]:
+        """Fetch billable GitHub Actions usage for one workflow."""
+        response = self._request_json(
+            "GET",
+            f"/repos/{owner}/{repo}/actions/workflows/{workflow_id}/timing",
+        )
+        if not isinstance(response, dict):
+            raise ValueError("GitHub getWorkflowUsage returned an unexpected response")
+        return response
+
     def dispatch_workflow(
         self,
         owner: str,
@@ -294,13 +477,82 @@ class GitHubService:
         payload: dict[str, Any] = {"ref": ref}
         if inputs:
             payload["inputs"] = inputs
-        self._request_no_content(
+        url = f"{self._base_url()}/repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches"
+        response = self._client.request(
             "POST",
-            f"/repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches",
+            url,
             json=payload,
-            success_codes=(204,),
+            headers=self._auth_headers(),
         )
-        return {"workflow_id": workflow_id, "ref": ref, "inputs": inputs or {}, "dispatched": True}
+        if response.status_code not in (200, 204):
+            raise ValueError(self._build_error_message(response))
+        result: dict[str, Any] = {
+            "workflow_id": workflow_id,
+            "ref": ref,
+            "inputs": inputs or {},
+            "dispatched": True,
+        }
+        if response.status_code == 200:
+            try:
+                response_data = response.json()
+            except ValueError as exc:
+                raise ValueError("GitHub API returned non-JSON dispatch response") from exc
+            if isinstance(response_data, dict):
+                result.update(response_data)
+        return result
+
+    def get_workflow_run(
+        self,
+        owner: str,
+        repo: str,
+        run_id: int,
+    ) -> dict[str, Any]:
+        """Fetch one GitHub Actions workflow run."""
+        response = self._request_json(
+            "GET",
+            f"/repos/{owner}/{repo}/actions/runs/{run_id}",
+        )
+        if not isinstance(response, dict):
+            raise ValueError("GitHub getWorkflowRun returned an unexpected response")
+        return response
+
+    def dispatch_workflow_and_wait(
+        self,
+        owner: str,
+        repo: str,
+        workflow_id: str,
+        ref: str,
+        inputs: dict[str, Any] | None = None,
+        timeout_seconds: int = 600,
+        poll_interval_seconds: float = 5.0,
+    ) -> dict[str, Any]:
+        """Dispatch a workflow and poll its run until completion."""
+        dispatch_result = self.dispatch_workflow(owner, repo, workflow_id, ref, inputs=inputs)
+        run_id_value = dispatch_result.get("workflow_run_id")
+        if run_id_value is None:
+            raise ValueError(
+                "GitHub dispatch did not return workflow_run_id; waiting requires "
+                "GitHub's 200 dispatch response"
+            )
+        run_id = int(run_id_value)
+        timeout = max(1, timeout_seconds)
+        interval = max(0.1, poll_interval_seconds)
+        deadline = time.monotonic() + timeout
+        while True:
+            workflow_run = self.get_workflow_run(owner, repo, run_id)
+            if str(workflow_run.get("status") or "").lower() == "completed":
+                return {
+                    **dispatch_result,
+                    "completed": True,
+                    "workflow_run": workflow_run,
+                    "status": workflow_run.get("status"),
+                    "conclusion": workflow_run.get("conclusion"),
+                }
+            if time.monotonic() >= deadline:
+                raise ValueError(
+                    f"GitHub workflow run {run_id} did not complete within {timeout} seconds"
+                )
+            time.sleep(interval)
 
     def get_file(
         self,
@@ -496,6 +748,53 @@ class GitHubService:
             params={"per_page": max(1, min(per_page, 100))},
         )
         return response if isinstance(response, list) else []
+
+    def get_user_repositories(
+        self,
+        username: str,
+        per_page: int = 30,
+    ) -> list[dict[str, Any]]:
+        """Get repositories owned by a user."""
+        return self.list_user_repositories(username, per_page=per_page)
+
+    def get_user_issues(
+        self,
+        state: str = "open",
+        per_page: int = 30,
+        mentioned: str | None = None,
+        labels: str | None = None,
+        since: str | None = None,
+        sort: str | None = None,
+        direction: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Get issues assigned to the authenticated user."""
+        params: dict[str, Any] = {
+            "filter": "assigned",
+            "state": state or "open",
+            "per_page": max(1, min(per_page, 100)),
+        }
+        for key, value in {
+            "mentioned": mentioned,
+            "labels": labels,
+            "since": since,
+            "sort": sort,
+            "direction": direction,
+        }.items():
+            if value:
+                params[key] = value
+        response = self._request_json("GET", "/issues", params=params)
+        return response if isinstance(response, list) else []
+
+    def invite_user(self, organization: str, email: str) -> dict[str, Any]:
+        """Invite a user to an organization by email."""
+        response = self._request_json(
+            "POST",
+            f"/orgs/{organization}/invitations",
+            json={"email": email},
+        )
+        if not isinstance(response, dict):
+            raise ValueError("GitHub inviteUser returned an unexpected response")
+        return response
 
     def _request_json(
         self,

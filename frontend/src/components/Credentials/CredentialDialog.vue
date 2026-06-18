@@ -85,6 +85,12 @@ const bqClientSecret = ref("");
 const bqOAuthConnected = ref(false);
 const bqOAuthConnecting = ref(false);
 const bqConnectedCredential = ref<import("@/types/credential").Credential | null>(null);
+const supabaseUrl = ref("");
+const supabaseKey = ref("");
+const supabaseSchema = ref("public");
+const supabaseTesting = ref(false);
+const supabaseTestSuccess = ref<boolean | null>(null);
+const supabaseTestMessage = ref("");
 const s3AccessKeyId = ref("");
 const s3SecretAccessKey = ref("");
 const s3Region = ref("us-east-1");
@@ -117,6 +123,28 @@ const hasS3CredentialConfigChange = computed((): boolean => {
   );
 });
 
+const storedSupabaseUrl = computed((): string => {
+  if (!props.credential || props.credential.type !== "supabase") {
+    return "";
+  }
+  return props.credential.public_fields?.supabase_url ?? "";
+});
+
+const storedSupabaseSchema = computed((): string => {
+  if (!props.credential || props.credential.type !== "supabase") {
+    return "public";
+  }
+  return props.credential.public_fields?.supabase_schema ?? "public";
+});
+
+const hasSupabaseCredentialConfigChange = computed((): boolean => {
+  return (
+    supabaseUrl.value.trim() !== storedSupabaseUrl.value ||
+    !!supabaseKey.value.trim() ||
+    (supabaseSchema.value.trim() || "public") !== storedSupabaseSchema.value
+  );
+});
+
 const typeOptions = [
   { value: "openai", label: CREDENTIAL_TYPE_LABELS.openai },
   { value: "google", label: CREDENTIAL_TYPE_LABELS.google },
@@ -140,6 +168,7 @@ const typeOptions = [
   { value: "flaresolverr", label: CREDENTIAL_TYPE_LABELS.flaresolverr },
   { value: "google_sheets", label: CREDENTIAL_TYPE_LABELS.google_sheets },
   { value: "bigquery", label: CREDENTIAL_TYPE_LABELS.bigquery },
+  { value: "supabase", label: CREDENTIAL_TYPE_LABELS.supabase },
   { value: "s3", label: CREDENTIAL_TYPE_LABELS.s3 },
 ];
 
@@ -200,6 +229,15 @@ watch(
         bqClientSecret.value = "";
         bqOAuthConnected.value = props.credential.masked_value === "connected" && props.credential.type === "bigquery";
         bqConnectedCredential.value = null;
+        supabaseUrl.value =
+          props.credential.type === "supabase"
+            ? props.credential.public_fields?.supabase_url ?? ""
+            : "";
+        supabaseKey.value = "";
+        supabaseSchema.value =
+          props.credential.type === "supabase"
+            ? props.credential.public_fields?.supabase_schema ?? "public"
+            : "public";
         s3AccessKeyId.value = "";
         s3SecretAccessKey.value = "";
         s3Region.value =
@@ -255,6 +293,9 @@ watch(
         bqClientSecret.value = "";
         bqOAuthConnected.value = false;
         bqConnectedCredential.value = null;
+        supabaseUrl.value = "";
+        supabaseKey.value = "";
+        supabaseSchema.value = "public";
         s3AccessKeyId.value = "";
         s3SecretAccessKey.value = "";
         s3Region.value = "us-east-1";
@@ -262,6 +303,9 @@ watch(
       }
       showApiKey.value = false;
       error.value = "";
+      supabaseTesting.value = false;
+      supabaseTestSuccess.value = null;
+      supabaseTestMessage.value = "";
     }
   }
 );
@@ -337,6 +381,11 @@ const isValid = computed(() => {
     return gsOAuthConnected.value || isEditing.value;
   } else if (type.value === "bigquery") {
     return bqOAuthConnected.value || isEditing.value;
+  } else if (type.value === "supabase") {
+    if (isEditing.value) {
+      return !!supabaseUrl.value.trim();
+    }
+    return !!supabaseUrl.value.trim() && !!supabaseKey.value.trim();
   } else if (type.value === "s3") {
     if (isEditing.value) {
       return !hasS3CredentialConfigChange.value || (
@@ -352,6 +401,16 @@ const isValid = computed(() => {
     );
   }
   return false;
+});
+
+const canTestSupabaseConnection = computed((): boolean => {
+  if (type.value !== "supabase") {
+    return false;
+  }
+  if (!!supabaseUrl.value.trim() && !!supabaseKey.value.trim()) {
+    return true;
+  }
+  return isEditing.value && !!props.credential?.id;
 });
 
 function buildConfig(): CredentialConfig {
@@ -438,6 +497,12 @@ function buildConfig(): CredentialConfig {
     return {
       client_id: bqClientId.value.trim(),
       client_secret: bqClientSecret.value.trim(),
+    };
+  } else if (type.value === "supabase") {
+    return {
+      supabase_url: supabaseUrl.value.trim(),
+      supabase_key: supabaseKey.value.trim(),
+      supabase_schema: supabaseSchema.value.trim() || "public",
     };
   } else if (type.value === "s3") {
     return {
@@ -608,6 +673,42 @@ async function startBigQueryOAuth(): Promise<void> {
   }
 }
 
+async function testSupabaseConnection(): Promise<void> {
+  if (!canTestSupabaseConnection.value) {
+    error.value = "Enter Project URL and API Key to test the connection.";
+    return;
+  }
+
+  supabaseTesting.value = true;
+  supabaseTestSuccess.value = null;
+  supabaseTestMessage.value = "";
+  error.value = "";
+
+  try {
+    const result = await credentialsApi.testConnection({
+      type: "supabase",
+      config: {
+        supabase_url: supabaseUrl.value.trim(),
+        supabase_key: supabaseKey.value.trim(),
+        supabase_schema: supabaseSchema.value.trim() || "public",
+      },
+      credential_id: isEditing.value ? props.credential?.id : undefined,
+    });
+    supabaseTestSuccess.value = result.success;
+    supabaseTestMessage.value = result.message;
+    if (!result.success) {
+      error.value = result.message;
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Connection test failed";
+    supabaseTestSuccess.value = false;
+    supabaseTestMessage.value = message;
+    error.value = message;
+  } finally {
+    supabaseTesting.value = false;
+  }
+}
+
 async function handleSave(): Promise<void> {
   if (!isValid.value) return;
 
@@ -665,6 +766,7 @@ async function handleSave(): Promise<void> {
           rabbitmqPassword.value.trim() ||
           rabbitmqVhost.value.trim() ||
           (type.value === "s3" && hasS3CredentialConfigChange.value) ||
+          (type.value === "supabase" && hasSupabaseCredentialConfigChange.value) ||
           cohereApiKey.value.trim() ||
           flaresolverrUrl.value.trim());
 
@@ -1706,6 +1808,85 @@ async function handleSave(): Promise<void> {
               {{ bqOAuthConnected ? 'Reconnect' : 'Connect' }}
             </Button>
           </div>
+        </div>
+      </template>
+
+      <template v-if="type === 'supabase'">
+        <div class="space-y-2">
+          <Label for="cred-supabase-url">Project URL</Label>
+          <Input
+            id="cred-supabase-url"
+            v-model="supabaseUrl"
+            placeholder="https://your-project.supabase.co"
+            :disabled="saving"
+          />
+          <p class="text-xs text-muted-foreground">
+            Supabase project URL. Heym uses the PostgREST API under `/rest/v1`.
+          </p>
+        </div>
+
+        <div class="space-y-2">
+          <Label for="cred-supabase-key">API Key</Label>
+          <div class="relative">
+            <Input
+              id="cred-supabase-key"
+              v-model="supabaseKey"
+              :type="showApiKey ? 'text' : 'password'"
+              :placeholder="isEditing ? '••••••• (re-enter to update)' : 'service_role or secret key'"
+              :disabled="saving"
+              class="pr-10"
+            />
+            <button
+              type="button"
+              class="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              @click="showApiKey = !showApiKey"
+            >
+              <EyeOff
+                v-if="showApiKey"
+                class="w-4 h-4"
+              />
+              <Eye
+                v-else
+                class="w-4 h-4"
+              />
+            </button>
+          </div>
+          <p class="text-xs text-muted-foreground">
+            Use a key that can read and write the tables your workflows touch.
+          </p>
+        </div>
+
+        <div class="space-y-2">
+          <Label for="cred-supabase-schema">Default Schema</Label>
+          <Input
+            id="cred-supabase-schema"
+            v-model="supabaseSchema"
+            placeholder="public"
+            :disabled="saving"
+          />
+          <p class="text-xs text-muted-foreground">
+            Optional. Nodes can override this per workflow step.
+          </p>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            :loading="supabaseTesting"
+            :disabled="saving || supabaseTesting || !canTestSupabaseConnection"
+            @click="testSupabaseConnection"
+          >
+            Test Connection
+          </Button>
+          <p
+            v-if="supabaseTestMessage"
+            class="text-xs"
+            :class="supabaseTestSuccess ? 'text-emerald-600' : 'text-destructive'"
+          >
+            {{ supabaseTestMessage }}
+          </p>
         </div>
       </template>
 

@@ -54,6 +54,8 @@ Click the trash icon in the dialog header to remove all version history. This ac
 
 Versions are created only when you **Save** (Ctrl/Cmd+S or the Save button). Unsaved changes are not stored in Edit History until you save.
 
+Agent skill edits are included in these snapshots. To browse or restore a single skill without reverting the entire workflow, use the **History** button on that skill card in the Agent node properties panel. See [Agent Node](../nodes/agent-node.md#skill-history).
+
 ## Related
 
 - [Execution History](./execution-history.md) – Past runs and Bring to Canvas

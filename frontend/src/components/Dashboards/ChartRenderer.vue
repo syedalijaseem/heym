@@ -3,11 +3,18 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import DOMPurify from "dompurify";
 import { marked } from "marked";
 
+import MarkdownTextContent from "@/components/Dashboards/MarkdownTextContent.vue";
+import { hasTaskItems } from "@/lib/markdownTaskList";
 import { useThemeStore } from "@/stores/theme";
 import type { ChartPayload } from "@/types/dashboard";
 
 const props = defineProps<{
   payload: ChartPayload | Record<string, unknown> | null;
+  markdownTaskSaving?: boolean;
+}>();
+
+const emit = defineEmits<{
+  (e: "markdown-task-toggle", lineIndex: number): void;
 }>();
 
 const themeStore = useThemeStore();
@@ -178,6 +185,16 @@ const renderedText = computed((): string => {
   return DOMPurify.sanitize(html);
 });
 
+const usesTaskListRenderer = computed((): boolean => {
+  const p = chartPayload.value;
+  if (!p || p.type !== "text" || !p.text) return false;
+  return hasTaskItems(p.text);
+});
+
+function onMarkdownTaskToggle(lineIndex: number): void {
+  emit("markdown-task-toggle", lineIndex);
+}
+
 const numericValue = computed((): string => {
   const p = chartPayload.value;
   if (!p || p.value === null || p.value === undefined) return "—";
@@ -342,6 +359,13 @@ const apexOptions = computed((): Record<string, unknown> => {
     </div>
 
     <!-- eslint-disable vue/no-v-html -->
+    <MarkdownTextContent
+      v-else-if="chartPayload && chartPayload.type === 'text' && usesTaskListRenderer"
+      :text="chartPayload.text || ''"
+      :interactive="!!chartPayload.text_interactive"
+      :saving="markdownTaskSaving"
+      @toggle="onMarkdownTaskToggle"
+    />
     <div
       v-else-if="chartPayload && chartPayload.type === 'text'"
       class="chart-markdown h-full overflow-auto break-words px-1 py-1 text-sm text-foreground"

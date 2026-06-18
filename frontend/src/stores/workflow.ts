@@ -1979,7 +1979,11 @@ export const useWorkflowStore = defineStore("workflow", () => {
         const repoOptionalOperations = new Set([
           "listOrganizationRepositories",
           "listUserRepositories",
+          "getUserRepositories",
+          "getUserIssues",
+          "inviteUser",
         ]);
+        const ownerOptionalOperations = new Set(["getUserIssues", "inviteUser"]);
 
         if (!node.data.credentialId || !isValidUUID(node.data.credentialId)) {
           errors.push({
@@ -1997,7 +2001,10 @@ export const useWorkflowStore = defineStore("workflow", () => {
             message: "Operation is not selected",
           });
         }
-        if (!node.data.githubOwner || node.data.githubOwner.trim() === "") {
+        if (
+          !ownerOptionalOperations.has(operation ?? "") &&
+          (!node.data.githubOwner || node.data.githubOwner.trim() === "")
+        ) {
           errors.push({
             nodeId: node.id,
             nodeLabel: node.data.label,
@@ -2014,6 +2021,22 @@ export const useWorkflowStore = defineStore("workflow", () => {
             nodeLabel: node.data.label,
             nodeType: "GitHub",
             message: "Repository is required",
+          });
+        }
+        if (
+          operation === "inviteUser" &&
+          (
+            !node.data.githubOrganization ||
+            node.data.githubOrganization.trim() === "" ||
+            !node.data.githubInviteEmail ||
+            node.data.githubInviteEmail.trim() === ""
+          )
+        ) {
+          errors.push({
+            nodeId: node.id,
+            nodeLabel: node.data.label,
+            nodeType: "GitHub",
+            message: "Organization and email are required to invite a user",
           });
         }
 
@@ -2076,6 +2099,60 @@ export const useWorkflowStore = defineStore("workflow", () => {
         }
         if (
           (
+            operation === "createReview" ||
+            operation === "getReview" ||
+            operation === "listReviews" ||
+            operation === "updateReview"
+          ) &&
+          (!node.data.githubPullRequestNumber ||
+            node.data.githubPullRequestNumber.trim() === "")
+        ) {
+          errors.push({
+            nodeId: node.id,
+            nodeLabel: node.data.label,
+            nodeType: "GitHub",
+            message: "Pull request number is required for review operations",
+          });
+        }
+        if (
+          (operation === "getReview" || operation === "updateReview") &&
+          (!node.data.githubReviewId || node.data.githubReviewId.trim() === "")
+        ) {
+          errors.push({
+            nodeId: node.id,
+            nodeLabel: node.data.label,
+            nodeType: "GitHub",
+            message: "Review ID is required for this operation",
+          });
+        }
+        if (
+          operation === "updateReview" &&
+          (!node.data.githubReviewBody || node.data.githubReviewBody.trim() === "")
+        ) {
+          errors.push({
+            nodeId: node.id,
+            nodeLabel: node.data.label,
+            nodeType: "GitHub",
+            message: "Review body is required for update review",
+          });
+        }
+        if (
+          operation === "createReview" &&
+          (
+            node.data.githubReviewEvent === "REQUEST_CHANGES" ||
+            node.data.githubReviewEvent === "COMMENT"
+          ) &&
+          (!node.data.githubReviewBody || node.data.githubReviewBody.trim() === "")
+        ) {
+          errors.push({
+            nodeId: node.id,
+            nodeLabel: node.data.label,
+            nodeType: "GitHub",
+            message: "Review body is required for comment and request changes events",
+          });
+        }
+        if (
+          (
             operation === "getFile" ||
             operation === "upsertFile" ||
             operation === "deleteFile"
@@ -2123,7 +2200,14 @@ export const useWorkflowStore = defineStore("workflow", () => {
           });
         }
         if (
-          (operation === "getWorkflow" || operation === "dispatchWorkflow") &&
+          (
+            operation === "getWorkflow" ||
+            operation === "dispatchWorkflow" ||
+            operation === "enableWorkflow" ||
+            operation === "disableWorkflow" ||
+            operation === "getWorkflowUsage"
+            || operation === "dispatchWorkflowAndWait"
+          ) &&
           (!node.data.githubWorkflowId || node.data.githubWorkflowId.trim() === "")
         ) {
           errors.push({
@@ -2134,7 +2218,7 @@ export const useWorkflowStore = defineStore("workflow", () => {
           });
         }
         if (
-          operation === "dispatchWorkflow" &&
+          (operation === "dispatchWorkflow" || operation === "dispatchWorkflowAndWait") &&
           (!node.data.githubBranch || node.data.githubBranch.trim() === "")
         ) {
           errors.push({

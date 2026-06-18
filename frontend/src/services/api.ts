@@ -15,7 +15,11 @@ import type {
   CredentialShare,
   CredentialType,
   CreateCredentialRequest,
+  CredentialTestRequest,
+  CredentialTestResponse,
   LLMModel,
+  SupabaseColumnsResponse,
+  SupabaseTablesResponse,
   UpdateCredentialRequest,
 } from "@/types/credential";
 import type {
@@ -1051,6 +1055,16 @@ export const credentialsApi = {
     return response.data;
   },
 
+  testConnection: async (
+    data: CredentialTestRequest,
+  ): Promise<CredentialTestResponse> => {
+    const response = await api.post<CredentialTestResponse>(
+      "/credentials/test",
+      data,
+    );
+    return response.data;
+  },
+
   update: async (
     id: string,
     data: UpdateCredentialRequest,
@@ -1065,6 +1079,29 @@ export const credentialsApi = {
 
   getModels: async (id: string): Promise<LLMModel[]> => {
     const response = await api.get<LLMModel[]>(`/credentials/${id}/models`);
+    return response.data;
+  },
+
+  listSupabaseTables: async (
+    id: string,
+    schema?: string,
+  ): Promise<SupabaseTablesResponse> => {
+    const response = await api.get<SupabaseTablesResponse>(
+      `/credentials/${id}/supabase/tables`,
+      { params: schema ? { schema } : undefined },
+    );
+    return response.data;
+  },
+
+  listSupabaseColumns: async (
+    id: string,
+    table: string,
+    schema?: string,
+  ): Promise<SupabaseColumnsResponse> => {
+    const response = await api.get<SupabaseColumnsResponse>(
+      `/credentials/${id}/supabase/columns`,
+      { params: { table, ...(schema ? { schema } : {}) } },
+    );
     return response.data;
   },
 
@@ -1216,6 +1253,14 @@ export const dashboardApi = {
     const response = await api.get<WidgetDataResponse>(`/dashboards/widgets/${id}/data`, {
       params: { force },
     });
+    return response.data;
+  },
+
+  toggleMarkdownTask: async (id: string, lineIndex: number): Promise<WidgetDataResponse> => {
+    const response = await api.patch<WidgetDataResponse>(
+      `/dashboards/widgets/${id}/markdown-task-toggle`,
+      { line_index: lineIndex },
+    );
     return response.data;
   },
 

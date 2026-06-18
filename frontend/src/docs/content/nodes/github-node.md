@@ -13,29 +13,18 @@ The **GitHub** node adds native GitHub REST operations to a workflow, similar to
 
 ## Supported Operations
 
-- `Get Repository`
-- `List Organization Repositories`
-- `List User Repositories`
-- `Get Issue`
-- `List Issues`
-- `Create Comment`
-- `Create Issue`
-- `Update Issue`
-- `Lock Issue`
-- `List Pull Requests`
-- `Create Pull Request`
-- `List Releases`
-- `Get Release`
-- `Create Release`
-- `Update Release`
-- `Delete Release`
-- `List Workflows`
-- `Get Workflow`
-- `Dispatch Workflow`
-- `Get File`
-- `List Files`
-- `Create or Update File`
-- `Delete File`
+The node currently provides 40 actions:
+
+| Resource | Actions |
+|----------|---------|
+| Repository | `Get Repository`, `Get Repository License`, `Get Repository Profile`, `Get Repository Issues`, `Get Repository Pull Requests`, `List Popular Paths for Repository`, `List Top Referrers for Repository` |
+| Organization / User | `List Organization Repositories`, `List User Repositories`, `Get User Repositories`, `Get User Issues`, `Invite User` |
+| Issue | `Create Issue`, `Get Issue`, `List Issues`, `Edit Issue`, `Lock Issue`, `Create Comment` |
+| Pull request | `Create Pull Request`, `List Pull Requests` |
+| Review | `Create Review`, `Get Review`, `List Reviews`, `Update Review` |
+| Release | `Create Release`, `Get Release`, `List Releases`, `Update Release`, `Delete Release` |
+| Workflow | `List Workflows`, `Get Workflow`, `Enable Workflow`, `Disable Workflow`, `Get Workflow Usage`, `Dispatch Workflow`, `Dispatch Workflow and Wait` |
+| File | `Get File`, `List Files`, `Create or Update File`, `Delete File` |
 
 ## Credential
 
@@ -59,6 +48,42 @@ Most operations use:
 
 `List User Repositories` only requires **Owner** (the username) and does not use the repository field.
 
+`Get User Repositories` mirrors n8n's User → Get Repositories action. `Get User Issues` returns
+issues assigned to the authenticated GitHub user and supports state, mentioned user, labels,
+updated-since, sort, direction, and per-page filters. `Invite User` requires an organization and
+email address and does not use Owner or Repository.
+
+## Repository
+
+Repository operations include metadata, detected license content, community health profile, and
+traffic insights. `List Popular Paths for Repository` and
+`List Top Referrers for Repository` return GitHub's top traffic entries for the last 14 days and
+require repository administration push access.
+
+`List Issues` supports optional assignee, creator, mentioned user, comma-separated labels,
+updated-since timestamp, sort, and direction filters. `List Pull Requests` supports state, sort,
+direction, and per-page controls.
+
+`Get Repository Issues` and `Get Repository Pull Requests` expose the same APIs as their List
+counterparts under explicit n8n-compatible repository action names.
+
+### Get Repository metadata
+
+`Get Repository` stores GitHub's complete response in `$github.repository` and also exposes
+`$github.full_name`, `$github.default_branch`, `$github.private`, and `$github.url`.
+
+The repository payload commonly includes:
+
+- Identity and ownership: ID, name, full name, description, owner, and visibility
+- Repository state: private, fork, archived, disabled, and default branch
+- URLs: GitHub page, API, clone, SSH, and Git URLs
+- Activity and size: creation, update and push timestamps, size, stars, watchers, forks, subscribers, and open issues
+- Features: issues, projects, wiki, Pages, discussions, topics, language, and homepage
+- License, merge settings, caller permissions, security settings, and fork parent/source metadata when available
+
+Some administrative, permission, merge, and security fields depend on the credential's repository
+permissions.
+
 Example:
 
 - Owner: `heymrun`
@@ -78,15 +103,16 @@ Issue operations support title/body fields and optional JSON-array fields for la
 ["octocat"]
 ```
 
-### Update Issue field semantics
+### Edit Issue field semantics
 
-For `Update Issue`, only fields you explicitly set are sent to GitHub:
+For `Edit Issue`, only fields you explicitly set are sent to GitHub:
 
 - **State** – Choose `Don't change`, `Open`, or `Closed`. Leave unset to keep the current state.
+- **State Reason** – Optionally set `Completed`, `Not Planned`, `Duplicate`, or `Reopened`.
 - **Title / Body** – Leave blank to keep the current value.
 - **Labels / Assignees** – Leave the field empty to keep the current value. Use `[]` to clear all labels or assignees. Use a JSON array such as `["bug"]` to replace them.
 
-`Update Issue` requires at least one field to change at runtime. If you only provide an issue number, execution fails with a validation error from the GitHub API layer.
+`Edit Issue` requires at least one field to change at runtime. If you only provide an issue number, execution fails with a validation error from the GitHub API layer.
 
 ## Lock Issue
 
@@ -109,6 +135,21 @@ Create PR requires:
 - Optional body
 - Optional draft mode
 
+## Pull Request Reviews
+
+Review operations match GitHub's pull request review API:
+
+| Operation | Required fields | Optional fields |
+|-----------|-----------------|-----------------|
+| `Create Review` | Pull request number, event | Body, commit ID |
+| `Get Review` | Pull request number, review ID | — |
+| `List Reviews` | Pull request number | Per page |
+| `Update Review` | Pull request number, review ID, body | — |
+
+`Create Review` supports `Approve`, `Request Changes`, `Comment`, and `Pending`.
+The body is required for `Request Changes` and `Comment`. When Commit ID is empty, GitHub
+reviews the pull request's latest commit.
+
 ## Releases
 
 | Operation | Required fields at runtime | Commonly optional |
@@ -125,7 +166,6 @@ Before you run a workflow from the editor, Heym validates a few GitHub fields mo
 
 - `Create Release` – The canvas requires **Name / Title** even though GitHub only requires a tag name at runtime.
 - `Update Release` – The canvas requires **Tag Name** even though runtime updates can change only the release ID, body, or draft flags.
-- `List Files` – The canvas currently requires **Directory Path** even though an empty path lists the repository root at runtime.
 
 If you hit one of these validation errors, fill the requested field or adjust the operation configuration before executing.
 
@@ -135,7 +175,20 @@ Workflow operations support:
 
 - Listing repository workflows
 - Getting a workflow by numeric ID or workflow file name
+- Enabling or disabling a workflow
+- Reading billable workflow usage by runner operating system
 - Dispatching a workflow with a ref or branch plus optional JSON inputs object
+
+GitHub is in the process of closing down the `Get Workflow Usage` endpoint. Workflows using
+this operation may need to migrate when GitHub removes the endpoint.
+
+`Dispatch Workflow` accepts both GitHub response forms: legacy `204 No Content` and the newer
+`200` response containing `workflow_run_id`, `run_url`, and `html_url`.
+
+`Dispatch Workflow and Wait` dispatches the workflow and polls the returned workflow run until
+its status is `completed`. Configure the timeout and polling interval in seconds. Waiting requires
+GitHub's newer `200` dispatch response containing `workflow_run_id`; older GitHub Enterprise
+servers that return only `204` cannot use this action.
 
 ## File Contents
 
@@ -156,7 +209,11 @@ If the file already exists, Heym fetches the current SHA automatically before up
 
 ## Pagination
 
-`List Issues`, `List Pull Requests`, `List Releases`, `List Workflows`, `List Organization Repositories`, and `List User Repositories` support **Per Page** (1–100). Heym requests a single page of results; there is no `page` parameter for fetching additional pages in the same operation.
+`List Issues`, `Get Repository Issues`, `Get User Issues`, `List Pull Requests`,
+`Get Repository Pull Requests`, `List Reviews`, `List Releases`, `List Workflows`,
+`List Organization Repositories`, `List User Repositories`, and `Get User Repositories` support
+**Per Page** (1–100). Heym requests one page of results; there is no `page` field for fetching
+additional pages in the same operation.
 
 ## Output
 
@@ -165,14 +222,27 @@ The exact shape depends on the selected operation. Common fields include:
 - `$github.success`
 - `$github.operation`
 - `$github.repository`
+- `$github.license`
+- `$github.profile`
+- `$github.paths`
+- `$github.referrers`
 - `$github.issue`
 - `$github.issues`
 - `$github.pull_request`
 - `$github.pull_requests`
+- `$github.review`
+- `$github.reviews`
 - `$github.release`
 - `$github.releases`
 - `$github.workflow`
 - `$github.workflows`
+- `$github.workflow_run`
+- `$github.workflow_run_id`
+- `$github.completed`
+- `$github.conclusion`
+- `$github.usage`
+- `$github.billable`
+- `$github.invitation`
 - `$github.file`
 - `$github.items`
 - `$github.path`
@@ -189,7 +259,7 @@ Replace `github` with your node label.
 
 - Labels and assignees must be valid JSON arrays when provided.
 - Workflow dispatch inputs must be a valid JSON object when provided.
-- `Update Issue` uses `state` only when you explicitly set it; leave it unset to keep the current issue state.
+- `Edit Issue` uses `state` only when you explicitly set it; leave it unset to keep the current issue state.
 - GitHub API permissions depend on the token scopes or fine-grained repository permissions you grant.
 
 ## Related

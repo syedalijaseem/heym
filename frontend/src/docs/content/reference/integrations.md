@@ -19,6 +19,7 @@ Some integration nodes do **not** require credentials. [WebSocket Trigger](../no
 | **Grist** | [Grist node](../nodes/grist-node.md) | `api_key`, `server_url` |
 | **Google Sheets** | [Google Sheets node](../nodes/google-sheets-node.md) | `client_id`, `client_secret` + OAuth2 consent |
 | **BigQuery** | [BigQuery node](../nodes/bigquery-node.md) | `client_id`, `client_secret` + OAuth2 consent |
+| **Supabase** | [Supabase node](../nodes/supabase-node.md) | `supabase_url`, `supabase_key`, optional `supabase_schema` |
 | **Amazon S3** | [Amazon S3 node](../nodes/amazon-s3-node.md) | `aws_access_key_id`, `aws_secret_access_key`, `aws_region` |
 | **SMTP** | [Send Email](../nodes/send-email-node.md) | `host`, `port`, `email`, `password` |
 | **IMAP** | [IMAP Trigger node](../nodes/imap-trigger-node.md) | `imap_host`, `imap_port`, `imap_username`, `imap_password` |
@@ -57,7 +58,7 @@ The GitHub credential stores a GitHub personal access token (PAT) so workflows c
 - Leave `base_url` empty for GitHub.com. Set it only when targeting GitHub Enterprise Server.
 - This credential currently models PAT-based auth only. To access organization repositories, use a PAT that has been granted the required organization/repository permissions.
 - GitHub App installation tokens and GitHub App setup flows are not first-class in the Heym UI today.
-- Prefer the [GitHub node](../nodes/github-node.md) for native repository, issue, pull request, release, workflow, and file operations. Use the [HTTP node](../nodes/http-node.md) only when you need endpoints or payloads the GitHub node does not cover.
+- Prefer the [GitHub node](../nodes/github-node.md) for native repository, user, issue, pull request, review, release, Actions workflow, traffic, and file operations. Use the [HTTP node](../nodes/http-node.md) only when you need endpoints or payloads the GitHub node does not cover.
 - Use the [Agent node](../nodes/agent-node.md) with MCP by passing `$credentials.YourGitHubCredential` into an MCP connection environment variable such as `GITHUB_PERSONAL_ACCESS_TOKEN`.
 - GitHub's REST API commonly expects `Authorization: Bearer <token>` plus `Accept: application/vnd.github+json`.
 - When editing a GitHub credential, re-enter the GitHub Enterprise `base_url` if you change the token. The edit dialog does not show the stored base URL, and saving a new token without it removes the Enterprise endpoint from the credential.
@@ -183,6 +184,30 @@ Tokens (`access_token`, `refresh_token`, `token_expiry`) are stored and refreshe
 ### Used By
 
 - [BigQuery node](../nodes/bigquery-node.md)
+
+---
+
+## Supabase
+
+The Supabase credential connects Heym to a Supabase project's PostgREST API so workflows can query and mutate Postgres-backed tables.
+
+### Required Fields
+
+| Field | Description |
+|-------|-------------|
+| `supabase_url` | Project base URL, for example `https://your-project.supabase.co` |
+| `supabase_key` | API key with access to the target tables |
+| `supabase_schema` | Optional default schema (defaults to `public`) |
+
+### Notes
+
+- The [Supabase node](../nodes/supabase-node.md) talks to `/rest/v1/<table>` and supports operator filters (`eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `like`, `ilike`, `is`, `in`, and related PostgREST operators) plus nested `or` / `and` logical groups.
+- For write operations, prefer a key intended for trusted server-side use with the minimum required table permissions.
+- Nodes can override the schema per step even if the credential defines a default schema.
+
+### Used By
+
+- [Supabase node](../nodes/supabase-node.md)
 
 ---
 

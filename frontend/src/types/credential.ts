@@ -20,6 +20,7 @@ export type CredentialType =
   | "flaresolverr"
   | "google_sheets"
   | "bigquery"
+  | "supabase"
   | "s3"
   | "elevenlabs";
 
@@ -29,6 +30,7 @@ export interface Credential {
   type: CredentialType;
   masked_value: string | null;
   header_key: string | null;
+  public_fields?: Record<string, string | null>;
   created_at: string;
   updated_at?: string;
 }
@@ -185,6 +187,12 @@ export interface CredentialConfigS3 {
   aws_session_token?: string;
 }
 
+export interface CredentialConfigSupabase {
+  supabase_url: string;
+  supabase_key: string;
+  supabase_schema?: string;
+}
+
 export type CredentialConfig =
   | CredentialConfigOpenAI
   | CredentialConfigGoogle
@@ -206,6 +214,7 @@ export type CredentialConfig =
   | CredentialConfigCohere
   | CredentialConfigFlaresolverr
   | CredentialConfigGoogleSheets
+  | CredentialConfigSupabase
   | CredentialConfigS3
   | CredentialConfigElevenLabs;
 
@@ -218,6 +227,27 @@ export interface CreateCredentialRequest {
 export interface UpdateCredentialRequest {
   name?: string;
   config?: CredentialConfig;
+}
+
+export interface CredentialTestRequest {
+  type: CredentialType;
+  config?: CredentialConfig;
+  credential_id?: string;
+}
+
+export interface CredentialTestResponse {
+  success: boolean;
+  message: string;
+}
+
+export interface SupabaseTablesResponse {
+  tables: string[];
+  success: boolean;
+}
+
+export interface SupabaseColumnsResponse {
+  columns: string[];
+  success: boolean;
 }
 
 export const CREDENTIAL_TYPE_LABELS: Record<CredentialType, string> = {
@@ -242,6 +272,7 @@ export const CREDENTIAL_TYPE_LABELS: Record<CredentialType, string> = {
   flaresolverr: "FlareSolverr",
   google_sheets: "Google Sheets (OAuth2)",
   bigquery: "BigQuery (OAuth2)",
+  supabase: "Supabase",
   s3: "Amazon S3",
   elevenlabs: "ElevenLabs (Voice)",
 };
@@ -268,6 +299,7 @@ export const CREDENTIAL_TYPE_DESCRIPTIONS: Record<CredentialType, string> = {
   flaresolverr: "Connect to FlareSolverr for web scraping with browser automation",
   google_sheets: "Connect to Google Sheets via OAuth2 — read, write, append, and query spreadsheets",
   bigquery: "Connect to Google BigQuery via OAuth2 — run SQL queries and insert rows",
+  supabase: "Connect to Supabase PostgREST — query and mutate Postgres-backed tables",
   s3: "Connect to Amazon S3 — manage buckets, folders, and objects",
   elevenlabs: "Text-to-speech and speech-to-text for chat voice features",
 };

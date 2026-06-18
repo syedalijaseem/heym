@@ -9,7 +9,67 @@ import {
   type ComponentPublicInstance,
 } from "vue";
 import { useRouter } from "vue-router";
-import { AlertTriangle, Ban, BarChart3, BookOpen, Bot, Braces, Brain, Bug, CalendarClock, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock, Copy, Database, Download, ExternalLink, FileArchive, FileJson, GitBranch, GitMerge, Globe, Github, HardDrive, Inbox, Loader2, Mail, Maximize2, MessageSquare, Minus, Minimize2, MonitorPlay, MousePointerClick, Play, Plug, Plus, Power, Rabbit, Radio, Repeat, Search, Send, Server, Settings, Settings2, Sheet, ShieldAlert, Shuffle, Sparkles, StickyNote, Table2, Terminal, Trash2, Type, Variable, X, XCircle, Zap } from "lucide-vue-next";
+import {
+  AlertTriangle,
+  Ban,
+  BarChart3,
+  BookOpen,
+  Bot,
+  Braces,
+  Brain,
+  Bug,
+  CalendarClock,
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  Copy,
+  Database,
+  ExternalLink,
+  FileArchive,
+  FileJson,
+  GitBranch,
+  GitMerge,
+  Github,
+  Globe,
+  HardDrive,
+  Inbox,
+  Loader2,
+  Mail,
+  Maximize2,
+  MessageSquare,
+  Minus,
+  Minimize2,
+  MonitorPlay,
+  MousePointerClick,
+  Play,
+  Plug,
+  Plus,
+  Power,
+  Rabbit,
+  Radio,
+  Repeat,
+  Search,
+  Send,
+  Server,
+  Settings,
+  Settings2,
+  Sheet,
+  ShieldAlert,
+  Shuffle,
+  Sparkles,
+  StickyNote,
+  Table2,
+  Terminal,
+  Trash2,
+  Type,
+  Variable,
+  X,
+  XCircle,
+  Zap,
+} from "lucide-vue-next";
 
 import type { CredentialListItem, LLMModel } from "@/types/credential";
 import type {
@@ -29,6 +89,8 @@ import type {
 import { createAgentSkillZipBlob, getSkillZipFileName, parseSkillZip } from "@/lib/skillZipParser";
 
 import SelectorPickerDialog from "@/components/Dialogs/SelectorPickerDialog.vue";
+import SkillHistoryDialog from "@/components/Dialogs/SkillHistoryDialog.vue";
+import AgentSkillCard from "@/components/Panels/AgentSkillCard.vue";
 import SkillBuilderModal from "@/components/Panels/SkillBuilderModal.vue";
 import Button from "@/components/ui/Button.vue";
 import AgentFieldToggle from "@/components/ui/AgentFieldToggle.vue";
@@ -99,6 +161,7 @@ const nodeIcons: Record<NodeType, ReturnType<typeof Type>> = {
   github: Github,
   googleSheets: Sheet,
   bigquery: Database,
+  supabase: Database,
   throwError: XCircle,
   rabbitmq: Rabbit,
   crawler: Bug,
@@ -146,6 +209,7 @@ const nodeColorMap: Record<NodeType, string> = {
   github: "node-github",
   googleSheets: "node-google-sheets",
   bigquery: "node-google-sheets",
+  supabase: "node-datatable",
   throwError: "node-throw-error",
   rabbitmq: "node-rabbitmq",
   crawler: "node-crawler",
@@ -193,6 +257,7 @@ const nodeDocSlugMap: Record<NodeType, string> = {
   github: "github-node",
   googleSheets: "google-sheets-node",
   bigquery: "bigquery-node",
+  supabase: "supabase-node",
   throwError: "throw-error-node",
   rabbitmq: "rabbitmq-node",
   crawler: "crawler-node",
@@ -392,6 +457,13 @@ const gristCredentials = ref<CredentialListItem[]>([]);
 const githubCredentials = ref<CredentialListItem[]>([]);
 const googleSheetsCredentials = ref<CredentialListItem[]>([]);
 const bigqueryCredentials = ref<CredentialListItem[]>([]);
+const supabaseCredentials = ref<CredentialListItem[]>([]);
+const supabaseDiscoveredTables = ref<string[]>([]);
+const supabaseDiscoveredColumns = ref<string[]>([]);
+const loadingSupabaseTables = ref(false);
+const loadingSupabaseColumns = ref(false);
+let supabaseTablesRequestSequence = 0;
+let supabaseColumnsRequestSequence = 0;
 const s3Credentials = ref<CredentialListItem[]>([]);
 const rabbitmqCredentials = ref<CredentialListItem[]>([]);
 const cohereCredentials = ref<CredentialListItem[]>([]);
@@ -457,15 +529,25 @@ const gristFilterJsonInputRef = ref<InstanceType<typeof JsonInputPanel> | null>(
 const currentGristExpressionFieldIndex = ref(0);
 const githubOwnerExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const githubRepoExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const githubOrganizationExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const githubInviteEmailExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const githubIssueNumberExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const githubAssigneeExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const githubCreatorExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const githubMentionedExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const githubLabelsFilterExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const githubSinceExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const githubTitleExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const githubBodyExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const githubCommentBodyExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const githubLabelsExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const githubAssigneesExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
-const githubLockReasonExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const githubHeadExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const githubBaseExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const githubPullRequestNumberExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const githubReviewIdExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const githubReviewBodyExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const githubCommitIdExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const githubFilePathExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const githubFileContentExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const githubCommitMessageExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
@@ -491,6 +573,15 @@ const bqTableIdExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | n
 const bqRowsExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const bqMappingInputRefs = ref<Map<number, InstanceType<typeof ExpressionInput>>>(new Map());
 const currentBigQueryExpressionFieldIndex = ref(0);
+const supabaseSchemaExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const supabaseTableExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const supabaseSelectColumnsExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const supabaseFilterExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const supabaseOrderByExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const supabaseRowsExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const supabaseOnConflictExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const supabaseDataExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const currentSupabaseExpressionFieldIndex = ref(0);
 const dataTableRowIdExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const dataTableDataExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const dataTableFilterExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
@@ -775,6 +866,14 @@ watch(
       }
     }
 
+    if (type === "supabase") {
+      try {
+        supabaseCredentials.value = await credentialsApi.listByType("supabase");
+      } catch {
+        supabaseCredentials.value = [];
+      }
+    }
+
     if (type === "s3") {
       try {
         s3Credentials.value = await credentialsApi.listByType("s3");
@@ -843,6 +942,137 @@ watch(
     }
     await loadDataTableColumnsForSelectedNode();
     syncDataTableSelectiveUiFromNodeMode();
+  },
+);
+
+async function loadSupabaseTablesForSelectedNode(): Promise<void> {
+  const node = workflowStore.selectedNode;
+  if (!node || node.type !== "supabase") {
+    supabaseDiscoveredTables.value = [];
+    return;
+  }
+
+  const credentialId = String(node.data.credentialId || "").trim();
+  if (!credentialId) {
+    supabaseDiscoveredTables.value = [];
+    return;
+  }
+
+  const requestId = ++supabaseTablesRequestSequence;
+  const selectedNodeId = node.id;
+  const selectedCredentialId = credentialId;
+  const selectedSchema = String(node.data.supabaseSchema || "").trim() || undefined;
+  loadingSupabaseTables.value = true;
+  try {
+    const result = await credentialsApi.listSupabaseTables(selectedCredentialId, selectedSchema);
+    const currentNode = workflowStore.selectedNode;
+    if (
+      requestId !== supabaseTablesRequestSequence ||
+      !currentNode ||
+      currentNode.type !== "supabase" ||
+      currentNode.id !== selectedNodeId ||
+      String(currentNode.data.credentialId || "").trim() !== selectedCredentialId ||
+      (String(currentNode.data.supabaseSchema || "").trim() || undefined) !== selectedSchema
+    ) {
+      return;
+    }
+    supabaseDiscoveredTables.value = result.tables || [];
+  } catch {
+    if (requestId === supabaseTablesRequestSequence) {
+      supabaseDiscoveredTables.value = [];
+    }
+  } finally {
+    if (requestId === supabaseTablesRequestSequence) {
+      loadingSupabaseTables.value = false;
+    }
+  }
+}
+
+async function loadSupabaseColumnsForSelectedNode(): Promise<void> {
+  const node = workflowStore.selectedNode;
+  if (!node || node.type !== "supabase") {
+    supabaseDiscoveredColumns.value = [];
+    return;
+  }
+
+  const credentialId = String(node.data.credentialId || "").trim();
+  const table = String(node.data.supabaseTable || "").trim();
+  if (!credentialId || !table) {
+    supabaseDiscoveredColumns.value = [];
+    return;
+  }
+
+  const requestId = ++supabaseColumnsRequestSequence;
+  const selectedNodeId = node.id;
+  const selectedCredentialId = credentialId;
+  const selectedTable = table;
+  const selectedSchema = String(node.data.supabaseSchema || "").trim() || undefined;
+  loadingSupabaseColumns.value = true;
+  try {
+    const result = await credentialsApi.listSupabaseColumns(
+      selectedCredentialId,
+      selectedTable,
+      selectedSchema,
+    );
+    const currentNode = workflowStore.selectedNode;
+    if (
+      requestId !== supabaseColumnsRequestSequence ||
+      !currentNode ||
+      currentNode.type !== "supabase" ||
+      currentNode.id !== selectedNodeId ||
+      String(currentNode.data.credentialId || "").trim() !== selectedCredentialId ||
+      String(currentNode.data.supabaseTable || "").trim() !== selectedTable ||
+      (String(currentNode.data.supabaseSchema || "").trim() || undefined) !== selectedSchema
+    ) {
+      return;
+    }
+    supabaseDiscoveredColumns.value = result.columns || [];
+  } catch {
+    if (requestId === supabaseColumnsRequestSequence) {
+      supabaseDiscoveredColumns.value = [];
+    }
+  } finally {
+    if (requestId === supabaseColumnsRequestSequence) {
+      loadingSupabaseColumns.value = false;
+    }
+  }
+}
+
+watch(
+  () => workflowStore.selectedNode?.id,
+  async () => {
+    if (workflowStore.selectedNode?.type !== "supabase") {
+      supabaseDiscoveredTables.value = [];
+      supabaseDiscoveredColumns.value = [];
+      return;
+    }
+    await loadSupabaseTablesForSelectedNode();
+    await loadSupabaseColumnsForSelectedNode();
+  },
+);
+
+watch(
+  () => [
+    workflowStore.selectedNode?.data.credentialId,
+    workflowStore.selectedNode?.data.supabaseSchema,
+  ],
+  async () => {
+    if (workflowStore.selectedNode?.type !== "supabase") {
+      return;
+    }
+    await loadSupabaseTablesForSelectedNode();
+    await loadSupabaseColumnsForSelectedNode();
+  },
+  { immediate: true },
+);
+
+watch(
+  () => workflowStore.selectedNode?.data.supabaseTable,
+  async () => {
+    if (workflowStore.selectedNode?.type !== "supabase") {
+      return;
+    }
+    await loadSupabaseColumnsForSelectedNode();
   },
 );
 
@@ -1916,6 +2146,17 @@ function openPrimaryExpandDialogForSelectedNode(): void {
       }
     };
     nextTick(() => tryOpenDialog());
+  } else if (nodeType === "supabase") {
+    currentSupabaseExpressionFieldIndex.value = 0;
+    const tryOpenDialog = (attempts = 0): void => {
+      if (attempts > 20) return;
+      if (supabaseSchemaExpressionInputRef.value) {
+        nextTick(() => openSupabaseExpressionFieldAtIndex(0));
+      } else {
+        setTimeout(() => tryOpenDialog(attempts + 1), 100);
+      }
+    };
+    nextTick(() => tryOpenDialog());
   } else if (nodeType === "drive") {
     currentDriveExpressionFieldIndex.value = 0;
     const tryOpenDialog = (attempts = 0): void => {
@@ -2012,6 +2253,7 @@ function selectedNodeHasPrimaryEvaluateExpandTarget(): boolean {
     case "grist":
     case "googleSheets":
     case "bigquery":
+    case "supabase":
     case "dataTable":
     case "drive":
     case "s3":
@@ -2603,6 +2845,106 @@ function handleBigQueryExpressionFieldNavigate(direction: "prev" | "next"): void
 
 function onBigQueryRegisterExpressionFieldIndex(index: number): void {
   currentBigQueryExpressionFieldIndex.value = index;
+}
+
+const supabaseExpressionFieldCount = computed((): number => {
+  const n = workflowStore.selectedNode;
+  if (!n || n.type !== "supabase") return 1;
+  const op = (n.data.supabaseOperation as string | undefined) || "";
+  const rowsMode = (n.data.supabaseRowsInputMode as string | undefined) || "raw";
+  const dataMode = (n.data.supabaseDataInputMode as string | undefined) || "raw";
+  if (!op) return 2;
+  if (op === "select") {
+    return 5; // schema, table, select, filter, orderBy
+  }
+  if (op === "insert") return rowsMode === "auto" ? 2 : 3; // schema, table, rows
+  if (op === "upsert") return rowsMode === "auto" ? 3 : 4; // schema, table, rows, onConflict
+  if (op === "update") return dataMode === "auto" ? 3 : 4; // schema, table, data, filter
+  if (op === "delete") return 3; // schema, table, filter
+  return 2;
+});
+
+function openSupabaseExpressionFieldAtIndex(index: number): void {
+  const n = selectedNode.value;
+  if (!n || n.type !== "supabase") return;
+  currentSupabaseExpressionFieldIndex.value = index;
+  const op = (n.data.supabaseOperation as string | undefined) || "";
+  if (index === 0) {
+    supabaseSchemaExpressionInputRef.value?.openExpandDialog();
+    return;
+  }
+  if (index === 1) {
+    supabaseTableExpressionInputRef.value?.openExpandDialog();
+    return;
+  }
+  if (op === "select") {
+    if (index === 2) {
+      supabaseSelectColumnsExpressionInputRef.value?.openExpandDialog();
+      return;
+    }
+    if (index === 3) {
+      supabaseFilterExpressionInputRef.value?.openExpandDialog();
+      return;
+    }
+    if (index === 4) {
+      supabaseOrderByExpressionInputRef.value?.openExpandDialog();
+    }
+    return;
+  }
+  if (op === "insert" || op === "upsert") {
+    const rowsMode = (n.data.supabaseRowsInputMode as string | undefined) || "raw";
+    if (rowsMode === "raw" && index === 2) {
+      supabaseRowsExpressionInputRef.value?.openExpandDialog();
+      return;
+    }
+    if (op === "upsert" && index === (rowsMode === "raw" ? 3 : 2)) {
+      supabaseOnConflictExpressionInputRef.value?.openExpandDialog();
+    }
+    return;
+  }
+  if (op === "update") {
+    const dataMode = (n.data.supabaseDataInputMode as string | undefined) || "raw";
+    if (dataMode === "raw" && index === 2) {
+      supabaseDataExpressionInputRef.value?.openExpandDialog();
+      return;
+    }
+    if (index === (dataMode === "raw" ? 3 : 2)) {
+      supabaseFilterExpressionInputRef.value?.openExpandDialog();
+    }
+    return;
+  }
+  if (op === "delete" && index === 2) {
+    supabaseFilterExpressionInputRef.value?.openExpandDialog();
+  }
+}
+
+function closeSupabaseExpressionDialogs(): void {
+  supabaseSchemaExpressionInputRef.value?.closeExpandDialog();
+  supabaseTableExpressionInputRef.value?.closeExpandDialog();
+  supabaseSelectColumnsExpressionInputRef.value?.closeExpandDialog();
+  supabaseFilterExpressionInputRef.value?.closeExpandDialog();
+  supabaseOrderByExpressionInputRef.value?.closeExpandDialog();
+  supabaseRowsExpressionInputRef.value?.closeExpandDialog();
+  supabaseOnConflictExpressionInputRef.value?.closeExpandDialog();
+  supabaseDataExpressionInputRef.value?.closeExpandDialog();
+}
+
+function handleSupabaseExpressionFieldNavigate(direction: "prev" | "next"): void {
+  const total = supabaseExpressionFieldCount.value;
+  const newIndex =
+    direction === "prev"
+      ? currentSupabaseExpressionFieldIndex.value - 1
+      : currentSupabaseExpressionFieldIndex.value + 1;
+  if (newIndex < 0 || newIndex >= total) return;
+  closeSupabaseExpressionDialogs();
+  currentSupabaseExpressionFieldIndex.value = newIndex;
+  nextTick(() => {
+    openSupabaseExpressionFieldAtIndex(newIndex);
+  });
+}
+
+function onSupabaseRegisterExpressionFieldIndex(index: number): void {
+  currentSupabaseExpressionFieldIndex.value = index;
 }
 
 function bqMappingInputRef(index: number, el: InstanceType<typeof ExpressionInput> | null): void {
@@ -3449,28 +3791,45 @@ const githubCredentialOptions = computed(() => {
 
 const githubOperationOptions = [
   { value: "getRepository", label: "Get Repository" },
+  { value: "getRepositoryLicense", label: "Get Repository License" },
+  { value: "getRepositoryProfile", label: "Get Repository Profile" },
+  { value: "listPopularPaths", label: "List Popular Paths for Repository" },
+  { value: "listReferrers", label: "List Top Referrers for Repository" },
   { value: "listOrganizationRepositories", label: "List Organization Repositories" },
   { value: "listUserRepositories", label: "List User Repositories" },
+  { value: "getUserRepositories", label: "Get User Repositories" },
+  { value: "getUserIssues", label: "Get User Issues" },
+  { value: "inviteUser", label: "Invite User" },
+  { value: "createIssue", label: "Create Issue" },
   { value: "getIssue", label: "Get Issue" },
   { value: "listIssues", label: "List Issues" },
-  { value: "createComment", label: "Create Comment" },
-  { value: "createIssue", label: "Create Issue" },
-  { value: "updateIssue", label: "Update Issue" },
+  { value: "getRepositoryIssues", label: "Get Repository Issues" },
   { value: "lockIssue", label: "Lock Issue" },
-  { value: "listPullRequests", label: "List Pull Requests" },
+  { value: "updateIssue", label: "Edit Issue" },
+  { value: "createComment", label: "Create Comment" },
   { value: "createPullRequest", label: "Create Pull Request" },
-  { value: "listReleases", label: "List Releases" },
-  { value: "getRelease", label: "Get Release" },
+  { value: "listPullRequests", label: "List Pull Requests" },
+  { value: "getRepositoryPullRequests", label: "Get Repository Pull Requests" },
+  { value: "createReview", label: "Create Review" },
+  { value: "getReview", label: "Get Review" },
+  { value: "listReviews", label: "List Reviews" },
+  { value: "updateReview", label: "Update Review" },
   { value: "createRelease", label: "Create Release" },
-  { value: "updateRelease", label: "Update Release" },
   { value: "deleteRelease", label: "Delete Release" },
-  { value: "listWorkflows", label: "List Workflows" },
-  { value: "getWorkflow", label: "Get Workflow" },
+  { value: "getRelease", label: "Get Release" },
+  { value: "listReleases", label: "List Releases" },
+  { value: "updateRelease", label: "Update Release" },
   { value: "dispatchWorkflow", label: "Dispatch Workflow" },
-  { value: "getFile", label: "Get File" },
-  { value: "listFiles", label: "List Files" },
+  { value: "dispatchWorkflowAndWait", label: "Dispatch Workflow and Wait" },
+  { value: "disableWorkflow", label: "Disable Workflow" },
+  { value: "enableWorkflow", label: "Enable Workflow" },
+  { value: "getWorkflow", label: "Get Workflow" },
+  { value: "getWorkflowUsage", label: "Get Workflow Usage" },
+  { value: "listWorkflows", label: "List Workflows" },
   { value: "upsertFile", label: "Create or Update File" },
   { value: "deleteFile", label: "Delete File" },
+  { value: "getFile", label: "Get File" },
+  { value: "listFiles", label: "List Files" },
 ];
 
 const githubStateOptions = [
@@ -3479,28 +3838,86 @@ const githubStateOptions = [
   { value: "all", label: "All" },
 ];
 
+const githubIssueSortOptions = [
+  { value: "", label: "Default" },
+  { value: "created", label: "Created" },
+  { value: "updated", label: "Updated" },
+  { value: "comments", label: "Comments" },
+];
+
+const githubPullRequestSortOptions = [
+  { value: "", label: "Default" },
+  { value: "created", label: "Created" },
+  { value: "updated", label: "Updated" },
+  { value: "popularity", label: "Popularity" },
+  { value: "long-running", label: "Long-running" },
+];
+
+const githubDirectionOptions = [
+  { value: "", label: "Default" },
+  { value: "asc", label: "Ascending" },
+  { value: "desc", label: "Descending" },
+];
+
 const githubUpdateIssueStateOptions = [
   { value: "", label: "Don't change" },
   { value: "open", label: "Open" },
   { value: "closed", label: "Closed" },
 ];
 
+const githubIssueStateReasonOptions = [
+  { value: "", label: "Don't change" },
+  { value: "completed", label: "Completed" },
+  { value: "not_planned", label: "Not Planned" },
+  { value: "duplicate", label: "Duplicate" },
+  { value: "reopened", label: "Reopened" },
+];
+
+const githubLockReasonOptions = [
+  { value: "", label: "No reason" },
+  { value: "off-topic", label: "Off-topic" },
+  { value: "too heated", label: "Too heated" },
+  { value: "resolved", label: "Resolved" },
+  { value: "spam", label: "Spam" },
+];
+
+const githubReviewEventOptions = [
+  { value: "APPROVE", label: "Approve" },
+  { value: "REQUEST_CHANGES", label: "Request Changes" },
+  { value: "COMMENT", label: "Comment" },
+  { value: "PENDING", label: "Pending" },
+];
+
 const githubRepoOptionalOperations = new Set([
   "listOrganizationRepositories",
   "listUserRepositories",
+  "getUserRepositories",
+  "getUserIssues",
+  "inviteUser",
 ]);
+
+const githubOwnerOptionalOperations = new Set(["getUserIssues", "inviteUser"]);
 
 const githubPerPageOperations = new Set([
   "listIssues",
+  "getRepositoryIssues",
+  "getUserIssues",
   "listPullRequests",
+  "getRepositoryPullRequests",
+  "listReviews",
   "listReleases",
   "listWorkflows",
   "listOrganizationRepositories",
   "listUserRepositories",
+  "getUserRepositories",
 ]);
 
 function isGitHubRepoRequired(operation: string | undefined): boolean {
   return !githubRepoOptionalOperations.has(operation || "");
+}
+
+function isGitHubOwnerRequired(operation: string | undefined): boolean {
+  return !githubOwnerOptionalOperations.has(operation || "");
 }
 
 function usesGitHubPerPage(operation: string | undefined): boolean {
@@ -3598,6 +4015,68 @@ const bigQueryOperationOptions = [
   { value: "query", label: "Run Query" },
   { value: "insertRows", label: "Insert Rows" },
 ];
+
+const supabaseCredentialOptions = computed(() => {
+  const node = selectedNode.value;
+  const selectedCredentialId =
+    node && node.type === "supabase"
+      ? (node.data.credentialId as string | undefined)
+      : undefined;
+
+  return buildCredentialOptions(
+    supabaseCredentials.value,
+    selectedCredentialId,
+    "Select Supabase credential...",
+    "Shared Supabase credential (from owner)",
+  );
+});
+
+const supabaseOperationOptions = [
+  { value: "", label: "Select operation..." },
+  { value: "select", label: "Select Rows" },
+  { value: "insert", label: "Insert Rows" },
+  { value: "update", label: "Update Rows" },
+  { value: "upsert", label: "Upsert Rows" },
+  { value: "delete", label: "Delete Rows" },
+];
+
+const supabaseDiscoveredTableOptions = computed(() => {
+  return supabaseDiscoveredTables.value.map((tableName) => ({
+    value: tableName,
+    label: tableName,
+  }));
+});
+
+function parseSupabaseSelectedColumns(rawValue: string): string[] {
+  return rawValue
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function toggleSupabaseSelectedColumn(columnName: string): void {
+  const node = selectedNode.value;
+  if (!node || node.type !== "supabase") {
+    return;
+  }
+  const current = new Set(parseSupabaseSelectedColumns(String(node.data.supabaseSelectColumns || "*")));
+  if (current.has("*")) {
+    current.delete("*");
+  }
+  if (current.has(columnName)) {
+    current.delete(columnName);
+  } else {
+    current.add(columnName);
+  }
+  updateNodeData("supabaseSelectColumns", current.size > 0 ? Array.from(current).join(",") : "*");
+}
+
+function useAllDiscoveredSupabaseColumns(): void {
+  if (supabaseDiscoveredColumns.value.length === 0) {
+    return;
+  }
+  updateNodeData("supabaseSelectColumns", supabaseDiscoveredColumns.value.join(","));
+}
 
 const s3CredentialOptions = computed(() => {
   const node = selectedNode.value;
@@ -4901,6 +5380,8 @@ const skillZipError = ref("");
 const skillDownloadLoadingId = ref<string | null>(null);
 const skillBuilderOpen = ref(false);
 const skillBuilderTargetSkill = ref<AgentSkill | null>(null);
+const skillHistoryOpen = ref(false);
+const skillHistoryTarget = ref<{ skill: AgentSkill; skillIndex: number } | null>(null);
 
 function upsertAgentSkills(parsedSkills: AgentSkill[], replaceSkillId?: string): void {
   if (!selectedNode.value) return;
@@ -5016,21 +5497,6 @@ async function downloadAgentSkill(skill: AgentSkill): Promise<void> {
   }
 }
 
-function isTextSkillFile(file: AgentSkillFile): boolean {
-  return (file.encoding ?? "text") === "text";
-}
-
-function isImageSkillFile(file: AgentSkillFile): boolean {
-  return (file.mimeType || "").startsWith("image/");
-}
-
-function getSkillFilePreviewSrc(file: AgentSkillFile): string {
-  if (!isImageSkillFile(file) || (file.encoding ?? "text") !== "base64") {
-    return "";
-  }
-  return `data:${file.mimeType};base64,${file.content}`;
-}
-
 const expandedSkillIds = ref<Set<string>>(new Set());
 
 function toggleSkillExpanded(id: string): void {
@@ -5048,6 +5514,44 @@ function openSkillBuilderNew(): void {
 function openSkillBuilderEdit(skill: AgentSkill): void {
   skillBuilderTargetSkill.value = skill;
   skillBuilderOpen.value = true;
+}
+
+function openSkillHistory(skill: AgentSkill, skillIndex: number): void {
+  skillHistoryTarget.value = { skill, skillIndex };
+  skillHistoryOpen.value = true;
+}
+
+function applySkillHistorySnapshot(snapshot: AgentSkill, skillIndex: number): void {
+  if (!selectedNode.value) return;
+  const current = [...(selectedNode.value.data.skills || [])];
+  const existingId = current[skillIndex]?.id;
+  if (!existingId) return;
+  current[skillIndex] = {
+    ...snapshot,
+    id: existingId,
+  };
+  updateNodeData("skills", current);
+}
+
+function handleSkillHistoryEdit(snapshot: AgentSkill, skillIndex: number): void {
+  applySkillHistorySnapshot(snapshot, skillIndex);
+}
+
+function handleSkillHistoryRevert(snapshot: AgentSkill, skillIndex: number): void {
+  applySkillHistorySnapshot(snapshot, skillIndex);
+  showToast("Skill restored from history", "success");
+}
+
+function handleSkillHistoryFineTune(snapshot: AgentSkill): void {
+  openSkillBuilderEdit(snapshot);
+}
+
+function handleSkillHistoryExpandSkill(): void {
+  const skillId = skillHistoryTarget.value?.skill.id;
+  if (!skillId) return;
+  const next = new Set(expandedSkillIds.value);
+  next.add(skillId);
+  expandedSkillIds.value = next;
 }
 
 async function handleSkillBuilderSave(file: File): Promise<void> {
@@ -7594,158 +8098,25 @@ onUnmounted(() => {
               >
                 {{ skillZipError }}
               </p>
-              <div
+              <AgentSkillCard
                 v-for="(skill, idx) in (selectedNode.data.skills || [])"
                 :key="skill.id"
-                class="rounded border p-3 space-y-2"
-              >
-                <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-                  <button
-                    type="button"
-                    class="flex min-w-0 flex-1 items-center gap-1.5 self-center text-left text-sm font-medium hover:text-primary"
-                    :title="`Skill ${idx + 1}: ${skill.name || '(unnamed)'}`"
-                    @click="toggleSkillExpanded(skill.id)"
-                  >
-                    <ChevronRight
-                      v-if="!expandedSkillIds.has(skill.id)"
-                      class="w-3.5 h-3.5"
-                    />
-                    <ChevronDown
-                      v-else
-                      class="w-3.5 h-3.5"
-                    />
-                    <span class="break-words leading-tight">
-                      Skill {{ idx + 1 }}: {{ skill.name || '(unnamed)' }}
-                    </span>
-                  </button>
-                  <div class="flex shrink-0 items-center gap-1 rounded-lg border border-border/60 bg-muted/10 p-1">
-                    <button
-                      type="button"
-                      class="flex h-7 w-7 items-center justify-center rounded-md text-primary transition-colors hover:bg-primary/10 hover:text-primary disabled:pointer-events-none disabled:opacity-50"
-                      :disabled="!selectedNode?.data?.credentialId || !selectedNode?.data?.model"
-                      :title="'Edit with AI'"
-                      :aria-label="'Edit with AI'"
-                      @click="openSkillBuilderEdit(skill)"
-                    >
-                      <Sparkles class="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      class="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
-                      :disabled="skillDownloadLoadingId !== null"
-                      :title="'Download skill ZIP'"
-                      :aria-label="'Download skill ZIP'"
-                      @click="downloadAgentSkill(skill)"
-                    >
-                      <Loader2
-                        v-if="skillDownloadLoadingId === skill.id"
-                        class="w-3.5 h-3.5 animate-spin"
-                      />
-                      <Download
-                        v-else
-                        class="w-3.5 h-3.5"
-                      />
-                    </button>
-                    <button
-                      type="button"
-                      class="flex h-7 w-7 items-center justify-center rounded-md text-destructive transition-colors hover:bg-destructive/10 hover:text-destructive"
-                      :title="'Remove skill'"
-                      :aria-label="'Remove skill'"
-                      @click="removeAgentSkill(idx)"
-                    >
-                      <Trash2 class="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-                <div
-                  v-if="expandedSkillIds.has(skill.id)"
-                  class="space-y-2 pt-2 border-t"
-                >
-                  <div>
-                    <Label class="text-xs">Name</Label>
-                    <Input
-                      :model-value="skill.name"
-                      placeholder="skill-name"
-                      @update:model-value="updateAgentSkill(idx, 'name', $event)"
-                    />
-                  </div>
-                  <div>
-                    <Label class="text-xs">Timeout (seconds)</Label>
-                    <Input
-                      type="number"
-                      :model-value="String(skill.timeoutSeconds ?? 30)"
-                      min="1"
-                      max="3600"
-                      placeholder="30"
-                      @update:model-value="updateAgentSkill(idx, 'timeoutSeconds', parseInt($event, 10) || 30)"
-                    />
-                  </div>
-                  <div>
-                    <Label class="text-xs">SKILL.md Content</Label>
-                    <Textarea
-                      :model-value="skill.content"
-                      placeholder="---&#10;name: my-skill&#10;---&#10;&#10;Instructions..."
-                      :rows="6"
-                      class="font-mono text-xs"
-                      @update:model-value="updateAgentSkill(idx, 'content', $event)"
-                    />
-                  </div>
-                  <div
-                    v-if="skill.files?.length"
-                    class="space-y-1"
-                  >
-                    <Label class="text-xs">Files ({{ skill.files.length }})</Label>
-                    <div
-                      v-for="(f, fi) in skill.files"
-                      :key="fi"
-                      class="rounded border bg-muted/20 p-2 min-w-0"
-                    >
-                      <div class="flex justify-between items-center gap-2 mb-1 min-w-0">
-                        <span
-                          class="text-xs font-mono min-w-0 flex-1 truncate"
-                          :title="f.path"
-                        >{{ f.path }}</span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          class="gap-1 shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                          @click="removeAgentSkillFile(idx, fi)"
-                        >
-                          <Trash2 class="w-3.5 h-3.5" />
-                          Remove
-                        </Button>
-                      </div>
-                      <div
-                        v-if="isImageSkillFile(f)"
-                        class="space-y-2"
-                      >
-                        <img
-                          v-if="getSkillFilePreviewSrc(f)"
-                          :src="getSkillFilePreviewSrc(f)"
-                          :alt="f.path"
-                          class="max-h-56 w-auto max-w-full rounded border bg-background object-contain"
-                        >
-                        <p class="text-xs text-muted-foreground">
-                          Image preview stored as base64 to keep workflow saves UTF-8 safe.
-                        </p>
-                      </div>
-                      <Textarea
-                        v-else-if="isTextSkillFile(f)"
-                        :model-value="f.content"
-                        :rows="4"
-                        class="font-mono text-xs"
-                        @update:model-value="updateAgentSkillFile(idx, fi, 'content', $event)"
-                      />
-                      <p
-                        v-else
-                        class="text-xs text-muted-foreground"
-                      >
-                        Binary file stored as base64. Editing is disabled in the workflow editor.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
+                :skill="skill"
+                :index="idx"
+                :expanded="expandedSkillIds.has(skill.id)"
+                :ai-edit-disabled="!selectedNode?.data?.credentialId || !selectedNode?.data?.model"
+                :download-loading="skillDownloadLoadingId === skill.id"
+                @toggle-expand="toggleSkillExpanded(skill.id)"
+                @ai-edit="openSkillBuilderEdit(skill)"
+                @download="downloadAgentSkill(skill)"
+                @remove="removeAgentSkill(idx)"
+                @history="openSkillHistory(skill, idx)"
+                @update:name="updateAgentSkill(idx, 'name', $event)"
+                @update:timeout-seconds="updateAgentSkill(idx, 'timeoutSeconds', $event)"
+                @update:content="updateAgentSkill(idx, 'content', $event)"
+                @update:file-content="(fileIndex, value) => updateAgentSkillFile(idx, fileIndex, 'content', value)"
+                @remove-file="removeAgentSkillFile(idx, $event)"
+              />
               <p class="text-xs text-muted-foreground">
                 SKILL.md instructions and optional Python files. Optional. Drop zip or add manually.
               </p>
@@ -10179,7 +10550,10 @@ onUnmounted(() => {
               class="grid gap-3"
               :class="isGitHubRepoRequired(selectedNode.data.githubOperation) ? 'grid-cols-2' : 'grid-cols-1'"
             >
-              <div class="space-y-2">
+              <div
+                v-if="isGitHubOwnerRequired(selectedNode.data.githubOperation)"
+                class="space-y-2"
+              >
                 <Label>
                   {{ selectedNode.data.githubOperation === 'listOrganizationRepositories' ? 'Organization' : 'Owner' }}
                 </Label>
@@ -10214,6 +10588,37 @@ onUnmounted(() => {
               </div>
             </div>
 
+            <template v-if="selectedNode.data.githubOperation === 'inviteUser'">
+              <div class="space-y-2">
+                <Label>Organization</Label>
+                <ExpressionInput
+                  ref="githubOrganizationExpressionInputRef"
+                  :model-value="selectedNode.data.githubOrganization || ''"
+                  placeholder="octo-org"
+                  single-line
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  @update:model-value="updateNodeData('githubOrganization', $event)"
+                />
+              </div>
+              <div class="space-y-2">
+                <Label>Email</Label>
+                <ExpressionInput
+                  ref="githubInviteEmailExpressionInputRef"
+                  :model-value="selectedNode.data.githubInviteEmail || ''"
+                  placeholder="user@example.com"
+                  single-line
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  @update:model-value="updateNodeData('githubInviteEmail', $event)"
+                />
+              </div>
+            </template>
+
             <template v-if="selectedNode.data.githubOperation === 'getIssue' || selectedNode.data.githubOperation === 'updateIssue' || selectedNode.data.githubOperation === 'createComment' || selectedNode.data.githubOperation === 'lockIssue'">
               <div class="space-y-2">
                 <Label>Issue Number</Label>
@@ -10231,7 +10636,7 @@ onUnmounted(() => {
               </div>
             </template>
 
-            <template v-if="selectedNode.data.githubOperation === 'listIssues' || selectedNode.data.githubOperation === 'listPullRequests' || selectedNode.data.githubOperation === 'updateIssue'">
+            <template v-if="selectedNode.data.githubOperation === 'listIssues' || selectedNode.data.githubOperation === 'getRepositoryIssues' || selectedNode.data.githubOperation === 'getUserIssues' || selectedNode.data.githubOperation === 'listPullRequests' || selectedNode.data.githubOperation === 'getRepositoryPullRequests' || selectedNode.data.githubOperation === 'updateIssue'">
               <div
                 class="grid gap-3"
                 :class="usesGitHubPerPage(selectedNode.data.githubOperation) ? 'grid-cols-2' : 'grid-cols-1'"
@@ -10258,6 +10663,119 @@ onUnmounted(() => {
                     @update:model-value="updateNodeData('githubPerPage', $event)"
                   />
                 </div>
+              </div>
+            </template>
+
+            <template v-if="selectedNode.data.githubOperation === 'listIssues' || selectedNode.data.githubOperation === 'getRepositoryIssues' || selectedNode.data.githubOperation === 'getUserIssues'">
+              <div class="grid grid-cols-2 gap-3">
+                <div
+                  v-if="selectedNode.data.githubOperation !== 'getUserIssues'"
+                  class="space-y-2"
+                >
+                  <Label>Assignee</Label>
+                  <ExpressionInput
+                    ref="githubAssigneeExpressionInputRef"
+                    :model-value="selectedNode.data.githubAssignee || ''"
+                    placeholder="octocat"
+                    single-line
+                    :nodes="workflowStore.nodes"
+                    :node-results="workflowStore.nodeResults"
+                    :edges="workflowStore.edges"
+                    :current-node-id="selectedNode.id"
+                    @update:model-value="updateNodeData('githubAssignee', $event)"
+                  />
+                </div>
+                <div
+                  v-if="selectedNode.data.githubOperation !== 'getUserIssues'"
+                  class="space-y-2"
+                >
+                  <Label>Creator</Label>
+                  <ExpressionInput
+                    ref="githubCreatorExpressionInputRef"
+                    :model-value="selectedNode.data.githubCreator || ''"
+                    placeholder="octocat"
+                    single-line
+                    :nodes="workflowStore.nodes"
+                    :node-results="workflowStore.nodeResults"
+                    :edges="workflowStore.edges"
+                    :current-node-id="selectedNode.id"
+                    @update:model-value="updateNodeData('githubCreator', $event)"
+                  />
+                </div>
+                <div class="space-y-2">
+                  <Label>Mentioned User</Label>
+                  <ExpressionInput
+                    ref="githubMentionedExpressionInputRef"
+                    :model-value="selectedNode.data.githubMentioned || ''"
+                    placeholder="octocat"
+                    single-line
+                    :nodes="workflowStore.nodes"
+                    :node-results="workflowStore.nodeResults"
+                    :edges="workflowStore.edges"
+                    :current-node-id="selectedNode.id"
+                    @update:model-value="updateNodeData('githubMentioned', $event)"
+                  />
+                </div>
+                <div class="space-y-2">
+                  <Label>Labels</Label>
+                  <ExpressionInput
+                    ref="githubLabelsFilterExpressionInputRef"
+                    :model-value="selectedNode.data.githubLabelsFilter || ''"
+                    placeholder="bug,backend"
+                    single-line
+                    :nodes="workflowStore.nodes"
+                    :node-results="workflowStore.nodeResults"
+                    :edges="workflowStore.edges"
+                    :current-node-id="selectedNode.id"
+                    @update:model-value="updateNodeData('githubLabelsFilter', $event)"
+                  />
+                </div>
+              </div>
+              <div class="space-y-2">
+                <Label>Updated Since</Label>
+                <ExpressionInput
+                  ref="githubSinceExpressionInputRef"
+                  :model-value="selectedNode.data.githubSince || ''"
+                  placeholder="2026-01-01T00:00:00Z"
+                  single-line
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  @update:model-value="updateNodeData('githubSince', $event)"
+                />
+              </div>
+            </template>
+
+            <template v-if="selectedNode.data.githubOperation === 'listIssues' || selectedNode.data.githubOperation === 'getRepositoryIssues' || selectedNode.data.githubOperation === 'getUserIssues' || selectedNode.data.githubOperation === 'listPullRequests' || selectedNode.data.githubOperation === 'getRepositoryPullRequests'">
+              <div class="grid grid-cols-2 gap-3">
+                <div class="space-y-2">
+                  <Label>Sort</Label>
+                  <Select
+                    :model-value="selectedNode.data.githubSort || ''"
+                    :options="selectedNode.data.githubOperation === 'listPullRequests' || selectedNode.data.githubOperation === 'getRepositoryPullRequests' ? githubPullRequestSortOptions : githubIssueSortOptions"
+                    @update:model-value="updateNodeData('githubSort', $event)"
+                  />
+                </div>
+                <div class="space-y-2">
+                  <Label>Direction</Label>
+                  <Select
+                    :model-value="selectedNode.data.githubDirection || ''"
+                    :options="githubDirectionOptions"
+                    @update:model-value="updateNodeData('githubDirection', $event)"
+                  />
+                </div>
+              </div>
+            </template>
+
+            <template v-if="selectedNode.data.githubOperation === 'updateIssue'">
+              <div class="space-y-2">
+                <Label>State Reason</Label>
+                <Select
+                  :model-value="selectedNode.data.githubStateReason ?? ''"
+                  :options="githubIssueStateReasonOptions"
+                  @update:model-value="updateNodeData('githubStateReason', $event)"
+                />
               </div>
             </template>
 
@@ -10360,15 +10878,9 @@ onUnmounted(() => {
             <template v-if="selectedNode.data.githubOperation === 'lockIssue'">
               <div class="space-y-2">
                 <Label>Lock Reason</Label>
-                <ExpressionInput
-                  ref="githubLockReasonExpressionInputRef"
-                  :model-value="selectedNode.data.githubLockReason || ''"
-                  placeholder="resolved"
-                  single-line
-                  :nodes="workflowStore.nodes"
-                  :node-results="workflowStore.nodeResults"
-                  :edges="workflowStore.edges"
-                  :current-node-id="selectedNode.id"
+                <Select
+                  :model-value="selectedNode.data.githubLockReason ?? ''"
+                  :options="githubLockReasonOptions"
                   @update:model-value="updateNodeData('githubLockReason', $event)"
                 />
               </div>
@@ -10417,6 +10929,90 @@ onUnmounted(() => {
                   for="github-draft-pr"
                   class="text-sm cursor-pointer select-none"
                 >Create as draft pull request</label>
+              </div>
+            </template>
+
+            <template v-if="selectedNode.data.githubOperation === 'createReview' || selectedNode.data.githubOperation === 'getReview' || selectedNode.data.githubOperation === 'listReviews' || selectedNode.data.githubOperation === 'updateReview'">
+              <div class="space-y-2">
+                <Label>Pull Request Number</Label>
+                <ExpressionInput
+                  ref="githubPullRequestNumberExpressionInputRef"
+                  :model-value="selectedNode.data.githubPullRequestNumber || ''"
+                  placeholder="123"
+                  single-line
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  @update:model-value="updateNodeData('githubPullRequestNumber', $event)"
+                />
+              </div>
+            </template>
+
+            <template v-if="selectedNode.data.githubOperation === 'getReview' || selectedNode.data.githubOperation === 'updateReview'">
+              <div class="space-y-2">
+                <Label>Review ID</Label>
+                <ExpressionInput
+                  ref="githubReviewIdExpressionInputRef"
+                  :model-value="selectedNode.data.githubReviewId || ''"
+                  placeholder="987654"
+                  single-line
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  @update:model-value="updateNodeData('githubReviewId', $event)"
+                />
+              </div>
+            </template>
+
+            <template v-if="selectedNode.data.githubOperation === 'createReview'">
+              <div class="space-y-2">
+                <Label>Review Event</Label>
+                <Select
+                  :model-value="selectedNode.data.githubReviewEvent || 'APPROVE'"
+                  :options="githubReviewEventOptions"
+                  @update:model-value="updateNodeData('githubReviewEvent', $event)"
+                />
+              </div>
+            </template>
+
+            <template v-if="selectedNode.data.githubOperation === 'createReview' || selectedNode.data.githubOperation === 'updateReview'">
+              <div class="space-y-2">
+                <Label>Review Body</Label>
+                <ExpressionInput
+                  ref="githubReviewBodyExpressionInputRef"
+                  :model-value="selectedNode.data.githubReviewBody || ''"
+                  placeholder="Looks good to me"
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  @update:model-value="updateNodeData('githubReviewBody', $event)"
+                />
+                <p
+                  v-if="selectedNode.data.githubOperation === 'createReview'"
+                  class="text-xs text-muted-foreground"
+                >
+                  Required for Comment and Request Changes events.
+                </p>
+              </div>
+            </template>
+
+            <template v-if="selectedNode.data.githubOperation === 'createReview'">
+              <div class="space-y-2">
+                <Label>Commit ID <span class="text-muted-foreground font-normal">(optional)</span></Label>
+                <ExpressionInput
+                  ref="githubCommitIdExpressionInputRef"
+                  :model-value="selectedNode.data.githubCommitId || ''"
+                  placeholder="Latest PR commit when empty"
+                  single-line
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  @update:model-value="updateNodeData('githubCommitId', $event)"
+                />
               </div>
             </template>
 
@@ -10492,7 +11088,7 @@ onUnmounted(() => {
               </div>
             </template>
 
-            <template v-if="selectedNode.data.githubOperation === 'getWorkflow' || selectedNode.data.githubOperation === 'dispatchWorkflow'">
+            <template v-if="selectedNode.data.githubOperation === 'getWorkflow' || selectedNode.data.githubOperation === 'dispatchWorkflow' || selectedNode.data.githubOperation === 'dispatchWorkflowAndWait' || selectedNode.data.githubOperation === 'enableWorkflow' || selectedNode.data.githubOperation === 'disableWorkflow' || selectedNode.data.githubOperation === 'getWorkflowUsage'">
               <div class="space-y-2">
                 <Label>Workflow ID or File Name</Label>
                 <ExpressionInput
@@ -10509,7 +11105,7 @@ onUnmounted(() => {
               </div>
             </template>
 
-            <template v-if="selectedNode.data.githubOperation === 'dispatchWorkflow'">
+            <template v-if="selectedNode.data.githubOperation === 'dispatchWorkflow' || selectedNode.data.githubOperation === 'dispatchWorkflowAndWait'">
               <div class="space-y-2">
                 <Label>Ref or Branch</Label>
                 <ExpressionInput
@@ -10537,6 +11133,30 @@ onUnmounted(() => {
                   :current-node-id="selectedNode.id"
                   @update:model-value="updateNodeData('githubWorkflowInputs', $event)"
                 />
+              </div>
+            </template>
+
+            <template v-if="selectedNode.data.githubOperation === 'dispatchWorkflowAndWait'">
+              <div class="grid grid-cols-2 gap-3">
+                <div class="space-y-2">
+                  <Label>Wait Timeout (seconds)</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    :model-value="selectedNode.data.githubWaitTimeoutSeconds || '600'"
+                    @update:model-value="updateNodeData('githubWaitTimeoutSeconds', $event)"
+                  />
+                </div>
+                <div class="space-y-2">
+                  <Label>Poll Interval (seconds)</Label>
+                  <Input
+                    type="number"
+                    min="0.1"
+                    step="0.1"
+                    :model-value="selectedNode.data.githubPollIntervalSeconds || '5'"
+                    @update:model-value="updateNodeData('githubPollIntervalSeconds', $event)"
+                  />
+                </div>
               </div>
             </template>
 
@@ -10611,9 +11231,31 @@ onUnmounted(() => {
                   <div>${{ selectedNode.data.label }}.repository - Repository payload</div>
                   <div>${{ selectedNode.data.label }}.full_name - owner/repo</div>
                 </template>
-                <template v-else-if="selectedNode.data.githubOperation === 'listOrganizationRepositories' || selectedNode.data.githubOperation === 'listUserRepositories'">
+                <template v-else-if="selectedNode.data.githubOperation === 'getRepositoryLicense'">
+                  <div>${{ selectedNode.data.label }}.license - License payload</div>
+                  <div>${{ selectedNode.data.label }}.spdx_id - SPDX identifier</div>
+                  <div>${{ selectedNode.data.label }}.content - Decoded license content</div>
+                </template>
+                <template v-else-if="selectedNode.data.githubOperation === 'getRepositoryProfile'">
+                  <div>${{ selectedNode.data.label }}.profile - Community profile payload</div>
+                  <div>${{ selectedNode.data.label }}.health_percentage - Health score</div>
+                </template>
+                <template v-else-if="selectedNode.data.githubOperation === 'listPopularPaths'">
+                  <div>${{ selectedNode.data.label }}.paths - Popular path array</div>
+                  <div>${{ selectedNode.data.label }}.count - Number of paths</div>
+                </template>
+                <template v-else-if="selectedNode.data.githubOperation === 'listReferrers'">
+                  <div>${{ selectedNode.data.label }}.referrers - Referrer array</div>
+                  <div>${{ selectedNode.data.label }}.count - Number of referrers</div>
+                </template>
+                <template v-else-if="selectedNode.data.githubOperation === 'listOrganizationRepositories' || selectedNode.data.githubOperation === 'listUserRepositories' || selectedNode.data.githubOperation === 'getUserRepositories'">
                   <div>${{ selectedNode.data.label }}.repositories - Repository array</div>
                   <div>${{ selectedNode.data.label }}.count - Number of repositories</div>
+                </template>
+                <template v-else-if="selectedNode.data.githubOperation === 'inviteUser'">
+                  <div>${{ selectedNode.data.label }}.invitation - Invitation payload</div>
+                  <div>${{ selectedNode.data.label }}.id - Invitation ID</div>
+                  <div>${{ selectedNode.data.label }}.email - Invited email</div>
                 </template>
                 <template v-else-if="selectedNode.data.githubOperation === 'getIssue' || selectedNode.data.githubOperation === 'createIssue' || selectedNode.data.githubOperation === 'updateIssue'">
                   <div>${{ selectedNode.data.label }}.issue - Issue payload</div>
@@ -10630,11 +11272,11 @@ onUnmounted(() => {
                   <div>${{ selectedNode.data.label }}.issue_number - Locked issue number</div>
                   <div>${{ selectedNode.data.label }}.lock_reason - Lock reason if provided</div>
                 </template>
-                <template v-else-if="selectedNode.data.githubOperation === 'listIssues'">
+                <template v-else-if="selectedNode.data.githubOperation === 'listIssues' || selectedNode.data.githubOperation === 'getRepositoryIssues' || selectedNode.data.githubOperation === 'getUserIssues'">
                   <div>${{ selectedNode.data.label }}.issues - Issue array</div>
                   <div>${{ selectedNode.data.label }}.count - Number of issues</div>
                 </template>
-                <template v-else-if="selectedNode.data.githubOperation === 'listPullRequests'">
+                <template v-else-if="selectedNode.data.githubOperation === 'listPullRequests' || selectedNode.data.githubOperation === 'getRepositoryPullRequests'">
                   <div>${{ selectedNode.data.label }}.pull_requests - PR array</div>
                   <div>${{ selectedNode.data.label }}.count - Number of pull requests</div>
                 </template>
@@ -10642,6 +11284,16 @@ onUnmounted(() => {
                   <div>${{ selectedNode.data.label }}.pull_request - PR payload</div>
                   <div>${{ selectedNode.data.label }}.number - Pull request number</div>
                   <div>${{ selectedNode.data.label }}.url - Pull request URL</div>
+                </template>
+                <template v-else-if="selectedNode.data.githubOperation === 'getReview' || selectedNode.data.githubOperation === 'createReview' || selectedNode.data.githubOperation === 'updateReview'">
+                  <div>${{ selectedNode.data.label }}.review - Review payload</div>
+                  <div>${{ selectedNode.data.label }}.id - Review ID</div>
+                  <div>${{ selectedNode.data.label }}.state - Review state</div>
+                  <div>${{ selectedNode.data.label }}.url - Review URL</div>
+                </template>
+                <template v-else-if="selectedNode.data.githubOperation === 'listReviews'">
+                  <div>${{ selectedNode.data.label }}.reviews - Review array</div>
+                  <div>${{ selectedNode.data.label }}.count - Number of reviews</div>
                 </template>
                 <template v-else-if="selectedNode.data.githubOperation === 'listReleases'">
                   <div>${{ selectedNode.data.label }}.releases - Release array</div>
@@ -10666,11 +11318,29 @@ onUnmounted(() => {
                   <div>${{ selectedNode.data.label }}.id - Workflow ID</div>
                   <div>${{ selectedNode.data.label }}.path - Workflow file path</div>
                 </template>
+                <template v-else-if="selectedNode.data.githubOperation === 'enableWorkflow'">
+                  <div>${{ selectedNode.data.label }}.enabled - Boolean</div>
+                  <div>${{ selectedNode.data.label }}.workflow_id - Workflow target</div>
+                </template>
+                <template v-else-if="selectedNode.data.githubOperation === 'disableWorkflow'">
+                  <div>${{ selectedNode.data.label }}.disabled - Boolean</div>
+                  <div>${{ selectedNode.data.label }}.workflow_id - Workflow target</div>
+                </template>
+                <template v-else-if="selectedNode.data.githubOperation === 'getWorkflowUsage'">
+                  <div>${{ selectedNode.data.label }}.usage - Workflow usage payload</div>
+                  <div>${{ selectedNode.data.label }}.billable - Usage by runner OS</div>
+                </template>
                 <template v-else-if="selectedNode.data.githubOperation === 'dispatchWorkflow'">
                   <div>${{ selectedNode.data.label }}.dispatched - Boolean</div>
                   <div>${{ selectedNode.data.label }}.workflow_id - Workflow target</div>
                   <div>${{ selectedNode.data.label }}.ref - Workflow ref</div>
                   <div>${{ selectedNode.data.label }}.inputs - Dispatch inputs object</div>
+                  <div>${{ selectedNode.data.label }}.workflow_run_id - Run ID when returned</div>
+                </template>
+                <template v-else-if="selectedNode.data.githubOperation === 'dispatchWorkflowAndWait'">
+                  <div>${{ selectedNode.data.label }}.completed - Boolean</div>
+                  <div>${{ selectedNode.data.label }}.workflow_run - Completed run payload</div>
+                  <div>${{ selectedNode.data.label }}.conclusion - Run conclusion</div>
                 </template>
                 <template v-else-if="selectedNode.data.githubOperation === 'listFiles'">
                   <div>${{ selectedNode.data.label }}.path - Directory path</div>
@@ -11213,6 +11883,456 @@ onUnmounted(() => {
                 <template v-else>
                   <div>Select an operation to see output fields</div>
                 </template>
+              </div>
+            </div>
+          </template>
+
+          <template v-if="selectedNode.type === 'supabase'">
+            <div class="space-y-2">
+              <Label>Supabase Credential</Label>
+              <Select
+                :model-value="selectedNode.data.credentialId || ''"
+                :options="supabaseCredentialOptions"
+                :disabled="!isWorkflowOwner"
+                @update:model-value="updateNodeData('credentialId', $event)"
+              />
+              <div v-if="!selectedNode.data.credentialId">
+                <p class="text-xs text-amber-500 flex items-center gap-1">
+                  <AlertTriangle class="h-3 w-3" />
+                  Credential is required.
+                </p>
+                <p class="text-xs text-muted-foreground mt-1">
+                  <a
+                    href="/?tab=credentials"
+                    class="text-primary hover:underline"
+                    @click.prevent="$router.push('/?tab=credentials')"
+                  >Add credentials</a> in Dashboard
+                </p>
+              </div>
+            </div>
+
+            <div class="space-y-2">
+              <Label>Operation</Label>
+              <Select
+                :model-value="selectedNode.data.supabaseOperation || ''"
+                :options="supabaseOperationOptions"
+                @update:model-value="updateNodeData('supabaseOperation', $event)"
+              />
+            </div>
+
+            <div class="space-y-2">
+              <Label>Schema</Label>
+              <ExpressionInput
+                ref="supabaseSchemaExpressionInputRef"
+                :model-value="selectedNode.data.supabaseSchema ?? 'public'"
+                placeholder="public"
+                single-line
+                :nodes="workflowStore.nodes"
+                :node-results="workflowStore.nodeResults"
+                :edges="workflowStore.edges"
+                :current-node-id="selectedNode.id"
+                :navigation-enabled="supabaseExpressionFieldCount > 1"
+                :navigation-index="0"
+                :navigation-total="supabaseExpressionFieldCount"
+                :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                dialog-key-label="Schema"
+                @update:model-value="updateNodeData('supabaseSchema', $event)"
+                @navigate="handleSupabaseExpressionFieldNavigate"
+                @register-field-index="onSupabaseRegisterExpressionFieldIndex"
+              />
+            </div>
+
+            <div class="space-y-2">
+              <Label>Table</Label>
+              <ExpressionInput
+                ref="supabaseTableExpressionInputRef"
+                :model-value="selectedNode.data.supabaseTable || ''"
+                placeholder="users"
+                single-line
+                :nodes="workflowStore.nodes"
+                :node-results="workflowStore.nodeResults"
+                :edges="workflowStore.edges"
+                :current-node-id="selectedNode.id"
+                :navigation-enabled="supabaseExpressionFieldCount > 1"
+                :navigation-index="1"
+                :navigation-total="supabaseExpressionFieldCount"
+                :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                dialog-key-label="Table"
+                @update:model-value="updateNodeData('supabaseTable', $event)"
+                @navigate="handleSupabaseExpressionFieldNavigate"
+                @register-field-index="onSupabaseRegisterExpressionFieldIndex"
+              />
+              <div class="flex items-center gap-2">
+                <Select
+                  :model-value="String(selectedNode.data.supabaseTable || '')"
+                  :options="supabaseDiscoveredTableOptions"
+                  placeholder="Discovered tables..."
+                  :disabled="loadingSupabaseTables || supabaseDiscoveredTableOptions.length === 0"
+                  @update:model-value="updateNodeData('supabaseTable', $event || '')"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  class="shrink-0"
+                  :loading="loadingSupabaseTables"
+                  :disabled="!selectedNode.data.credentialId"
+                  @click="loadSupabaseTablesForSelectedNode"
+                >
+                  Refresh
+                </Button>
+              </div>
+            </div>
+
+            <template v-if="selectedNode.data.supabaseOperation === 'select'">
+              <div class="space-y-2">
+                <Label>Select Columns</Label>
+                <ExpressionInput
+                  ref="supabaseSelectColumnsExpressionInputRef"
+                  :model-value="selectedNode.data.supabaseSelectColumns || '*'"
+                  placeholder="id,name,email"
+                  single-line
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  :navigation-enabled="supabaseExpressionFieldCount > 1"
+                  :navigation-index="2"
+                  :navigation-total="supabaseExpressionFieldCount"
+                  :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                  dialog-key-label="Select Columns"
+                  @update:model-value="updateNodeData('supabaseSelectColumns', $event)"
+                  @navigate="handleSupabaseExpressionFieldNavigate"
+                  @register-field-index="onSupabaseRegisterExpressionFieldIndex"
+                />
+                <div class="flex items-center justify-between gap-2">
+                  <p class="text-xs text-muted-foreground">
+                    Discover columns from the selected table, then click to add or remove them.
+                  </p>
+                  <div class="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      class="shrink-0"
+                      :loading="loadingSupabaseColumns"
+                      :disabled="!selectedNode.data.credentialId || !selectedNode.data.supabaseTable"
+                      @click="loadSupabaseColumnsForSelectedNode"
+                    >
+                      Refresh
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      class="shrink-0"
+                      :disabled="supabaseDiscoveredColumns.length === 0"
+                      @click="useAllDiscoveredSupabaseColumns"
+                    >
+                      Use all
+                    </Button>
+                  </div>
+                </div>
+                <div
+                  v-if="supabaseDiscoveredColumns.length > 0"
+                  class="flex flex-wrap gap-2"
+                >
+                  <button
+                    v-for="columnName in supabaseDiscoveredColumns"
+                    :key="columnName"
+                    type="button"
+                    :class="[
+                      'rounded-full border px-2 py-1 text-xs transition-colors',
+                      parseSupabaseSelectedColumns(String(selectedNode.data.supabaseSelectColumns || '*')).includes(columnName)
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-border text-muted-foreground hover:text-foreground hover:border-border/80'
+                    ]"
+                    @click="toggleSupabaseSelectedColumn(columnName)"
+                  >
+                    {{ columnName }}
+                  </button>
+                </div>
+              </div>
+
+              <div class="space-y-2">
+                <Label>Filter (JSON object)</Label>
+                <ExpressionInput
+                  ref="supabaseFilterExpressionInputRef"
+                  :model-value="selectedNode.data.supabaseFilter || '{}'"
+                  placeholder="{&quot;status&quot;:&quot;active&quot;}"
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  :navigation-enabled="supabaseExpressionFieldCount > 1"
+                  :navigation-index="3"
+                  :navigation-total="supabaseExpressionFieldCount"
+                  :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                  dialog-key-label="Filter"
+                  @update:model-value="updateNodeData('supabaseFilter', $event)"
+                  @navigate="handleSupabaseExpressionFieldNavigate"
+                  @register-field-index="onSupabaseRegisterExpressionFieldIndex"
+                />
+              </div>
+
+              <div class="space-y-2">
+                <Label>Limit <span class="text-muted-foreground font-normal">(0 = unlimited)</span></Label>
+                <input
+                  type="number"
+                  min="0"
+                  :value="selectedNode.data.supabaseLimit ?? '100'"
+                  placeholder="100"
+                  class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  @input="updateNodeData('supabaseLimit', String(($event.target as HTMLInputElement).value))"
+                >
+              </div>
+
+              <div class="space-y-2">
+                <Label>Order By</Label>
+                <ExpressionInput
+                  ref="supabaseOrderByExpressionInputRef"
+                  :model-value="selectedNode.data.supabaseOrderBy || ''"
+                  placeholder="created_at"
+                  single-line
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  :navigation-enabled="supabaseExpressionFieldCount > 1"
+                  :navigation-index="4"
+                  :navigation-total="supabaseExpressionFieldCount"
+                  :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                  dialog-key-label="Order By"
+                  @update:model-value="updateNodeData('supabaseOrderBy', $event)"
+                  @navigate="handleSupabaseExpressionFieldNavigate"
+                  @register-field-index="onSupabaseRegisterExpressionFieldIndex"
+                />
+                <label class="flex items-center gap-2 text-sm text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    class="rounded border-input"
+                    :checked="selectedNode.data.supabaseAscending !== false"
+                    @change="updateNodeData('supabaseAscending', ($event.target as HTMLInputElement).checked)"
+                  >
+                  Ascending sort
+                </label>
+              </div>
+            </template>
+
+            <template v-else-if="selectedNode.data.supabaseOperation === 'insert' || selectedNode.data.supabaseOperation === 'upsert'">
+              <div class="flex items-center gap-2 rounded-md border border-input p-1">
+                <button
+                  :class="[
+                    'flex-1 rounded text-xs py-1 transition-colors',
+                    (selectedNode.data.supabaseRowsInputMode || 'raw') === 'raw'
+                      ? 'bg-primary text-primary-foreground font-medium'
+                      : 'text-muted-foreground hover:text-foreground'
+                  ]"
+                  @click="updateNodeData('supabaseRowsInputMode', 'raw')"
+                >
+                  JSON array
+                </button>
+                <button
+                  :class="[
+                    'flex-1 rounded text-xs py-1 transition-colors',
+                    selectedNode.data.supabaseRowsInputMode === 'auto'
+                      ? 'bg-primary text-primary-foreground font-medium'
+                      : 'text-muted-foreground hover:text-foreground'
+                  ]"
+                  @click="updateNodeData('supabaseRowsInputMode', 'auto')"
+                >
+                  Auto-map input
+                </button>
+              </div>
+
+              <div class="space-y-2">
+                <template v-if="(selectedNode.data.supabaseRowsInputMode || 'raw') === 'raw'">
+                  <Label>Rows (JSON array)</Label>
+                  <ExpressionInput
+                    ref="supabaseRowsExpressionInputRef"
+                    :model-value="selectedNode.data.supabaseRows || '[]'"
+                    placeholder="[{&quot;name&quot;:&quot;$input.name&quot;}]"
+                    :nodes="workflowStore.nodes"
+                    :node-results="workflowStore.nodeResults"
+                    :edges="workflowStore.edges"
+                    :current-node-id="selectedNode.id"
+                    :navigation-enabled="supabaseExpressionFieldCount > 1"
+                    :navigation-index="2"
+                    :navigation-total="supabaseExpressionFieldCount"
+                    :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                    dialog-key-label="Rows"
+                    @update:model-value="updateNodeData('supabaseRows', $event)"
+                    @navigate="handleSupabaseExpressionFieldNavigate"
+                    @register-field-index="onSupabaseRegisterExpressionFieldIndex"
+                  />
+                </template>
+                <template v-else>
+                  <Label>Auto-map rows</Label>
+                  <p class="text-xs text-muted-foreground">
+                    Uses the single upstream input automatically. Objects become one row; arrays
+                    of objects or upstream <code class="font-mono">rows</code> arrays become many rows.
+                  </p>
+                  <div class="space-y-2">
+                    <Label class="text-xs text-muted-foreground">Ignore fields</Label>
+                    <Input
+                      :model-value="String(selectedNode.data.supabaseIgnoredInputFields || '')"
+                      placeholder="id, created_at"
+                      @input="updateNodeData('supabaseIgnoredInputFields', String(($event.target as HTMLInputElement).value))"
+                    />
+                  </div>
+                </template>
+              </div>
+
+              <div
+                v-if="selectedNode.data.supabaseOperation === 'upsert'"
+                class="space-y-2"
+              >
+                <Label>On Conflict</Label>
+                <ExpressionInput
+                  ref="supabaseOnConflictExpressionInputRef"
+                  :model-value="selectedNode.data.supabaseOnConflict || ''"
+                  placeholder="id or tenant_id,email"
+                  single-line
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  :navigation-enabled="supabaseExpressionFieldCount > 1"
+                  :navigation-index="(selectedNode.data.supabaseRowsInputMode || 'raw') === 'raw' ? 3 : 2"
+                  :navigation-total="supabaseExpressionFieldCount"
+                  :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                  dialog-key-label="On Conflict"
+                  @update:model-value="updateNodeData('supabaseOnConflict', $event)"
+                  @navigate="handleSupabaseExpressionFieldNavigate"
+                  @register-field-index="onSupabaseRegisterExpressionFieldIndex"
+                />
+                <p class="text-xs text-muted-foreground">
+                  Optional comma-separated conflict target columns passed to PostgREST
+                  `on_conflict`.
+                </p>
+              </div>
+            </template>
+
+            <template v-else-if="selectedNode.data.supabaseOperation === 'update'">
+              <div class="flex items-center gap-2 rounded-md border border-input p-1">
+                <button
+                  :class="[
+                    'flex-1 rounded text-xs py-1 transition-colors',
+                    (selectedNode.data.supabaseDataInputMode || 'raw') === 'raw'
+                      ? 'bg-primary text-primary-foreground font-medium'
+                      : 'text-muted-foreground hover:text-foreground'
+                  ]"
+                  @click="updateNodeData('supabaseDataInputMode', 'raw')"
+                >
+                  JSON object
+                </button>
+                <button
+                  :class="[
+                    'flex-1 rounded text-xs py-1 transition-colors',
+                    selectedNode.data.supabaseDataInputMode === 'auto'
+                      ? 'bg-primary text-primary-foreground font-medium'
+                      : 'text-muted-foreground hover:text-foreground'
+                  ]"
+                  @click="updateNodeData('supabaseDataInputMode', 'auto')"
+                >
+                  Auto-map input
+                </button>
+              </div>
+
+              <div class="space-y-2">
+                <template v-if="(selectedNode.data.supabaseDataInputMode || 'raw') === 'raw'">
+                  <Label>Data (JSON object)</Label>
+                  <ExpressionInput
+                    ref="supabaseDataExpressionInputRef"
+                    :model-value="selectedNode.data.supabaseData || '{}'"
+                    placeholder="{&quot;status&quot;:&quot;processed&quot;}"
+                    :nodes="workflowStore.nodes"
+                    :node-results="workflowStore.nodeResults"
+                    :edges="workflowStore.edges"
+                    :current-node-id="selectedNode.id"
+                    :navigation-enabled="supabaseExpressionFieldCount > 1"
+                    :navigation-index="2"
+                    :navigation-total="supabaseExpressionFieldCount"
+                    :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                    dialog-key-label="Data"
+                    @update:model-value="updateNodeData('supabaseData', $event)"
+                    @navigate="handleSupabaseExpressionFieldNavigate"
+                    @register-field-index="onSupabaseRegisterExpressionFieldIndex"
+                  />
+                </template>
+                <template v-else>
+                  <Label>Auto-map update data</Label>
+                  <p class="text-xs text-muted-foreground">
+                    Uses the single upstream object as the update payload. Ignore any fields you
+                    do not want to write.
+                  </p>
+                  <div class="space-y-2">
+                    <Label class="text-xs text-muted-foreground">Ignore fields</Label>
+                    <Input
+                      :model-value="String(selectedNode.data.supabaseIgnoredInputFields || '')"
+                      placeholder="id, created_at"
+                      @input="updateNodeData('supabaseIgnoredInputFields', String(($event.target as HTMLInputElement).value))"
+                    />
+                  </div>
+                </template>
+              </div>
+
+              <div class="space-y-2">
+                <Label>Filter (JSON object)</Label>
+                <ExpressionInput
+                  ref="supabaseFilterExpressionInputRef"
+                  :model-value="selectedNode.data.supabaseFilter || '{}'"
+                  placeholder="{&quot;id&quot;:123}"
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  :navigation-enabled="supabaseExpressionFieldCount > 1"
+                  :navigation-index="(selectedNode.data.supabaseDataInputMode || 'raw') === 'raw' ? 3 : 2"
+                  :navigation-total="supabaseExpressionFieldCount"
+                  :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                  dialog-key-label="Filter"
+                  @update:model-value="updateNodeData('supabaseFilter', $event)"
+                  @navigate="handleSupabaseExpressionFieldNavigate"
+                  @register-field-index="onSupabaseRegisterExpressionFieldIndex"
+                />
+                <p class="text-xs text-muted-foreground">
+                  Supports exact matches plus operator objects like
+                  <code class="font-mono">{&quot;created_at&quot;:{&quot;gte&quot;:&quot;2026-01-01&quot;}}</code>
+                  and logical groups like
+                  <code class="font-mono">{&quot;or&quot;:[{&quot;status&quot;:&quot;active&quot;},{&quot;score&quot;:{&quot;gte&quot;:10}}]}</code>.
+                </p>
+              </div>
+            </template>
+
+            <template v-else-if="selectedNode.data.supabaseOperation === 'delete'">
+              <div class="space-y-2">
+                <Label>Filter (JSON object)</Label>
+                <ExpressionInput
+                  ref="supabaseFilterExpressionInputRef"
+                  :model-value="selectedNode.data.supabaseFilter || '{}'"
+                  placeholder="{&quot;id&quot;:123}"
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  :navigation-enabled="supabaseExpressionFieldCount > 1"
+                  :navigation-index="2"
+                  :navigation-total="supabaseExpressionFieldCount"
+                  :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                  dialog-key-label="Filter"
+                  @update:model-value="updateNodeData('supabaseFilter', $event)"
+                  @navigate="handleSupabaseExpressionFieldNavigate"
+                  @register-field-index="onSupabaseRegisterExpressionFieldIndex"
+                />
+              </div>
+            </template>
+
+            <div class="rounded-md bg-muted/40 border p-3 space-y-1">
+              <p class="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Output
+              </p>
+              <div class="text-xs font-mono space-y-0.5">
+                <div>${{ selectedNode.data.label }}.rows - Returned row objects</div>
+                <div>${{ selectedNode.data.label }}.count - Number of affected rows</div>
+                <div>${{ selectedNode.data.label }}.success - Boolean success flag</div>
               </div>
             </div>
           </template>
@@ -14466,6 +15586,20 @@ onUnmounted(() => {
     :model="selectedNode?.data?.model || ''"
     @save="handleSkillBuilderSave"
     @update:open="skillBuilderOpen = $event"
+  />
+
+  <SkillHistoryDialog
+    :open="skillHistoryOpen"
+    :workflow-id="workflowStore.currentWorkflow?.id ?? ''"
+    :agent-node-id="selectedNode?.id ?? ''"
+    :skill="skillHistoryTarget?.skill ?? null"
+    :skill-index="skillHistoryTarget?.skillIndex ?? -1"
+    :ai-edit-disabled="!selectedNode?.data?.credentialId || !selectedNode?.data?.model"
+    @edit-snapshot="handleSkillHistoryEdit"
+    @revert-snapshot="handleSkillHistoryRevert"
+    @fine-tune="handleSkillHistoryFineTune"
+    @expand-skill="handleSkillHistoryExpandSkill"
+    @update:open="skillHistoryOpen = $event"
   />
 </template>
 
