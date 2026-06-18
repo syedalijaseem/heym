@@ -3243,6 +3243,14 @@ Text checklist (three items, one checked — put markdown in `text` so dashboard
 {"type": "chartOutput", "data": {"label": "todoList", "chartType": "text", "text": "- [x] Option 1\\n- [ ] Option 2\\n- [ ] Option 3", "title": "Tasks"}}
 ```
 
+**Numbered text lists (including descending):** prefix each line with the explicit number to
+display (e.g. `9. Title\\n8. Title\\n7. Title`). Do NOT rely on markdown auto-numbering alone —
+HTML ordered lists only increment from the first number (9, 8, 7 would render as 9, 10, 11).
+For dynamic descending lists, loop over items and build each line with
+`$loopLabel.total - $loopLabel.index` (0-based index) plus the title/link, accumulate with a
+variable `.add()`, then `join("\\n")` upstream and set `valueField` on chartOutput. Example line:
+`$processVideos.total - $processVideos.index + ". [" + $processVideos.item.title + "](url)"`
+
 ## Expression Syntax
 
 Expressions use `$nodeName` to reference node outputs by their label.

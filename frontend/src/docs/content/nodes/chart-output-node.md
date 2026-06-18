@@ -62,7 +62,46 @@ Use GitHub-flavored markdown task list syntax in the static `text` field:
 
 On the [Dashboard](../tabs/dashboard-tab.md), checkboxes render as clickable controls (dark and light mode friendly). Toggling a checkbox updates the widget workflow's `text` field and persists across refreshes.
 
+**Inline editing:** double-click a task item's label to edit it in place. Press Enter or click away to save; press Escape to cancel. Clear the label completely to remove that item from the list.
+
+**Links in task items:** when a label contains a markdown link (`[title](url)`), clicking the link opens the URL without toggling the checkbox. Click elsewhere on the row to toggle.
+
 **Static text only:** interactivity requires GFM task list syntax (`- [ ]` / `- [x]`). Plain dynamic status messages without task items stay read-only. When markdown comes from `valueField`, the first toggle copies it into the static `text` field so changes persist.
+
+### Numbered lists
+
+Text widgets render markdown with **explicit line numbers preserved**. Prefix each line with the number you want shown (e.g. `9.`, `8.`, `7.`). Heym does not renumber lines for you.
+
+**Why explicit numbers?** Standard markdown ordered lists (`1.`, `2.`, `3.`) become HTML `<ol>` lists, which only count **up** from the first number. A list written as `9.` / `8.` / `7.` would display as `9`, `10`, `11` in a normal markdown renderer. Prefixing each line with the intended number avoids that.
+
+**Descending lists (e.g. newest first):** build the markdown in a workflow loop and compute the display number per item:
+
+```
+${loop.total - loop.index}. [${item.title}](https://example.com/watch?v=${item.id})
+```
+
+Typical pattern:
+
+1. Fetch or build an array of items (e.g. HTTP → `body.videos`).
+2. [Loop](./loop-node.md) over the array; inside the body, use a [Variable](./variable-node.md) with `.add()` to append one numbered line per iteration.
+3. After the loop's **done** branch, [Set](./set-node.md) `join("\n")` on the accumulated array (or equivalent) into a single markdown string.
+4. Point **Chart Output** `valueField` at that string (or set static `text`).
+
+Example line expression inside the loop (label `processVideos`, items with `title` and `id`):
+
+```
+$processVideos.total - $processVideos.index + ". [" + $processVideos.item.title + "](https://www.youtube.com/watch?v=" + $processVideos.item.id + ")"
+```
+
+Resulting markdown:
+
+```markdown
+9. [Latest video](https://www.youtube.com/watch?v=abc)
+8. [Previous video](https://www.youtube.com/watch?v=def)
+1. [Oldest video](https://www.youtube.com/watch?v=xyz)
+```
+
+For a simple ascending list starting at 1, either prefix each line (`1.`, `2.`, `3.`) or use a loop with `$loop.index + 1`. Use [bullet lists](#interactive-task-lists) (`- item`) when you do not need numbers.
 
 ## How data is resolved
 
@@ -208,13 +247,15 @@ When generating a widget with **AI**, prompts like these map cleanly to each typ
 
 - **Bar** — "Show monthly revenue for the last 6 months as a vertical bar chart with example data."
 - **Line** — "Plot daily active users over the last 14 days as a line chart."
+- **Area** — "Show memory and CPU usage over the last 24 hours as an area chart with two series. Use example data."
 - **Pie** — "Break down execution status (success, error, cancelled) as a pie chart."
+- **Table** — "Show the top 10 workflows by execution count as a scrollable table with name and runs columns. Use example data."
+- **Numeric** — "Show today's total workflow executions as a single KPI with unit 'runs'. Use example data."
 - **Gauge** — "Show current CPU usage as a gauge from 0 to 100 percent."
 - **Scatter** — "Plot request latency versus payload size as a scatter chart with example data."
 - **Proportion** — "Show my most used languages as a proportion bar: Kotlin 49.64%, JavaScript 23.73%, TypeScript 11.64%, Java 8.92%, Python 6.06%. Use example data."
-- **Area** — "Show memory and CPU usage over the last 24 hours as an area chart with two series. Use example data."
 - **Bar gauge** — "Show free disk space per volume (sda1 to sda7) as a bar gauge in GB. Use example data."
-- **Text** — "Add a text widget with a markdown checklist: one checked item and two unchecked options."
+- **Text** — "Add a text widget with a markdown checklist (one checked item, two unchecked), or list the 5 newest tutorial videos in descending order (5. down to 1.) with YouTube links — prefix each line with an explicit number (`5. Title`, `4. Title`, …)."
 
 ## Related
 

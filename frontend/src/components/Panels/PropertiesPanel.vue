@@ -98,6 +98,7 @@ import ExpressionInput from "@/components/ui/ExpressionInput.vue";
 import Input from "@/components/ui/Input.vue";
 import Label from "@/components/ui/Label.vue";
 import Select from "@/components/ui/Select.vue";
+import RunInputField from "@/components/Panels/RunInputField.vue";
 import Textarea from "@/components/ui/Textarea.vue";
 import JsonTree from "@/components/ui/JsonTree.vue";
 import GoogleSheetsValuesInputPanel from "@/components/ui/GoogleSheetsValuesInputPanel.vue";
@@ -115,6 +116,7 @@ import { configApi, credentialsApi, dataTablesApi, filesApi, gristApi, mcpApi, w
 import type { MCPFetchToolItem } from "@/services/api";
 import { onDismissOverlays } from "@/composables/useOverlayBackHandler";
 import { useToast } from "@/composables/useToast";
+import { useRunPanelFileDrag } from "@/composables/useRunPanelFileDrag";
 import type { DataTableListItem } from "@/types/dataTable";
 import type { GeneratedFile } from "@/types/file";
 import { useAuthStore } from "@/stores/auth";
@@ -1447,6 +1449,21 @@ const selectedNodeTypeLabel = computed((): string => {
 });
 
 const isExecuting = computed(() => workflowStore.isExecuting);
+const {
+  isActive: isRunPanelFileDragActive,
+  reset: resetRunPanelFileDrag,
+  onDragEnter: onRunPanelFileDragEnter,
+  onDragLeave: onRunPanelFileDragLeave,
+  onDragOver: onRunPanelFileDragOver,
+  onDrop: onRunPanelFileDrop,
+} = useRunPanelFileDrag(
+  computed(
+    () =>
+      isExecuting.value
+      || isGenericWebhookBodyMode.value
+      || allInputFields.value.length === 0,
+  ),
+);
 const { isRunbookPlaying } = useRunbookPlayer();
 const hasNodes = computed(() => workflowStore.nodes.length > 0);
 
@@ -15246,6 +15263,10 @@ onUnmounted(() => {
     <div
       v-if="activeTab === 'config'"
       class="flex-1 flex flex-col overflow-hidden overflow-x-hidden min-h-0"
+      @dragenter="onRunPanelFileDragEnter"
+      @dragleave="onRunPanelFileDragLeave"
+      @dragover="onRunPanelFileDragOver"
+      @drop="onRunPanelFileDrop"
     >
       <div class="flex-1 flex flex-col overflow-hidden min-h-0">
         <div
@@ -15294,13 +15315,14 @@ onUnmounted(() => {
               class="space-y-2 min-w-0"
             >
               <Label class="truncate">{{ field.key }}</Label>
-              <Textarea
+              <RunInputField
+                :field-key="field.key"
                 :model-value="runInputValues[field.key] ?? ''"
                 :placeholder="field.defaultValue || `Enter ${field.key}...`"
-                :rows="3"
                 :disabled="isExecuting"
-                class="min-w-0 w-full"
+                :panel-file-drag-active="isRunPanelFileDragActive"
                 @update:model-value="updateInputValue(field.key, $event)"
+                @file-dropped="resetRunPanelFileDrag"
               />
             </div>
           </template>

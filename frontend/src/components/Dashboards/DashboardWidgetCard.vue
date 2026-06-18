@@ -6,7 +6,7 @@ import { ExternalLink, Loader2, MoreVertical, Pencil, RefreshCw, Settings, Spark
 
 import type { ChartPayload, DashboardWidget } from "@/types/dashboard";
 import ChartRenderer from "@/components/Dashboards/ChartRenderer.vue";
-import { toggleTaskItemLocal } from "@/lib/markdownTaskList";
+import { toggleTaskItemLocal, updateOrRemoveTaskItemLocal } from "@/lib/markdownTaskList";
 import { dashboardApi } from "@/services/api";
 
 const props = defineProps<{
@@ -142,6 +142,33 @@ async function onMarkdownTaskToggle(lineIndex: number): Promise<void> {
   } catch (e) {
     payload.value = previousPayload;
     error.value = e instanceof Error ? e.message : "Failed to update checkbox";
+  } finally {
+    markdownTaskSaving.value = false;
+  }
+}
+
+async function onMarkdownTaskUpdate(update: { lineIndex: number; text: string }): Promise<void> {
+  if (!payload.value || payload.value.type !== "text" || !payload.value.text_interactive) {
+    return;
+  }
+  const previousPayload = payload.value;
+  const previousText = previousPayload.text ?? "";
+  markdownTaskSaving.value = true;
+  try {
+    payload.value = {
+      ...previousPayload,
+      text: updateOrRemoveTaskItemLocal(previousText, update.lineIndex, update.text),
+    };
+    const response = await dashboardApi.updateMarkdownTask(
+      props.widget.id,
+      update.lineIndex,
+      update.text,
+    );
+    payload.value = response.payload;
+    error.value = response.error ?? null;
+  } catch (e) {
+    payload.value = previousPayload;
+    error.value = e instanceof Error ? e.message : "Failed to update checkbox item";
   } finally {
     markdownTaskSaving.value = false;
   }
@@ -287,6 +314,7 @@ onBeforeUnmount(() => {
         :payload="payload"
         :markdown-task-saving="markdownTaskSaving"
         @markdown-task-toggle="onMarkdownTaskToggle"
+        @markdown-task-update="onMarkdownTaskUpdate"
       />
     </div>
   </div>

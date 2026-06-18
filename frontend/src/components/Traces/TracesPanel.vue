@@ -26,6 +26,22 @@ interface SelectOption {
   label: string;
 }
 
+const TRACE_SOURCE_LABELS: Record<string, string> = {
+  workflow: "Workflow LLM",
+  assistant: "AI Assistant",
+  dashboard_chat: "Dashboard Chat / Docs",
+  skill_builder: "Skill Builder",
+  evals: "Evals",
+  data_table_ai: "DataTable Create / Fine-tune",
+  dashboard_widget_ai: "Widget Create / Fine-tune",
+  expression_builder: "Build with AI",
+  mcp: "MCP",
+};
+
+function formatTraceSourceLabel(source: string): string {
+  return TRACE_SOURCE_LABELS[source] ?? source;
+}
+
 const traces = ref<LLMTraceListItem[]>([]);
 const total = ref(0);
 const limit = ref(25);
@@ -282,11 +298,14 @@ function goToWorkflow(): void {
 
 const sourceOptions = computed<SelectOption[]>(() => [
   { value: "all", label: "All Sources" },
-  { value: "workflow", label: "Workflow LLM" },
-  { value: "assistant", label: "AI Assistant" },
-  { value: "dashboard_chat", label: "Dashboard Chat / Docs" },
-  { value: "skill_builder", label: "Skill Builder" },
-  { value: "evals", label: "Evals" },
+  { value: "workflow", label: TRACE_SOURCE_LABELS.workflow },
+  { value: "assistant", label: TRACE_SOURCE_LABELS.assistant },
+  { value: "expression_builder", label: TRACE_SOURCE_LABELS.expression_builder },
+  { value: "dashboard_chat", label: TRACE_SOURCE_LABELS.dashboard_chat },
+  { value: "skill_builder", label: TRACE_SOURCE_LABELS.skill_builder },
+  { value: "data_table_ai", label: TRACE_SOURCE_LABELS.data_table_ai },
+  { value: "dashboard_widget_ai", label: TRACE_SOURCE_LABELS.dashboard_widget_ai },
+  { value: "evals", label: TRACE_SOURCE_LABELS.evals },
 ]);
 
 const credentialOptions = computed<SelectOption[]>(() => {
@@ -769,7 +788,7 @@ onMounted(async () => {
                 <span>{{ formatDate(trace.created_at) }}</span>
               </div>
               <span class="text-xs uppercase tracking-wide text-muted-foreground">
-                {{ trace.source }}
+                {{ formatTraceSourceLabel(trace.source) }}
               </span>
               <span
                 v-if="traceModelListLabel(trace)"

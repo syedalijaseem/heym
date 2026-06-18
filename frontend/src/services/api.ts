@@ -1264,6 +1264,18 @@ export const dashboardApi = {
     return response.data;
   },
 
+  updateMarkdownTask: async (
+    id: string,
+    lineIndex: number,
+    text: string,
+  ): Promise<WidgetDataResponse> => {
+    const response = await api.patch<WidgetDataResponse>(
+      `/dashboards/widgets/${id}/markdown-task-update`,
+      { line_index: lineIndex, text },
+    );
+    return response.data;
+  },
+
   aiGenerateWidget: async (
     prompt: string,
     credentialId: string,
@@ -1421,6 +1433,21 @@ export interface AIAssistantRequest {
     output_node?: OutputNodeInfo | null;
   }>;
   askMode?: boolean;
+  executionLog?: {
+    execution_status: string;
+    execution_time_ms: number | null;
+    final_outputs: Record<string, unknown> | null;
+    node_results: Array<{
+      node_id: string;
+      node_label: string;
+      node_type: string;
+      status: string;
+      execution_time_ms: number;
+      output: Record<string, unknown>;
+      error: string | null;
+      metadata?: Record<string, unknown>;
+    }>;
+  } | null;
 }
 
 export interface FixTranscriptionRequest {
@@ -1909,6 +1936,7 @@ export const aiApi = {
         conversation_history: request.conversationHistory,
         available_workflows: request.availableWorkflows,
         ask_mode: request.askMode ?? false,
+        execution_log: request.executionLog ?? null,
       }),
       signal,
     })

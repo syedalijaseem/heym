@@ -339,6 +339,8 @@ async def resume_hitl_request_in_background(request_id: uuid.UUID) -> None:
         hitl_request = result.scalar_one_or_none()
         if hitl_request is None:
             return
+        if hitl_request.status != "resolved" or not hitl_request.decision:
+            return
 
         workflow = await db.get(Workflow, hitl_request.workflow_id)
         history_entry = await db.get(ExecutionHistory, hitl_request.execution_history_id)

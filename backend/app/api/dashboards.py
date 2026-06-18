@@ -21,6 +21,7 @@ from app.models.dashboard_schemas import (
     DashboardResponse,
     DashboardWidgetResponse,
     MarkdownTaskToggleRequest,
+    MarkdownTaskUpdateRequest,
     WidgetCreateRequest,
     WidgetDataResponse,
     WidgetUpdateRequest,
@@ -30,7 +31,11 @@ from app.services.encryption import decrypt_config
 from app.services.llm_provider import is_reasoning_model
 from app.services.llm_service import execute_llm
 from app.services.llm_trace import LLMTraceContext
-from app.services.markdown_task_list import has_task_items, toggle_task_item
+from app.services.markdown_task_list import (
+    has_task_items,
+    toggle_task_item,
+    update_or_remove_task_item,
+)
 from app.services.workflow_dsl_prompt import build_assistant_prompt
 
 router = APIRouter()
@@ -45,7 +50,10 @@ _AI_WIDGET_SUFFIX = (
     "sample data, produce the upstream rows with a set node using "
     "$array(dict(key=value, ...), ...) — never use ${...} or bare {...} object literals. "
     "For markdown checklists / task lists, use chartType text and put GFM task list lines "
-    "(- [ ] / - [x]) directly in chartOutput text (not only in upstream rows)."
+    "(- [ ] / - [x]) directly in chartOutput text (not only in upstream rows). "
+    "For numbered markdown lines (especially descending lists), prefix each line with the "
+    "explicit number to display (e.g. 9. Title\\n8. Title); use a loop with "
+    "total - index to count down and join lines before chartOutput valueField."
 )
 
 
@@ -174,6 +182,73 @@ def _find_chart_output_node(workflow: Workflow) -> dict[str, Any] | None:
     return None
 
 
+async def _load_widget_workflow(db: AsyncSession, widget: DashboardWidget) -> Workflow:
+    wf_result = await db.execute(select(Workflow).where(Workflow.id == widget.workflow_id))
+    workflow = wf_result.scalar_one_or_none()
+    if workflow is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow not found")
+    return workflow
+
+
+def _validate_text_task_widget(workflow: Workflow, payload: dict[str, Any]) -> str:
+    chart_node = _find_chart_output_node(workflow)
+    if chart_node is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Widget workflow has no chartOutput node",
+        )
+
+    chart_data = chart_node.get("data") or {}
+    if chart_data.get("chartType") != "text":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Checkbox toggling is only supported for text chart widgets",
+        )
+
+    displayed_text = payload.get("text")
+    if not displayed_text or not str(displayed_text).strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Widget has no markdown text to toggle",
+        )
+    if not payload.get("text_interactive"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Checkbox toggling is only supported for markdown task lists",
+        )
+    if not has_task_items(str(displayed_text)):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Checkbox toggling is only supported for markdown task lists",
+        )
+    return str(displayed_text)
+
+
+async def _apply_markdown_text_to_widget(
+    db: AsyncSession,
+    widget: DashboardWidget,
+    workflow: Workflow,
+    current_user: User,
+    updated_text: str,
+) -> WidgetDataResponse:
+    nodes = list(workflow.nodes or [])
+    for index, node in enumerate(nodes):
+        if isinstance(node, dict) and node.get("type") == "chartOutput":
+            node_data = dict(node.get("data") or {})
+            node_data["text"] = updated_text
+            node_data.pop("valueField", None)
+            nodes[index] = {**node, "data": node_data}
+            break
+    workflow.nodes = nodes
+    flag_modified(workflow, "nodes")
+    widget.cached_payload = None
+    widget.cached_at = None
+    widget.cached_workflow_version = None
+    await db.commit()
+    await db.refresh(widget)
+    return await compute_widget_data(db, widget, current_user, force=True)
+
+
 @router.get("", response_model=DashboardResponse)
 async def get_dashboard(
     current_user: User = Depends(get_current_user),
@@ -299,65 +374,40 @@ async def toggle_markdown_task(
     db: AsyncSession = Depends(get_db),
 ) -> WidgetDataResponse:
     widget = await _load_widget(db, widget_id, current_user)
-    wf_result = await db.execute(select(Workflow).where(Workflow.id == widget.workflow_id))
-    workflow = wf_result.scalar_one_or_none()
-    if workflow is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow not found")
-
-    chart_node = _find_chart_output_node(workflow)
-    if chart_node is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Widget workflow has no chartOutput node",
-        )
-
-    chart_data = chart_node.get("data") or {}
-    if chart_data.get("chartType") != "text":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Checkbox toggling is only supported for text chart widgets",
-        )
+    workflow = await _load_widget_workflow(db, widget)
 
     current = await compute_widget_data(db, widget, current_user, force=False)
     payload = current.payload or {}
-    displayed_text = payload.get("text")
-    if not displayed_text or not str(displayed_text).strip():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Widget has no markdown text to toggle",
-        )
-    if not payload.get("text_interactive"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Checkbox toggling is only supported for markdown task lists",
-        )
-    if not has_task_items(str(displayed_text)):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Checkbox toggling is only supported for markdown task lists",
-        )
+    displayed_text = _validate_text_task_widget(workflow, payload)
 
     try:
-        updated_text = toggle_task_item(str(displayed_text), body.line_index)
+        updated_text = toggle_task_item(displayed_text, body.line_index)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
-    nodes = list(workflow.nodes or [])
-    for index, node in enumerate(nodes):
-        if isinstance(node, dict) and node.get("type") == "chartOutput":
-            node_data = dict(node.get("data") or {})
-            node_data["text"] = updated_text
-            node_data.pop("valueField", None)
-            nodes[index] = {**node, "data": node_data}
-            break
-    workflow.nodes = nodes
-    flag_modified(workflow, "nodes")
-    widget.cached_payload = None
-    widget.cached_at = None
-    widget.cached_workflow_version = None
-    await db.commit()
-    await db.refresh(widget)
-    return await compute_widget_data(db, widget, current_user, force=True)
+    return await _apply_markdown_text_to_widget(db, widget, workflow, current_user, updated_text)
+
+
+@router.patch("/widgets/{widget_id}/markdown-task-update", response_model=WidgetDataResponse)
+async def update_markdown_task(
+    widget_id: uuid.UUID,
+    body: MarkdownTaskUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> WidgetDataResponse:
+    widget = await _load_widget(db, widget_id, current_user)
+    workflow = await _load_widget_workflow(db, widget)
+
+    current = await compute_widget_data(db, widget, current_user, force=False)
+    payload = current.payload or {}
+    displayed_text = _validate_text_task_widget(workflow, payload)
+
+    try:
+        updated_text = update_or_remove_task_item(displayed_text, body.line_index, body.text)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    return await _apply_markdown_text_to_widget(db, widget, workflow, current_user, updated_text)
 
 
 @router.post(

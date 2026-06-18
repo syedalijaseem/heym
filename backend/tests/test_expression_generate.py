@@ -140,7 +140,7 @@ class GenerateExpressionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(trace_context.credential_id, request.credential_id)
         self.assertEqual(trace_context.workflow_id, request.workflow_id)
         self.assertEqual(trace_context.node_id, "node-1")
-        self.assertEqual(trace_context.source, "assistant")
+        self.assertEqual(trace_context.source, "expression_builder")
         self.assertEqual(trace_context.node_label, "Expression Builder")
 
     async def test_regenerate_prior_attempt_and_temperature(self) -> None:

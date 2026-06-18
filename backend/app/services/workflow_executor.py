@@ -5268,21 +5268,25 @@ class WorkflowExecutor:
                     combined[key] = self._wrap_value(val)
             combined[label] = wrapped_data
 
+        with self.lock:
+            label_to_output_snapshot = dict(self.label_to_output)
+            wrapped_cache_snapshot = dict(self._wrapped_label_output_cache)
+
         if current_node_id:
             upstream_labels = self.get_upstream_node_labels(current_node_id)
             for label in upstream_labels:
                 if label in combined:
                     continue
-                if label in self._wrapped_label_output_cache:
-                    combined[label] = self._wrapped_label_output_cache[label]
-                elif label in self.label_to_output:
-                    combined[label] = self._wrap_value(self.label_to_output[label])
+                if label in wrapped_cache_snapshot:
+                    combined[label] = wrapped_cache_snapshot[label]
+                elif label in label_to_output_snapshot:
+                    combined[label] = self._wrap_value(label_to_output_snapshot[label])
         else:
-            for label, data in self.label_to_output.items():
+            for label, data in label_to_output_snapshot.items():
                 if label in combined:
                     continue
-                if label in self._wrapped_label_output_cache:
-                    combined[label] = self._wrapped_label_output_cache[label]
+                if label in wrapped_cache_snapshot:
+                    combined[label] = wrapped_cache_snapshot[label]
                 else:
                     combined[label] = self._wrap_value(data)
 

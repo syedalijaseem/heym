@@ -50,6 +50,11 @@ class MarkdownTaskToggleRequest(BaseModel):
     line_index: int = Field(ge=0)
 
 
+class MarkdownTaskUpdateRequest(BaseModel):
+    line_index: int = Field(ge=0)
+    text: str = ""
+
+
 class WidgetDataResponse(BaseModel):
     widget_id: uuid.UUID
     payload: dict[str, Any] | None
