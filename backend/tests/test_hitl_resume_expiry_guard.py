@@ -24,10 +24,13 @@ class TestResumeHitlExpiryGuard(IsolatedAsyncioTestCase):
             hitl_request.status = status
             hitl_request.expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
 
-            with patch(
-                "app.services.hitl_service.async_session_maker",
-                return_value=_mock_session(hitl_request),
-            ), patch("app.services.hitl_service.resume_workflow_execution") as mock_resume:
+            with (
+                patch(
+                    "app.services.hitl_service.async_session_maker",
+                    return_value=_mock_session(hitl_request),
+                ),
+                patch("app.services.hitl_service.resume_workflow_execution") as mock_resume,
+            ):
                 from app.services.hitl_service import resume_hitl_request_in_background
 
                 await resume_hitl_request_in_background(uuid.uuid4())
@@ -38,10 +41,13 @@ class TestResumeHitlExpiryGuard(IsolatedAsyncioTestCase):
         hitl_request.status = "pending"
         hitl_request.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
 
-        with patch(
-            "app.services.hitl_service.async_session_maker",
-            return_value=_mock_session(hitl_request),
-        ), patch("app.services.hitl_service.resume_workflow_execution") as mock_resume:
+        with (
+            patch(
+                "app.services.hitl_service.async_session_maker",
+                return_value=_mock_session(hitl_request),
+            ),
+            patch("app.services.hitl_service.resume_workflow_execution") as mock_resume,
+        ):
             from app.services.hitl_service import resume_hitl_request_in_background
 
             await resume_hitl_request_in_background(uuid.uuid4())
