@@ -16,7 +16,7 @@ A widget is a single chart on the grid. Supported chart types:
 - **Scatter** (X/Y points for correlation plots)
 - **Proportion** (one bar split into shares with a percentage legend, e.g. a language breakdown)
 - **Bar gauge** (one horizontal gauge per row with a red→green gradient and a value, e.g. free disk space)
-- **Text** (a markdown message, e.g. a status note like "Last execution at 19:47"; supports [interactive checkboxes](../nodes/chart-output-node.md#interactive-task-lists) when the markdown is static)
+- **Text** (a markdown message, e.g. a status note like "Last execution at 19:47"; supports [interactive checkboxes](../nodes/chart-output-node.md#interactive-task-lists) when the markdown is static, and [explicit numbered lists](../nodes/chart-output-node.md#numbered-lists) for custom or descending numbering)
 
 Each widget loads its data asynchronously when you open the tab, so the page stays responsive while charts populate.
 

@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import DOMPurify from "dompurify";
-import { marked } from "marked";
 
 import MarkdownTextContent from "@/components/Dashboards/MarkdownTextContent.vue";
+import { renderChartMarkdown } from "@/lib/markdown";
 import { hasTaskItems } from "@/lib/markdownTaskList";
 import { useThemeStore } from "@/stores/theme";
 import type { ChartPayload } from "@/types/dashboard";
@@ -181,8 +180,7 @@ const isEmpty = computed((): boolean => {
 const renderedText = computed((): string => {
   const p = chartPayload.value;
   if (!p || p.type !== "text" || !p.text) return "";
-  const html = marked(p.text, { breaks: true, gfm: true }) as string;
-  return DOMPurify.sanitize(html);
+  return renderChartMarkdown(p.text);
 });
 
 const usesTaskListRenderer = computed((): boolean => {

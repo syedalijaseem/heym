@@ -4,6 +4,7 @@ import DOMPurify from "dompurify";
 import { Check } from "lucide-vue-next";
 import { marked } from "marked";
 
+import { preserveExplicitOrderedListNumbers } from "@/lib/markdown";
 import { parseMarkdownBlocks } from "@/lib/markdownTaskList";
 
 const INLINE_ALLOWED_TAGS = ["strong", "em", "u", "s", "code", "a", "br"];
@@ -23,7 +24,8 @@ const blocks = computed(() => parseMarkdownBlocks(props.text));
 
 function renderHtml(content: string): string {
   if (!content.trim()) return "";
-  const html = marked(content, { breaks: true, gfm: true }) as string;
+  const prepared = preserveExplicitOrderedListNumbers(content);
+  const html = marked(prepared, { breaks: true, gfm: true }) as string;
   return DOMPurify.sanitize(html);
 }
 
