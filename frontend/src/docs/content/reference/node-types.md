@@ -54,6 +54,7 @@ See [Triggers](./triggers.md) for all entry points.
 | [Send Email](../nodes/send-email-node.md) | Send emails via SMTP | 1 | 1 |
 | [Redis](../nodes/redis-node.md) | Redis operations (set, get, hasKey, deleteKey) | 1 | 1 |
 | [Grist](../nodes/grist-node.md) | Read/write Grist spreadsheets | 1 | 1 |
+| [GitHub](../nodes/github-node.md) | Manage repositories, issues, pull requests, and file contents through the GitHub REST API | 1 | 1 |
 | [Google Sheets](../nodes/google-sheets-node.md) | Read/write Google Sheets via OAuth2 | 1 | 1 |
 | [BigQuery](../nodes/bigquery-node.md) | Run SQL queries and insert rows in BigQuery | 1 | 1 |
 | [Amazon S3](../nodes/amazon-s3-node.md) | Manage buckets and folders; list, upload, download, copy, and delete objects | 1 | 1 |

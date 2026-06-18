@@ -8740,6 +8740,589 @@ class WorkflowExecutor:
                     else:
                         raise ValueError(f"Unknown BigQuery operation: {operation}")
 
+            elif node_type == "github":
+                import json as _json
+
+                from app.db.models import CredentialType
+                from app.db.session import SessionLocal
+                from app.services.encryption import decrypt_config
+                from app.services.github_service import GitHubService
+
+                credential_id = node_data.get("credentialId")
+                if not credential_id:
+                    raise ValueError("GitHub node requires a credential")
+
+                github_config: dict = {}
+                with SessionLocal() as db:
+                    cred = self._get_accessible_credential(db, credential_id)
+                    if cred:
+                        if cred.type != CredentialType.github:
+                            raise ValueError("GitHub node requires a GitHub credential")
+                        github_config = decrypt_config(cred.encrypted_config)
+
+                if not github_config:
+                    raise ValueError("GitHub credential not found or invalid")
+
+                operation = str(node_data.get("githubOperation", "") or "").strip()
+                if not operation:
+                    raise ValueError("GitHub node requires an operation")
+
+                owner = self.evaluate_message_template(
+                    str(node_data.get("githubOwner", "") or ""), inputs, node_id
+                ).strip()
+                repo = self.evaluate_message_template(
+                    str(node_data.get("githubRepo", "") or ""), inputs, node_id
+                ).strip()
+                repo_optional_operations = {"listOrganizationRepositories", "listUserRepositories"}
+                if not owner:
+                    raise ValueError("GitHub node requires an owner or organization")
+                if operation not in repo_optional_operations and not repo:
+                    raise ValueError("GitHub node requires owner and repository")
+
+                def _resolve_optional_template(field_name: str) -> tuple[bool, str]:
+                    if field_name not in node_data:
+                        return False, ""
+                    raw_value = node_data.get(field_name)
+                    if raw_value is None:
+                        return True, ""
+                    if isinstance(raw_value, str) and raw_value == "":
+                        return True, ""
+                    resolved = self.evaluate_message_template(str(raw_value), inputs, node_id)
+                    return True, resolved
+
+                def _parse_optional_string_list(
+                    field_name: str,
+                    label: str,
+                ) -> tuple[bool, list[str] | None]:
+                    provided, raw = _resolve_optional_template(field_name)
+                    if not provided:
+                        return False, None
+                    stripped = raw.strip()
+                    if not stripped:
+                        return False, None
+                    try:
+                        parsed = _json.loads(stripped)
+                    except _json.JSONDecodeError as exc:
+                        raise ValueError(f"GitHub {label} must be a JSON array of strings") from exc
+                    if parsed is None:
+                        return True, None
+                    if not isinstance(parsed, list):
+                        raise ValueError(f"GitHub {label} must be a JSON array of strings")
+                    if operation == "updateIssue" and parsed == []:
+                        return False, None
+                    return True, [str(item) for item in parsed]
+
+                def _parse_optional_object(
+                    field_name: str,
+                    label: str,
+                ) -> tuple[bool, dict | None]:
+                    provided, raw = _resolve_optional_template(field_name)
+                    if not provided:
+                        return False, None
+                    stripped = raw.strip()
+                    if not stripped:
+                        return False, None
+                    try:
+                        parsed = _json.loads(stripped)
+                    except _json.JSONDecodeError as exc:
+                        raise ValueError(f"GitHub {label} must be a JSON object") from exc
+                    if parsed is None:
+                        return True, None
+                    if not isinstance(parsed, dict):
+                        raise ValueError(f"GitHub {label} must be a JSON object")
+                    return True, parsed
+
+                labels_provided, labels = _parse_optional_string_list("githubLabels", "labels")
+                assignees_provided, assignees = _parse_optional_string_list(
+                    "githubAssignees",
+                    "assignees",
+                )
+                service = GitHubService(github_config)
+                try:
+                    if operation == "getRepository":
+                        repo_data = service.get_repository(owner, repo)
+                        output = {
+                            "success": True,
+                            "operation": operation,
+                            "repository": repo_data,
+                            "full_name": repo_data.get("full_name"),
+                            "default_branch": repo_data.get("default_branch"),
+                            "private": repo_data.get("private"),
+                            "url": repo_data.get("html_url"),
+                        }
+                    elif operation == "getIssue":
+                        issue_number_value = self.evaluate_message_template(
+                            str(node_data.get("githubIssueNumber", "") or ""), inputs, node_id
+                        ).strip()
+                        if not issue_number_value:
+                            raise ValueError("GitHub getIssue requires an issue number")
+                        issue_number = int(float(issue_number_value))
+                        issue = service.get_issue(owner, repo, issue_number)
+                        output = {
+                            "success": True,
+                            "operation": operation,
+                            "issue": issue,
+                            "number": issue.get("number"),
+                            "title": issue.get("title"),
+                            "state": issue.get("state"),
+                            "url": issue.get("html_url"),
+                        }
+                    elif operation == "listIssues":
+                        state = (
+                            self.evaluate_message_template(
+                                str(node_data.get("githubState", "open") or "open"), inputs, node_id
+                            ).strip()
+                            or "open"
+                        )
+                        per_page_value = self.evaluate_message_template(
+                            str(node_data.get("githubPerPage", "30") or "30"), inputs, node_id
+                        ).strip()
+                        per_page = int(float(per_page_value or "30"))
+                        issues = service.list_issues(owner, repo, state=state, per_page=per_page)
+                        output = {
+                            "success": True,
+                            "operation": operation,
+                            "issues": issues,
+                            "count": len(issues),
+                        }
+                    elif operation == "createComment":
+                        issue_number_value = self.evaluate_message_template(
+                            str(node_data.get("githubIssueNumber", "") or ""), inputs, node_id
+                        ).strip()
+                        if not issue_number_value:
+                            raise ValueError("GitHub createComment requires an issue number")
+                        comment_body = self.evaluate_message_template(
+                            str(node_data.get("githubCommentBody", "") or ""), inputs, node_id
+                        )
+                        if not comment_body.strip():
+                            raise ValueError("GitHub createComment requires a comment body")
+                        issue_number = int(float(issue_number_value))
+                        comment = service.create_issue_comment(
+                            owner, repo, issue_number, comment_body
+                        )
+                        output = {
+                            "success": True,
+                            "operation": operation,
+                            "comment": comment,
+                            "id": comment.get("id"),
+                            "url": comment.get("html_url"),
+                        }
+                    elif operation == "createIssue":
+                        title = self.evaluate_message_template(
+                            str(node_data.get("githubTitle", "") or ""), inputs, node_id
+                        ).strip()
+                        if not title:
+                            raise ValueError("GitHub createIssue requires a title")
+                        body = self.evaluate_message_template(
+                            str(node_data.get("githubBody", "") or ""), inputs, node_id
+                        )
+                        issue = service.create_issue(
+                            owner,
+                            repo,
+                            title,
+                            body=body or None,
+                            labels=labels or None,
+                            assignees=assignees or None,
+                        )
+                        output = {
+                            "success": True,
+                            "operation": operation,
+                            "issue": issue,
+                            "number": issue.get("number"),
+                            "title": issue.get("title"),
+                            "url": issue.get("html_url"),
+                        }
+                    elif operation == "updateIssue":
+                        issue_number_value = self.evaluate_message_template(
+                            str(node_data.get("githubIssueNumber", "") or ""), inputs, node_id
+                        ).strip()
+                        if not issue_number_value:
+                            raise ValueError("GitHub updateIssue requires an issue number")
+                        issue_number = int(float(issue_number_value))
+                        title_provided, title_raw = _resolve_optional_template("githubTitle")
+                        body_provided, body = _resolve_optional_template("githubBody")
+                        state_provided, state_raw = _resolve_optional_template("githubState")
+                        title = title_raw.strip()
+                        state = state_raw.strip()
+                        issue = service.update_issue(
+                            owner,
+                            repo,
+                            issue_number,
+                            title=title if title_provided else None,
+                            body=body if body_provided else None,
+                            state=state or None if state_provided else None,
+                            labels=labels if labels_provided else None,
+                            assignees=assignees if assignees_provided else None,
+                        )
+                        output = {
+                            "success": True,
+                            "operation": operation,
+                            "issue": issue,
+                            "number": issue.get("number"),
+                            "title": issue.get("title"),
+                            "state": issue.get("state"),
+                            "url": issue.get("html_url"),
+                        }
+                    elif operation == "lockIssue":
+                        issue_number_value = self.evaluate_message_template(
+                            str(node_data.get("githubIssueNumber", "") or ""), inputs, node_id
+                        ).strip()
+                        if not issue_number_value:
+                            raise ValueError("GitHub lockIssue requires an issue number")
+                        lock_reason = self.evaluate_message_template(
+                            str(node_data.get("githubLockReason", "") or ""), inputs, node_id
+                        ).strip()
+                        issue_number = int(float(issue_number_value))
+                        lock_result = service.lock_issue(
+                            owner,
+                            repo,
+                            issue_number,
+                            lock_reason=lock_reason or None,
+                        )
+                        output = {
+                            "success": True,
+                            "operation": operation,
+                            **lock_result,
+                        }
+                    elif operation == "listPullRequests":
+                        state = (
+                            self.evaluate_message_template(
+                                str(node_data.get("githubState", "open") or "open"), inputs, node_id
+                            ).strip()
+                            or "open"
+                        )
+                        per_page_value = self.evaluate_message_template(
+                            str(node_data.get("githubPerPage", "30") or "30"), inputs, node_id
+                        ).strip()
+                        per_page = int(float(per_page_value or "30"))
+                        pull_requests = service.list_pull_requests(
+                            owner, repo, state=state, per_page=per_page
+                        )
+                        output = {
+                            "success": True,
+                            "operation": operation,
+                            "pull_requests": pull_requests,
+                            "count": len(pull_requests),
+                        }
+                    elif operation == "createPullRequest":
+                        title = self.evaluate_message_template(
+                            str(node_data.get("githubTitle", "") or ""), inputs, node_id
+                        ).strip()
+                        head = self.evaluate_message_template(
+                            str(node_data.get("githubHead", "") or ""), inputs, node_id
+                        ).strip()
+                        base = self.evaluate_message_template(
+                            str(node_data.get("githubBase", "") or ""), inputs, node_id
+                        ).strip()
+                        if not title or not head or not base:
+                            raise ValueError(
+                                "GitHub createPullRequest requires title, head branch, and base branch"
+                            )
+                        body = self.evaluate_message_template(
+                            str(node_data.get("githubBody", "") or ""), inputs, node_id
+                        )
+                        draft = bool(node_data.get("githubDraft", False))
+                        pull_request = service.create_pull_request(
+                            owner,
+                            repo,
+                            title,
+                            head,
+                            base,
+                            body=body or None,
+                            draft=draft,
+                        )
+                        output = {
+                            "success": True,
+                            "operation": operation,
+                            "pull_request": pull_request,
+                            "number": pull_request.get("number"),
+                            "title": pull_request.get("title"),
+                            "url": pull_request.get("html_url"),
+                        }
+                    elif operation == "listReleases":
+                        per_page_value = self.evaluate_message_template(
+                            str(node_data.get("githubPerPage", "30") or "30"), inputs, node_id
+                        ).strip()
+                        per_page = int(float(per_page_value or "30"))
+                        releases = service.list_releases(owner, repo, per_page=per_page)
+                        output = {
+                            "success": True,
+                            "operation": operation,
+                            "releases": releases,
+                            "count": len(releases),
+                        }
+                    elif operation == "getRelease":
+                        release_id_value = self.evaluate_message_template(
+                            str(node_data.get("githubReleaseId", "") or ""), inputs, node_id
+                        ).strip()
+                        if not release_id_value:
+                            raise ValueError("GitHub getRelease requires a release id")
+                        release_id = int(float(release_id_value))
+                        release = service.get_release(owner, repo, release_id)
+                        output = {
+                            "success": True,
+                            "operation": operation,
+                            "release": release,
+                            "id": release.get("id"),
+                            "tag_name": release.get("tag_name"),
+                            "url": release.get("html_url"),
+                        }
+                    elif operation == "createRelease":
+                        tag_name = self.evaluate_message_template(
+                            str(node_data.get("githubTagName", "") or ""), inputs, node_id
+                        ).strip()
+                        if not tag_name:
+                            raise ValueError("GitHub createRelease requires a tag name")
+                        name = self.evaluate_message_template(
+                            str(node_data.get("githubTitle", "") or ""), inputs, node_id
+                        ).strip()
+                        body = self.evaluate_message_template(
+                            str(node_data.get("githubBody", "") or ""), inputs, node_id
+                        )
+                        target_commitish = self.evaluate_message_template(
+                            str(node_data.get("githubBranch", "") or ""), inputs, node_id
+                        ).strip()
+                        release = service.create_release(
+                            owner,
+                            repo,
+                            tag_name,
+                            name=name or None,
+                            body=body or None,
+                            target_commitish=target_commitish or None,
+                            draft=bool(node_data.get("githubDraft", False)),
+                            prerelease=bool(node_data.get("githubPrerelease", False)),
+                        )
+                        output = {
+                            "success": True,
+                            "operation": operation,
+                            "release": release,
+                            "id": release.get("id"),
+                            "tag_name": release.get("tag_name"),
+                            "url": release.get("html_url"),
+                        }
+                    elif operation == "updateRelease":
+                        release_id_value = self.evaluate_message_template(
+                            str(node_data.get("githubReleaseId", "") or ""), inputs, node_id
+                        ).strip()
+                        if not release_id_value:
+                            raise ValueError("GitHub updateRelease requires a release id")
+                        release_id = int(float(release_id_value))
+                        tag_name = self.evaluate_message_template(
+                            str(node_data.get("githubTagName", "") or ""), inputs, node_id
+                        ).strip()
+                        name_provided, name_raw = _resolve_optional_template("githubTitle")
+                        body_provided, body = _resolve_optional_template("githubBody")
+                        target_commitish_provided, target_commitish_raw = (
+                            _resolve_optional_template("githubBranch")
+                        )
+                        name = name_raw.strip()
+                        target_commitish = target_commitish_raw.strip()
+                        release = service.update_release(
+                            owner,
+                            repo,
+                            release_id,
+                            tag_name=tag_name or None,
+                            name=name if name_provided else None,
+                            body=body if body_provided else None,
+                            target_commitish=target_commitish or None
+                            if target_commitish_provided
+                            else None,
+                            draft=(
+                                bool(node_data.get("githubDraft"))
+                                if node_data.get("githubDraft") is not None
+                                else None
+                            ),
+                            prerelease=(
+                                bool(node_data.get("githubPrerelease"))
+                                if node_data.get("githubPrerelease") is not None
+                                else None
+                            ),
+                        )
+                        output = {
+                            "success": True,
+                            "operation": operation,
+                            "release": release,
+                            "id": release.get("id"),
+                            "tag_name": release.get("tag_name"),
+                            "url": release.get("html_url"),
+                        }
+                    elif operation == "deleteRelease":
+                        release_id_value = self.evaluate_message_template(
+                            str(node_data.get("githubReleaseId", "") or ""), inputs, node_id
+                        ).strip()
+                        if not release_id_value:
+                            raise ValueError("GitHub deleteRelease requires a release id")
+                        release_id = int(float(release_id_value))
+                        delete_result = service.delete_release(owner, repo, release_id)
+                        output = {"success": True, "operation": operation, **delete_result}
+                    elif operation == "listWorkflows":
+                        per_page_value = self.evaluate_message_template(
+                            str(node_data.get("githubPerPage", "30") or "30"), inputs, node_id
+                        ).strip()
+                        per_page = int(float(per_page_value or "30"))
+                        workflows = service.list_workflows(owner, repo, per_page=per_page)
+                        output = {
+                            "success": True,
+                            "operation": operation,
+                            "workflows": workflows,
+                            "count": len(workflows),
+                        }
+                    elif operation == "getWorkflow":
+                        workflow_id = self.evaluate_message_template(
+                            str(node_data.get("githubWorkflowId", "") or ""), inputs, node_id
+                        ).strip()
+                        if not workflow_id:
+                            raise ValueError(
+                                "GitHub getWorkflow requires a workflow id or file name"
+                            )
+                        workflow = service.get_workflow(owner, repo, workflow_id)
+                        output = {
+                            "success": True,
+                            "operation": operation,
+                            "workflow": workflow,
+                            "id": workflow.get("id"),
+                            "name": workflow.get("name"),
+                            "path": workflow.get("path"),
+                        }
+                    elif operation == "dispatchWorkflow":
+                        workflow_id = self.evaluate_message_template(
+                            str(node_data.get("githubWorkflowId", "") or ""), inputs, node_id
+                        ).strip()
+                        if not workflow_id:
+                            raise ValueError(
+                                "GitHub dispatchWorkflow requires a workflow id or file name"
+                            )
+                        ref = self.evaluate_message_template(
+                            str(node_data.get("githubBranch", "") or ""), inputs, node_id
+                        ).strip()
+                        if not ref:
+                            raise ValueError("GitHub dispatchWorkflow requires a branch or ref")
+                        _, workflow_inputs = _parse_optional_object(
+                            "githubWorkflowInputs",
+                            "workflow inputs",
+                        )
+                        dispatch_result = service.dispatch_workflow(
+                            owner,
+                            repo,
+                            workflow_id,
+                            ref,
+                            inputs=workflow_inputs,
+                        )
+                        output = {"success": True, "operation": operation, **dispatch_result}
+                    elif operation == "getFile":
+                        path = self.evaluate_message_template(
+                            str(node_data.get("githubFilePath", "") or ""), inputs, node_id
+                        ).strip()
+                        if not path:
+                            raise ValueError("GitHub getFile requires a file path")
+                        ref = self.evaluate_message_template(
+                            str(node_data.get("githubBranch", "") or ""), inputs, node_id
+                        ).strip()
+                        file_data = service.get_file(owner, repo, path, ref=ref or None)
+                        output = {
+                            "success": True,
+                            "operation": operation,
+                            "file": file_data,
+                            "path": file_data.get("path"),
+                            "sha": file_data.get("sha"),
+                            "content": file_data.get("content"),
+                        }
+                    elif operation == "listFiles":
+                        path = self.evaluate_message_template(
+                            str(node_data.get("githubFilePath", "") or ""), inputs, node_id
+                        ).strip()
+                        ref = self.evaluate_message_template(
+                            str(node_data.get("githubBranch", "") or ""), inputs, node_id
+                        ).strip()
+                        directory = service.list_files(owner, repo, path=path, ref=ref or None)
+                        output = {"success": True, "operation": operation, **directory}
+                    elif operation == "upsertFile":
+                        path = self.evaluate_message_template(
+                            str(node_data.get("githubFilePath", "") or ""), inputs, node_id
+                        ).strip()
+                        if not path:
+                            raise ValueError("GitHub upsertFile requires a file path")
+                        message = self.evaluate_message_template(
+                            str(node_data.get("githubCommitMessage", "") or ""), inputs, node_id
+                        ).strip()
+                        if not message:
+                            raise ValueError("GitHub upsertFile requires a commit message")
+                        content = self.evaluate_message_template(
+                            str(node_data.get("githubFileContent", "") or ""), inputs, node_id
+                        )
+                        branch = self.evaluate_message_template(
+                            str(node_data.get("githubBranch", "") or ""), inputs, node_id
+                        ).strip()
+                        file_result = service.upsert_file(
+                            owner,
+                            repo,
+                            path,
+                            message,
+                            content,
+                            branch=branch or None,
+                        )
+                        output = {
+                            "success": True,
+                            "operation": operation,
+                            "file": file_result,
+                            "path": file_result.get("path"),
+                            "sha": file_result.get("sha"),
+                            "commit_sha": file_result.get("commit_sha"),
+                            "created": file_result.get("created"),
+                        }
+                    elif operation == "deleteFile":
+                        path = self.evaluate_message_template(
+                            str(node_data.get("githubFilePath", "") or ""), inputs, node_id
+                        ).strip()
+                        if not path:
+                            raise ValueError("GitHub deleteFile requires a file path")
+                        message = self.evaluate_message_template(
+                            str(node_data.get("githubCommitMessage", "") or ""), inputs, node_id
+                        ).strip()
+                        if not message:
+                            raise ValueError("GitHub deleteFile requires a commit message")
+                        branch = self.evaluate_message_template(
+                            str(node_data.get("githubBranch", "") or ""), inputs, node_id
+                        ).strip()
+                        delete_result = service.delete_file(
+                            owner,
+                            repo,
+                            path,
+                            message,
+                            branch=branch or None,
+                        )
+                        output = {"success": True, "operation": operation, **delete_result}
+                    elif operation == "listOrganizationRepositories":
+                        per_page_value = self.evaluate_message_template(
+                            str(node_data.get("githubPerPage", "30") or "30"), inputs, node_id
+                        ).strip()
+                        per_page = int(float(per_page_value or "30"))
+                        repositories = service.list_organization_repositories(
+                            owner, per_page=per_page
+                        )
+                        output = {
+                            "success": True,
+                            "operation": operation,
+                            "repositories": repositories,
+                            "count": len(repositories),
+                        }
+                    elif operation == "listUserRepositories":
+                        per_page_value = self.evaluate_message_template(
+                            str(node_data.get("githubPerPage", "30") or "30"), inputs, node_id
+                        ).strip()
+                        per_page = int(float(per_page_value or "30"))
+                        repositories = service.list_user_repositories(owner, per_page=per_page)
+                        output = {
+                            "success": True,
+                            "operation": operation,
+                            "repositories": repositories,
+                            "count": len(repositories),
+                        }
+                    else:
+                        raise ValueError(f"Unknown GitHub operation: {operation}")
+                finally:
+                    service.close()
+
             elif node_type == "s3":
                 from app.db.session import SessionLocal
                 from app.services.amazon_s3_service import S3Service, normalize_s3_list_max_keys

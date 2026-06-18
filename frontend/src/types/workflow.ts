@@ -152,6 +152,7 @@ export type NodeType =
   | "redis"
   | "rag"
   | "grist"
+  | "github"
   | "googleSheets"
   | "bigquery"
   | "throwError"
@@ -420,6 +421,53 @@ export interface NodeData {
   gristRecordDataInputMode?: "raw" | "selective";
   gristFilterInputMode?: "raw" | "selective";
   gristColumns?: Array<{ id: string; name: string; type: string }>;
+  githubOperation?:
+    | "getRepository"
+    | "listOrganizationRepositories"
+    | "listUserRepositories"
+    | "getIssue"
+    | "listIssues"
+    | "createComment"
+    | "createIssue"
+    | "updateIssue"
+    | "lockIssue"
+    | "listPullRequests"
+    | "createPullRequest"
+    | "listReleases"
+    | "getRelease"
+    | "createRelease"
+    | "updateRelease"
+    | "deleteRelease"
+    | "listWorkflows"
+    | "getWorkflow"
+    | "dispatchWorkflow"
+    | "getFile"
+    | "listFiles"
+    | "upsertFile"
+    | "deleteFile";
+  githubOwner?: string;
+  githubRepo?: string;
+  githubIssueNumber?: string;
+  githubTitle?: string;
+  githubBody?: string;
+  githubCommentBody?: string;
+  githubState?: string;
+  githubLabels?: string;
+  githubAssignees?: string;
+  githubLockReason?: string;
+  githubHead?: string;
+  githubBase?: string;
+  githubDraft?: boolean;
+  githubPrerelease?: boolean;
+  githubFilePath?: string;
+  githubFileContent?: string;
+  githubCommitMessage?: string;
+  githubBranch?: string;
+  githubPerPage?: string;
+  githubTagName?: string;
+  githubReleaseId?: string;
+  githubWorkflowId?: string;
+  githubWorkflowInputs?: string;
   errorMessage?: string;
   httpStatusCode?: number;
   retryEnabled?: boolean;

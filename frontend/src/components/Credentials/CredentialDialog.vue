@@ -120,6 +120,7 @@ const hasS3CredentialConfigChange = computed((): boolean => {
 const typeOptions = [
   { value: "openai", label: CREDENTIAL_TYPE_LABELS.openai },
   { value: "google", label: CREDENTIAL_TYPE_LABELS.google },
+  { value: "github", label: CREDENTIAL_TYPE_LABELS.github },
   { value: "elevenlabs", label: CREDENTIAL_TYPE_LABELS.elevenlabs },
   { value: "custom", label: CREDENTIAL_TYPE_LABELS.custom },
   { value: "bearer", label: CREDENTIAL_TYPE_LABELS.bearer },
@@ -268,7 +269,12 @@ watch(
 const isValid = computed(() => {
   if (!name.value.trim()) return false;
 
-  if (type.value === "openai" || type.value === "google" || type.value === "elevenlabs") {
+  if (
+    type.value === "openai" ||
+    type.value === "google" ||
+    type.value === "github" ||
+    type.value === "elevenlabs"
+  ) {
     return !!apiKey.value.trim() || isEditing.value;
   } else if (type.value === "custom") {
     return (!!apiKey.value.trim() && !!baseUrl.value.trim()) || isEditing.value;
@@ -353,6 +359,12 @@ function buildConfig(): CredentialConfig {
     return { api_key: apiKey.value };
   } else if (type.value === "google") {
     return { api_key: apiKey.value };
+  } else if (type.value === "github") {
+    const trimmedBaseUrl = baseUrl.value.trim();
+    return {
+      api_key: apiKey.value,
+      ...(trimmedBaseUrl ? { base_url: trimmedBaseUrl } : {}),
+    };
   } else if (type.value === "elevenlabs") {
     return { api_key: apiKey.value };
   } else if (type.value === "custom") {
@@ -732,7 +744,7 @@ async function handleSave(): Promise<void> {
       </div>
 
       <div
-        v-if="type === 'openai' || type === 'google' || type === 'elevenlabs'"
+        v-if="type === 'openai' || type === 'google' || type === 'github' || type === 'elevenlabs'"
         class="space-y-2"
       >
         <Label for="cred-api-key">API Key</Label>
@@ -741,7 +753,7 @@ async function handleSave(): Promise<void> {
             id="cred-api-key"
             v-model="apiKey"
             :type="showApiKey ? 'text' : 'password'"
-            :placeholder="isEditing ? '••••••• (re-enter to update)' : 'sk-...'"
+            :placeholder="isEditing ? '••••••• (re-enter to update)' : (type === 'github' ? 'github_pat_... or ghp_...' : 'sk-...')"
             :disabled="saving"
             class="pr-10"
           />
@@ -767,6 +779,28 @@ async function handleSave(): Promise<void> {
           Grant this API key the <strong>Text to Speech</strong>,
           <strong>Speech to Text</strong>, and <strong>Voices</strong> permissions in your
           ElevenLabs account.
+        </p>
+        <p
+          v-else-if="type === 'github'"
+          class="text-xs text-muted-foreground"
+        >
+          Use a GitHub personal access token. Fine-grained PATs are recommended. This credential currently targets PAT-based auth, not GitHub App installation flows.
+        </p>
+      </div>
+
+      <div
+        v-if="type === 'github'"
+        class="space-y-2"
+      >
+        <Label for="cred-github-base-url">GitHub API Base URL (Optional)</Label>
+        <Input
+          id="cred-github-base-url"
+          v-model="baseUrl"
+          placeholder="https://github.example.com/api/v3"
+          :disabled="saving"
+        />
+        <p class="text-xs text-muted-foreground">
+          Leave empty for GitHub.com. Set this for GitHub Enterprise Server REST API endpoints.
         </p>
       </div>
 

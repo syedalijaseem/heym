@@ -9,7 +9,7 @@ import {
   type ComponentPublicInstance,
 } from "vue";
 import { useRouter } from "vue-router";
-import { AlertTriangle, Ban, BarChart3, BookOpen, Bot, Braces, Brain, Bug, CalendarClock, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock, Copy, Database, Download, ExternalLink, FileArchive, FileJson, GitBranch, GitMerge, Globe, HardDrive, Inbox, Loader2, Mail, Maximize2, MessageSquare, Minus, Minimize2, MonitorPlay, MousePointerClick, Play, Plug, Plus, Power, Rabbit, Radio, Repeat, Search, Send, Server, Settings, Settings2, Sheet, ShieldAlert, Shuffle, Sparkles, StickyNote, Table2, Terminal, Trash2, Type, Variable, X, XCircle, Zap } from "lucide-vue-next";
+import { AlertTriangle, Ban, BarChart3, BookOpen, Bot, Braces, Brain, Bug, CalendarClock, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock, Copy, Database, Download, ExternalLink, FileArchive, FileJson, GitBranch, GitMerge, Globe, Github, HardDrive, Inbox, Loader2, Mail, Maximize2, MessageSquare, Minus, Minimize2, MonitorPlay, MousePointerClick, Play, Plug, Plus, Power, Rabbit, Radio, Repeat, Search, Send, Server, Settings, Settings2, Sheet, ShieldAlert, Shuffle, Sparkles, StickyNote, Table2, Terminal, Trash2, Type, Variable, X, XCircle, Zap } from "lucide-vue-next";
 
 import type { CredentialListItem, LLMModel } from "@/types/credential";
 import type {
@@ -96,6 +96,7 @@ const nodeIcons: Record<NodeType, ReturnType<typeof Type>> = {
   redis: Database,
   rag: Search,
   grist: Table2,
+  github: Github,
   googleSheets: Sheet,
   bigquery: Database,
   throwError: XCircle,
@@ -142,6 +143,7 @@ const nodeColorMap: Record<NodeType, string> = {
   redis: "node-redis",
   rag: "node-rag",
   grist: "node-grist",
+  github: "node-github",
   googleSheets: "node-google-sheets",
   bigquery: "node-google-sheets",
   throwError: "node-throw-error",
@@ -188,6 +190,7 @@ const nodeDocSlugMap: Record<NodeType, string> = {
   redis: "redis-node",
   rag: "rag-node",
   grist: "grist-node",
+  github: "github-node",
   googleSheets: "google-sheets-node",
   bigquery: "bigquery-node",
   throwError: "throw-error-node",
@@ -386,6 +389,7 @@ const imapTriggerCredentials = ref<CredentialListItem[]>([]);
 const smtpCredentials = ref<CredentialListItem[]>([]);
 const redisCredentials = ref<CredentialListItem[]>([]);
 const gristCredentials = ref<CredentialListItem[]>([]);
+const githubCredentials = ref<CredentialListItem[]>([]);
 const googleSheetsCredentials = ref<CredentialListItem[]>([]);
 const bigqueryCredentials = ref<CredentialListItem[]>([]);
 const s3Credentials = ref<CredentialListItem[]>([]);
@@ -451,6 +455,25 @@ const gristSortExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | n
 const gristRecordDataJsonInputRef = ref<InstanceType<typeof JsonInputPanel> | null>(null);
 const gristFilterJsonInputRef = ref<InstanceType<typeof JsonInputPanel> | null>(null);
 const currentGristExpressionFieldIndex = ref(0);
+const githubOwnerExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const githubRepoExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const githubIssueNumberExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const githubTitleExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const githubBodyExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const githubCommentBodyExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const githubLabelsExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const githubAssigneesExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const githubLockReasonExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const githubHeadExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const githubBaseExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const githubFilePathExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const githubFileContentExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const githubCommitMessageExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const githubBranchExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const githubTagNameExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const githubReleaseIdExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const githubWorkflowIdExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const githubWorkflowInputsExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const googleSheetsSpreadsheetIdExpressionInputRef = ref<InstanceType<
   typeof ExpressionInput
 > | null>(null);
@@ -725,6 +748,14 @@ watch(
         gristCredentials.value = await credentialsApi.listByType("grist");
       } catch {
         gristCredentials.value = [];
+      }
+    }
+
+    if (type === "github") {
+      try {
+        githubCredentials.value = await credentialsApi.listByType("github");
+      } catch {
+        githubCredentials.value = [];
       }
     }
 
@@ -3400,6 +3431,81 @@ const gristCredentialOptions = computed(() => {
     "Shared Grist credential (from owner)",
   );
 });
+
+const githubCredentialOptions = computed(() => {
+  const node = selectedNode.value;
+  const selectedCredentialId =
+    node && node.type === "github"
+      ? (node.data.credentialId as string | undefined)
+      : undefined;
+
+  return buildCredentialOptions(
+    githubCredentials.value,
+    selectedCredentialId,
+    "Select GitHub credential...",
+    "Shared GitHub credential (from owner)",
+  );
+});
+
+const githubOperationOptions = [
+  { value: "getRepository", label: "Get Repository" },
+  { value: "listOrganizationRepositories", label: "List Organization Repositories" },
+  { value: "listUserRepositories", label: "List User Repositories" },
+  { value: "getIssue", label: "Get Issue" },
+  { value: "listIssues", label: "List Issues" },
+  { value: "createComment", label: "Create Comment" },
+  { value: "createIssue", label: "Create Issue" },
+  { value: "updateIssue", label: "Update Issue" },
+  { value: "lockIssue", label: "Lock Issue" },
+  { value: "listPullRequests", label: "List Pull Requests" },
+  { value: "createPullRequest", label: "Create Pull Request" },
+  { value: "listReleases", label: "List Releases" },
+  { value: "getRelease", label: "Get Release" },
+  { value: "createRelease", label: "Create Release" },
+  { value: "updateRelease", label: "Update Release" },
+  { value: "deleteRelease", label: "Delete Release" },
+  { value: "listWorkflows", label: "List Workflows" },
+  { value: "getWorkflow", label: "Get Workflow" },
+  { value: "dispatchWorkflow", label: "Dispatch Workflow" },
+  { value: "getFile", label: "Get File" },
+  { value: "listFiles", label: "List Files" },
+  { value: "upsertFile", label: "Create or Update File" },
+  { value: "deleteFile", label: "Delete File" },
+];
+
+const githubStateOptions = [
+  { value: "open", label: "Open" },
+  { value: "closed", label: "Closed" },
+  { value: "all", label: "All" },
+];
+
+const githubUpdateIssueStateOptions = [
+  { value: "", label: "Don't change" },
+  { value: "open", label: "Open" },
+  { value: "closed", label: "Closed" },
+];
+
+const githubRepoOptionalOperations = new Set([
+  "listOrganizationRepositories",
+  "listUserRepositories",
+]);
+
+const githubPerPageOperations = new Set([
+  "listIssues",
+  "listPullRequests",
+  "listReleases",
+  "listWorkflows",
+  "listOrganizationRepositories",
+  "listUserRepositories",
+]);
+
+function isGitHubRepoRequired(operation: string | undefined): boolean {
+  return !githubRepoOptionalOperations.has(operation || "");
+}
+
+function usesGitHubPerPage(operation: string | undefined): boolean {
+  return githubPerPageOperations.has(operation || "");
+}
 
 const googleSheetsCredentialOptions = computed(() => {
   const node = selectedNode.value;
@@ -10029,6 +10135,566 @@ onUnmounted(() => {
                   <div>${{ selectedNode.data.label }}.success - Boolean</div>
                   <div>${{ selectedNode.data.label }}.deleted - Array of deleted IDs</div>
                   <div>${{ selectedNode.data.label }}.count - Number deleted</div>
+                </template>
+                <template v-else>
+                  <div>Select an operation to see output fields</div>
+                </template>
+              </div>
+            </div>
+          </template>
+
+          <template v-if="selectedNode.type === 'github'">
+            <div class="space-y-2">
+              <Label>GitHub Credential</Label>
+              <Select
+                :model-value="selectedNode.data.credentialId || ''"
+                :options="githubCredentialOptions"
+                @update:model-value="updateNodeData('credentialId', $event)"
+              />
+              <div v-if="!selectedNode.data.credentialId">
+                <p class="text-xs text-amber-500 flex items-center gap-1">
+                  <AlertTriangle class="h-3 w-3" />
+                  Credential is required.
+                </p>
+                <p class="text-xs text-muted-foreground mt-1">
+                  <a
+                    href="/?tab=credentials"
+                    class="text-primary hover:underline"
+                    @click.prevent="$router.push('/?tab=credentials')"
+                  >Add credentials</a> in Dashboard
+                </p>
+              </div>
+            </div>
+
+            <div class="space-y-2">
+              <Label>Operation</Label>
+              <Select
+                :model-value="selectedNode.data.githubOperation || 'getRepository'"
+                :options="githubOperationOptions"
+                @update:model-value="updateNodeData('githubOperation', $event)"
+              />
+            </div>
+
+            <div
+              class="grid gap-3"
+              :class="isGitHubRepoRequired(selectedNode.data.githubOperation) ? 'grid-cols-2' : 'grid-cols-1'"
+            >
+              <div class="space-y-2">
+                <Label>
+                  {{ selectedNode.data.githubOperation === 'listOrganizationRepositories' ? 'Organization' : 'Owner' }}
+                </Label>
+                <ExpressionInput
+                  ref="githubOwnerExpressionInputRef"
+                  :model-value="selectedNode.data.githubOwner || ''"
+                  placeholder="octocat"
+                  single-line
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  @update:model-value="updateNodeData('githubOwner', $event)"
+                />
+              </div>
+              <div
+                v-if="isGitHubRepoRequired(selectedNode.data.githubOperation)"
+                class="space-y-2"
+              >
+                <Label>Repository</Label>
+                <ExpressionInput
+                  ref="githubRepoExpressionInputRef"
+                  :model-value="selectedNode.data.githubRepo || ''"
+                  placeholder="hello-world"
+                  single-line
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  @update:model-value="updateNodeData('githubRepo', $event)"
+                />
+              </div>
+            </div>
+
+            <template v-if="selectedNode.data.githubOperation === 'getIssue' || selectedNode.data.githubOperation === 'updateIssue' || selectedNode.data.githubOperation === 'createComment' || selectedNode.data.githubOperation === 'lockIssue'">
+              <div class="space-y-2">
+                <Label>Issue Number</Label>
+                <ExpressionInput
+                  ref="githubIssueNumberExpressionInputRef"
+                  :model-value="selectedNode.data.githubIssueNumber || ''"
+                  placeholder="123"
+                  single-line
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  @update:model-value="updateNodeData('githubIssueNumber', $event)"
+                />
+              </div>
+            </template>
+
+            <template v-if="selectedNode.data.githubOperation === 'listIssues' || selectedNode.data.githubOperation === 'listPullRequests' || selectedNode.data.githubOperation === 'updateIssue'">
+              <div
+                class="grid gap-3"
+                :class="usesGitHubPerPage(selectedNode.data.githubOperation) ? 'grid-cols-2' : 'grid-cols-1'"
+              >
+                <div class="space-y-2">
+                  <Label>State</Label>
+                  <Select
+                    :model-value="selectedNode.data.githubOperation === 'updateIssue' ? (selectedNode.data.githubState ?? '') : (selectedNode.data.githubState || 'open')"
+                    :options="selectedNode.data.githubOperation === 'updateIssue' ? githubUpdateIssueStateOptions : githubStateOptions"
+                    @update:model-value="updateNodeData('githubState', $event)"
+                  />
+                </div>
+                <div
+                  v-if="usesGitHubPerPage(selectedNode.data.githubOperation)"
+                  class="space-y-2"
+                >
+                  <Label>Per Page</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    max="100"
+                    :model-value="selectedNode.data.githubPerPage || '30'"
+                    placeholder="30"
+                    @update:model-value="updateNodeData('githubPerPage', $event)"
+                  />
+                </div>
+              </div>
+            </template>
+
+            <template v-if="usesGitHubPerPage(selectedNode.data.githubOperation) && selectedNode.data.githubOperation !== 'listIssues' && selectedNode.data.githubOperation !== 'listPullRequests'">
+              <div class="space-y-2">
+                <Label>Per Page</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  max="100"
+                  :model-value="selectedNode.data.githubPerPage || '30'"
+                  placeholder="30"
+                  @update:model-value="updateNodeData('githubPerPage', $event)"
+                />
+              </div>
+            </template>
+
+            <template v-if="selectedNode.data.githubOperation === 'createIssue' || selectedNode.data.githubOperation === 'updateIssue' || selectedNode.data.githubOperation === 'createPullRequest' || selectedNode.data.githubOperation === 'createRelease' || selectedNode.data.githubOperation === 'updateRelease'">
+              <div class="space-y-2">
+                <Label>{{ selectedNode.data.githubOperation === 'createRelease' || selectedNode.data.githubOperation === 'updateRelease' ? 'Name / Title' : 'Title' }}</Label>
+                <ExpressionInput
+                  ref="githubTitleExpressionInputRef"
+                  :model-value="selectedNode.data.githubTitle || ''"
+                  placeholder="Fix flaky workflow run"
+                  single-line
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  @update:model-value="updateNodeData('githubTitle', $event)"
+                />
+              </div>
+            </template>
+
+            <template v-if="selectedNode.data.githubOperation === 'createIssue' || selectedNode.data.githubOperation === 'updateIssue' || selectedNode.data.githubOperation === 'createPullRequest' || selectedNode.data.githubOperation === 'createRelease' || selectedNode.data.githubOperation === 'updateRelease'">
+              <div class="space-y-2">
+                <Label>Body</Label>
+                <ExpressionInput
+                  ref="githubBodyExpressionInputRef"
+                  :model-value="selectedNode.data.githubBody || ''"
+                  placeholder="$input.text"
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  @update:model-value="updateNodeData('githubBody', $event)"
+                />
+              </div>
+            </template>
+
+            <template v-if="selectedNode.data.githubOperation === 'createComment'">
+              <div class="space-y-2">
+                <Label>Comment Body</Label>
+                <ExpressionInput
+                  ref="githubCommentBodyExpressionInputRef"
+                  :model-value="selectedNode.data.githubCommentBody || '$input.text'"
+                  placeholder="$input.text"
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  @update:model-value="updateNodeData('githubCommentBody', $event)"
+                />
+              </div>
+            </template>
+
+            <template v-if="selectedNode.data.githubOperation === 'createIssue' || selectedNode.data.githubOperation === 'updateIssue'">
+              <div class="grid grid-cols-2 gap-3">
+                <div class="space-y-2">
+                  <Label>Labels (JSON Array)</Label>
+                  <ExpressionInput
+                    ref="githubLabelsExpressionInputRef"
+                    :model-value="selectedNode.data.githubLabels ?? ''"
+                    placeholder="[&quot;bug&quot;, &quot;backend&quot;]"
+                    :rows="2"
+                    :nodes="workflowStore.nodes"
+                    :node-results="workflowStore.nodeResults"
+                    :edges="workflowStore.edges"
+                    :current-node-id="selectedNode.id"
+                    @update:model-value="updateNodeData('githubLabels', $event)"
+                  />
+                </div>
+                <div class="space-y-2">
+                  <Label>Assignees (JSON Array)</Label>
+                  <ExpressionInput
+                    ref="githubAssigneesExpressionInputRef"
+                    :model-value="selectedNode.data.githubAssignees ?? ''"
+                    placeholder="[&quot;octocat&quot;]"
+                    :rows="2"
+                    :nodes="workflowStore.nodes"
+                    :node-results="workflowStore.nodeResults"
+                    :edges="workflowStore.edges"
+                    :current-node-id="selectedNode.id"
+                    @update:model-value="updateNodeData('githubAssignees', $event)"
+                  />
+                </div>
+              </div>
+            </template>
+
+            <template v-if="selectedNode.data.githubOperation === 'lockIssue'">
+              <div class="space-y-2">
+                <Label>Lock Reason</Label>
+                <ExpressionInput
+                  ref="githubLockReasonExpressionInputRef"
+                  :model-value="selectedNode.data.githubLockReason || ''"
+                  placeholder="resolved"
+                  single-line
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  @update:model-value="updateNodeData('githubLockReason', $event)"
+                />
+              </div>
+            </template>
+
+            <template v-if="selectedNode.data.githubOperation === 'createPullRequest'">
+              <div class="grid grid-cols-2 gap-3">
+                <div class="space-y-2">
+                  <Label>Head Branch</Label>
+                  <ExpressionInput
+                    ref="githubHeadExpressionInputRef"
+                    :model-value="selectedNode.data.githubHead || ''"
+                    placeholder="feature/my-branch"
+                    single-line
+                    :nodes="workflowStore.nodes"
+                    :node-results="workflowStore.nodeResults"
+                    :edges="workflowStore.edges"
+                    :current-node-id="selectedNode.id"
+                    @update:model-value="updateNodeData('githubHead', $event)"
+                  />
+                </div>
+                <div class="space-y-2">
+                  <Label>Base Branch</Label>
+                  <ExpressionInput
+                    ref="githubBaseExpressionInputRef"
+                    :model-value="selectedNode.data.githubBase || 'main'"
+                    placeholder="main"
+                    single-line
+                    :nodes="workflowStore.nodes"
+                    :node-results="workflowStore.nodeResults"
+                    :edges="workflowStore.edges"
+                    :current-node-id="selectedNode.id"
+                    @update:model-value="updateNodeData('githubBase', $event)"
+                  />
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <input
+                  id="github-draft-pr"
+                  type="checkbox"
+                  :checked="selectedNode.data.githubDraft === true"
+                  class="rounded border-border"
+                  @change="updateNodeData('githubDraft', ($event.target as HTMLInputElement).checked)"
+                >
+                <label
+                  for="github-draft-pr"
+                  class="text-sm cursor-pointer select-none"
+                >Create as draft pull request</label>
+              </div>
+            </template>
+
+            <template v-if="selectedNode.data.githubOperation === 'getRelease' || selectedNode.data.githubOperation === 'updateRelease' || selectedNode.data.githubOperation === 'deleteRelease'">
+              <div class="space-y-2">
+                <Label>Release ID</Label>
+                <ExpressionInput
+                  ref="githubReleaseIdExpressionInputRef"
+                  :model-value="selectedNode.data.githubReleaseId || ''"
+                  placeholder="123456"
+                  single-line
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  @update:model-value="updateNodeData('githubReleaseId', $event)"
+                />
+              </div>
+            </template>
+
+            <template v-if="selectedNode.data.githubOperation === 'createRelease' || selectedNode.data.githubOperation === 'updateRelease'">
+              <div class="grid grid-cols-2 gap-3">
+                <div class="space-y-2">
+                  <Label>Tag Name</Label>
+                  <ExpressionInput
+                    ref="githubTagNameExpressionInputRef"
+                    :model-value="selectedNode.data.githubTagName || ''"
+                    placeholder="v1.2.3"
+                    single-line
+                    :nodes="workflowStore.nodes"
+                    :node-results="workflowStore.nodeResults"
+                    :edges="workflowStore.edges"
+                    :current-node-id="selectedNode.id"
+                    @update:model-value="updateNodeData('githubTagName', $event)"
+                  />
+                </div>
+                <div class="space-y-2">
+                  <Label>Target Commitish / Branch</Label>
+                  <ExpressionInput
+                    ref="githubBranchExpressionInputRef"
+                    :model-value="selectedNode.data.githubBranch || ''"
+                    placeholder="main"
+                    single-line
+                    :nodes="workflowStore.nodes"
+                    :node-results="workflowStore.nodeResults"
+                    :edges="workflowStore.edges"
+                    :current-node-id="selectedNode.id"
+                    @update:model-value="updateNodeData('githubBranch', $event)"
+                  />
+                </div>
+              </div>
+              <div class="flex items-center gap-4">
+                <label class="flex items-center gap-2 text-sm cursor-pointer select-none">
+                  <input
+                    id="github-release-draft"
+                    type="checkbox"
+                    :checked="selectedNode.data.githubDraft === true"
+                    class="rounded border-border"
+                    @change="updateNodeData('githubDraft', ($event.target as HTMLInputElement).checked)"
+                  >
+                  <span>Draft release</span>
+                </label>
+                <label class="flex items-center gap-2 text-sm cursor-pointer select-none">
+                  <input
+                    id="github-release-prerelease"
+                    type="checkbox"
+                    :checked="selectedNode.data.githubPrerelease === true"
+                    class="rounded border-border"
+                    @change="updateNodeData('githubPrerelease', ($event.target as HTMLInputElement).checked)"
+                  >
+                  <span>Prerelease</span>
+                </label>
+              </div>
+            </template>
+
+            <template v-if="selectedNode.data.githubOperation === 'getWorkflow' || selectedNode.data.githubOperation === 'dispatchWorkflow'">
+              <div class="space-y-2">
+                <Label>Workflow ID or File Name</Label>
+                <ExpressionInput
+                  ref="githubWorkflowIdExpressionInputRef"
+                  :model-value="selectedNode.data.githubWorkflowId || ''"
+                  placeholder="build.yml"
+                  single-line
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  @update:model-value="updateNodeData('githubWorkflowId', $event)"
+                />
+              </div>
+            </template>
+
+            <template v-if="selectedNode.data.githubOperation === 'dispatchWorkflow'">
+              <div class="space-y-2">
+                <Label>Ref or Branch</Label>
+                <ExpressionInput
+                  ref="githubBranchExpressionInputRef"
+                  :model-value="selectedNode.data.githubBranch || ''"
+                  placeholder="main"
+                  single-line
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  @update:model-value="updateNodeData('githubBranch', $event)"
+                />
+              </div>
+              <div class="space-y-2">
+                <Label>Workflow Inputs (JSON Object)</Label>
+                <ExpressionInput
+                  ref="githubWorkflowInputsExpressionInputRef"
+                  :model-value="selectedNode.data.githubWorkflowInputs ?? ''"
+                  placeholder="{&quot;environment&quot;:&quot;prod&quot;}"
+                  :rows="3"
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  @update:model-value="updateNodeData('githubWorkflowInputs', $event)"
+                />
+              </div>
+            </template>
+
+            <template v-if="selectedNode.data.githubOperation === 'getFile' || selectedNode.data.githubOperation === 'listFiles' || selectedNode.data.githubOperation === 'upsertFile' || selectedNode.data.githubOperation === 'deleteFile'">
+              <div class="space-y-2">
+                <Label>{{ selectedNode.data.githubOperation === 'listFiles' ? 'Directory Path' : 'File Path' }}</Label>
+                <ExpressionInput
+                  ref="githubFilePathExpressionInputRef"
+                  :model-value="selectedNode.data.githubFilePath || ''"
+                  placeholder="docs/README.md"
+                  single-line
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  @update:model-value="updateNodeData('githubFilePath', $event)"
+                />
+              </div>
+              <div class="space-y-2">
+                <Label>{{ selectedNode.data.githubOperation === 'getFile' || selectedNode.data.githubOperation === 'listFiles' ? 'Ref or Branch' : 'Target Branch' }}</Label>
+                <ExpressionInput
+                  ref="githubBranchExpressionInputRef"
+                  :model-value="selectedNode.data.githubBranch || ''"
+                  placeholder="main"
+                  single-line
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  @update:model-value="updateNodeData('githubBranch', $event)"
+                />
+              </div>
+            </template>
+
+            <template v-if="selectedNode.data.githubOperation === 'upsertFile' || selectedNode.data.githubOperation === 'deleteFile'">
+              <div class="space-y-2">
+                <Label>Commit Message</Label>
+                <ExpressionInput
+                  ref="githubCommitMessageExpressionInputRef"
+                  :model-value="selectedNode.data.githubCommitMessage || ''"
+                  placeholder="Update generated report"
+                  single-line
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  @update:model-value="updateNodeData('githubCommitMessage', $event)"
+                />
+              </div>
+            </template>
+
+            <template v-if="selectedNode.data.githubOperation === 'upsertFile'">
+              <div class="space-y-2">
+                <Label>File Content</Label>
+                <ExpressionInput
+                  ref="githubFileContentExpressionInputRef"
+                  :model-value="selectedNode.data.githubFileContent || '$input.text'"
+                  placeholder="$input.text"
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  @update:model-value="updateNodeData('githubFileContent', $event)"
+                />
+              </div>
+            </template>
+
+            <div class="space-y-2 pt-2 border-t">
+              <Label class="text-muted-foreground">Output</Label>
+              <div class="text-xs font-mono space-y-1 text-muted-foreground">
+                <template v-if="selectedNode.data.githubOperation === 'getRepository'">
+                  <div>${{ selectedNode.data.label }}.repository - Repository payload</div>
+                  <div>${{ selectedNode.data.label }}.full_name - owner/repo</div>
+                </template>
+                <template v-else-if="selectedNode.data.githubOperation === 'listOrganizationRepositories' || selectedNode.data.githubOperation === 'listUserRepositories'">
+                  <div>${{ selectedNode.data.label }}.repositories - Repository array</div>
+                  <div>${{ selectedNode.data.label }}.count - Number of repositories</div>
+                </template>
+                <template v-else-if="selectedNode.data.githubOperation === 'getIssue' || selectedNode.data.githubOperation === 'createIssue' || selectedNode.data.githubOperation === 'updateIssue'">
+                  <div>${{ selectedNode.data.label }}.issue - Issue payload</div>
+                  <div>${{ selectedNode.data.label }}.number - Issue number</div>
+                  <div>${{ selectedNode.data.label }}.url - GitHub URL</div>
+                </template>
+                <template v-else-if="selectedNode.data.githubOperation === 'createComment'">
+                  <div>${{ selectedNode.data.label }}.comment - Comment payload</div>
+                  <div>${{ selectedNode.data.label }}.id - Comment ID</div>
+                  <div>${{ selectedNode.data.label }}.url - Comment URL</div>
+                </template>
+                <template v-else-if="selectedNode.data.githubOperation === 'lockIssue'">
+                  <div>${{ selectedNode.data.label }}.locked - Boolean</div>
+                  <div>${{ selectedNode.data.label }}.issue_number - Locked issue number</div>
+                  <div>${{ selectedNode.data.label }}.lock_reason - Lock reason if provided</div>
+                </template>
+                <template v-else-if="selectedNode.data.githubOperation === 'listIssues'">
+                  <div>${{ selectedNode.data.label }}.issues - Issue array</div>
+                  <div>${{ selectedNode.data.label }}.count - Number of issues</div>
+                </template>
+                <template v-else-if="selectedNode.data.githubOperation === 'listPullRequests'">
+                  <div>${{ selectedNode.data.label }}.pull_requests - PR array</div>
+                  <div>${{ selectedNode.data.label }}.count - Number of pull requests</div>
+                </template>
+                <template v-else-if="selectedNode.data.githubOperation === 'createPullRequest'">
+                  <div>${{ selectedNode.data.label }}.pull_request - PR payload</div>
+                  <div>${{ selectedNode.data.label }}.number - Pull request number</div>
+                  <div>${{ selectedNode.data.label }}.url - Pull request URL</div>
+                </template>
+                <template v-else-if="selectedNode.data.githubOperation === 'listReleases'">
+                  <div>${{ selectedNode.data.label }}.releases - Release array</div>
+                  <div>${{ selectedNode.data.label }}.count - Number of releases</div>
+                </template>
+                <template v-else-if="selectedNode.data.githubOperation === 'getRelease' || selectedNode.data.githubOperation === 'createRelease' || selectedNode.data.githubOperation === 'updateRelease'">
+                  <div>${{ selectedNode.data.label }}.release - Release payload</div>
+                  <div>${{ selectedNode.data.label }}.id - Release ID</div>
+                  <div>${{ selectedNode.data.label }}.tag_name - Tag name</div>
+                  <div>${{ selectedNode.data.label }}.url - Release URL</div>
+                </template>
+                <template v-else-if="selectedNode.data.githubOperation === 'deleteRelease'">
+                  <div>${{ selectedNode.data.label }}.deleted - Boolean</div>
+                  <div>${{ selectedNode.data.label }}.release_id - Deleted release ID</div>
+                </template>
+                <template v-else-if="selectedNode.data.githubOperation === 'listWorkflows'">
+                  <div>${{ selectedNode.data.label }}.workflows - Workflow array</div>
+                  <div>${{ selectedNode.data.label }}.count - Number of workflows</div>
+                </template>
+                <template v-else-if="selectedNode.data.githubOperation === 'getWorkflow'">
+                  <div>${{ selectedNode.data.label }}.workflow - Workflow payload</div>
+                  <div>${{ selectedNode.data.label }}.id - Workflow ID</div>
+                  <div>${{ selectedNode.data.label }}.path - Workflow file path</div>
+                </template>
+                <template v-else-if="selectedNode.data.githubOperation === 'dispatchWorkflow'">
+                  <div>${{ selectedNode.data.label }}.dispatched - Boolean</div>
+                  <div>${{ selectedNode.data.label }}.workflow_id - Workflow target</div>
+                  <div>${{ selectedNode.data.label }}.ref - Workflow ref</div>
+                  <div>${{ selectedNode.data.label }}.inputs - Dispatch inputs object</div>
+                </template>
+                <template v-else-if="selectedNode.data.githubOperation === 'listFiles'">
+                  <div>${{ selectedNode.data.label }}.path - Directory path</div>
+                  <div>${{ selectedNode.data.label }}.items - Directory entries</div>
+                  <div>${{ selectedNode.data.label }}.count - Number of items</div>
+                </template>
+                <template v-else-if="selectedNode.data.githubOperation === 'getFile'">
+                  <div>${{ selectedNode.data.label }}.file - File payload</div>
+                  <div>${{ selectedNode.data.label }}.path - Repository path</div>
+                  <div>${{ selectedNode.data.label }}.sha - File SHA</div>
+                  <div>${{ selectedNode.data.label }}.content - Decoded text content</div>
+                </template>
+                <template v-else-if="selectedNode.data.githubOperation === 'upsertFile'">
+                  <div>${{ selectedNode.data.label }}.file - File payload</div>
+                  <div>${{ selectedNode.data.label }}.path - Repository path</div>
+                  <div>${{ selectedNode.data.label }}.sha - File SHA</div>
+                  <div>${{ selectedNode.data.label }}.commit_sha - Commit SHA</div>
+                  <div>${{ selectedNode.data.label }}.created - True when file was newly created</div>
+                </template>
+                <template v-else-if="selectedNode.data.githubOperation === 'deleteFile'">
+                  <div>${{ selectedNode.data.label }}.deleted - Boolean</div>
+                  <div>${{ selectedNode.data.label }}.path - Deleted repository path</div>
+                  <div>${{ selectedNode.data.label }}.sha - Deleted file SHA</div>
+                  <div>${{ selectedNode.data.label }}.commit_sha - Deletion commit SHA</div>
                 </template>
                 <template v-else>
                   <div>Select an operation to see output fields</div>
