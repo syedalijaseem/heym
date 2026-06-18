@@ -45,7 +45,10 @@ _AI_WIDGET_SUFFIX = (
     "sample data, produce the upstream rows with a set node using "
     "$array(dict(key=value, ...), ...) — never use ${...} or bare {...} object literals. "
     "For markdown checklists / task lists, use chartType text and put GFM task list lines "
-    "(- [ ] / - [x]) directly in chartOutput text (not only in upstream rows)."
+    "(- [ ] / - [x]) directly in chartOutput text (not only in upstream rows). "
+    "For numbered markdown lines (especially descending lists), prefix each line with the "
+    "explicit number to display (e.g. 9. Title\\n8. Title); use a loop with "
+    "total - index to count down and join lines before chartOutput valueField."
 )
 
 

@@ -95,6 +95,7 @@ class AIAssistantRequest(BaseModel):
     conversation_history: list[dict] | None = None
     available_workflows: list[dict] | None = None
     ask_mode: bool = False
+    execution_log: dict | None = None
 
 
 class FileAttachment(BaseModel):
@@ -129,6 +130,84 @@ DASHBOARD_CHAT_TEMPERATURE = 0.1
 WORKFLOW_BUILDER_TEMPERATURE = 0.0
 WORKFLOW_ASSISTANT_SSE_HEARTBEAT_SECONDS = 10.0
 DASHBOARD_CHAT_SSE_HEARTBEAT_SECONDS = 10.0
+
+
+WORKFLOW_ASSISTANT_SSE_HEARTBEAT_SECONDS = 10.0
+DASHBOARD_CHAT_SSE_HEARTBEAT_SECONDS = 10.0
+EXECUTION_LOG_NODE_OUTPUT_MAX_CHARS = 2048
+EXECUTION_LOG_TOTAL_MAX_CHARS = 12_000
+
+
+def _truncate_execution_log_text(text: str, max_chars: int) -> str:
+    if len(text) <= max_chars:
+        return text
+    suffix = "...[truncated]"
+    return f"{text[: max(0, max_chars - len(suffix))]}{suffix}"
+
+
+def _truncate_execution_log_value(value: Any, max_chars: int) -> Any:
+    if isinstance(value, str):
+        return _truncate_execution_log_text(value, max_chars)
+    if isinstance(value, (int, float, bool)) or value is None:
+        return value
+    try:
+        serialized = json.dumps(value, ensure_ascii=False, default=str)
+    except (TypeError, ValueError):
+        serialized = str(value)
+    if len(serialized) <= max_chars:
+        return value
+    return _truncate_execution_log_text(serialized, max_chars)
+
+
+def _prepare_execution_log_for_prompt(execution_log: dict) -> dict:
+    prepared = copy.deepcopy(execution_log)
+    node_results = prepared.get("node_results")
+    if not isinstance(node_results, list):
+        return prepared
+
+    truncated_results: list[dict[str, Any]] = []
+    for node_result in node_results:
+        if not isinstance(node_result, dict):
+            continue
+        entry = dict(node_result)
+        if "output" in entry:
+            entry["output"] = _truncate_execution_log_value(
+                entry.get("output"),
+                EXECUTION_LOG_NODE_OUTPUT_MAX_CHARS,
+            )
+        truncated_results.append(entry)
+    prepared["node_results"] = truncated_results
+
+    if "final_outputs" in prepared and prepared["final_outputs"] is not None:
+        prepared["final_outputs"] = _truncate_execution_log_value(
+            prepared["final_outputs"],
+            EXECUTION_LOG_NODE_OUTPUT_MAX_CHARS,
+        )
+
+    return prepared
+
+
+def _append_execution_log_to_prompt(system_prompt: str, execution_log: dict | None) -> str:
+    if not execution_log:
+        return system_prompt
+
+    node_results = execution_log.get("node_results")
+    if not isinstance(node_results, list) or not node_results:
+        return system_prompt
+
+    prepared = _prepare_execution_log_for_prompt(execution_log)
+    log_json = json.dumps(prepared, ensure_ascii=False, indent=2, default=str)
+    if len(log_json) > EXECUTION_LOG_TOTAL_MAX_CHARS:
+        log_json = _truncate_execution_log_text(log_json, EXECUTION_LOG_TOTAL_MAX_CHARS)
+
+    return (
+        f"{system_prompt}\n\n"
+        "## Latest Workflow Execution Log\n\n"
+        "This log comes from the most recent canvas/widget test run in the editor. "
+        "Use it for debugging, error analysis, and workflow fixes. "
+        "Do not invent node results that are not present in this log.\n\n"
+        f"```json\n{log_json}\n```\n"
+    )
 
 
 def _get_dashboard_chat_node_label(
@@ -3466,6 +3545,8 @@ async def workflow_assistant_stream(
 
     if is_dashboard_widget_workflow(request.current_workflow):
         system_prompt += DASHBOARD_WIDGET_PROMPT_HINT
+
+    system_prompt = _append_execution_log_to_prompt(system_prompt, request.execution_log)
 
     logger.debug(
         "\n" + "=" * 60 + "\n"

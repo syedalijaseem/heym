@@ -24,7 +24,7 @@ import JsonTree from "@/components/ui/JsonTree.vue";
 import Textarea from "@/components/ui/Textarea.vue";
 import ExecutionTimeline from "@/components/Panels/ExecutionTimeline.vue";
 import type { TimelineEntry, TimelineSelectPayload } from "@/components/Panels/executionTimeline";
-import { formatExecutionLogToolCallTitle, isRetryAttemptNodeResult } from "@/lib/executionLog";
+import { buildExecutionLogForAssistant, formatExecutionLogToolCallTitle, isRetryAttemptNodeResult } from "@/lib/executionLog";
 import { cn, formatFileSize } from "@/lib/utils";
 import { buildMeasuredNodeSizeMap, getWorkflowNodeLayoutSize } from "@/lib/workflowLayout";
 import { normalizeWorkflowEdges } from "@/lib/workflowEdges";
@@ -337,23 +337,29 @@ function selectCanvasNodeFromTimeline(payload: TimelineSelectPayload): void {
   workflowStore.openPropertiesPanel(undefined, { skipPrimaryExpand: true });
 }
 
+function getExecutionLogForAssistantRequest():
+  | ReturnType<typeof buildExecutionLogForAssistant>
+  | undefined {
+  if (isExecuting.value) {
+    return undefined;
+  }
+  return buildExecutionLogForAssistant(extendedExecutionRows.value, executionResult.value) ?? undefined;
+}
+
 function getLogsAsJsonData(): object {
-  const logs = displayResults.value.map((result) => ({
-    node_id: result.node_id,
-    node_label: result.node_label,
-    node_type: result.node_type,
-    status: result.status,
-    execution_time_ms: result.execution_time_ms,
-    output: result.output,
-    error: result.error,
-    metadata: result.metadata,
-  }));
+  const log = buildExecutionLogForAssistant(
+    displayResults.value as NodeResult[],
+    executionResult.value,
+  );
+  if (log) {
+    return log;
+  }
 
   return {
     execution_status: executionResult.value?.status || "running",
     execution_time_ms: executionResult.value?.execution_time_ms || null,
     final_outputs: executionResult.value?.outputs || null,
-    node_results: logs,
+    node_results: [],
   };
 }
 
@@ -1519,6 +1525,7 @@ async function sendAiMessage(): Promise<void> {
   const historyForRequest = conversationHistory.value.slice(0, -2);
 
   const isAskMode = canvasMode.value === "ask";
+  const executionLog = getExecutionLogForAssistantRequest();
 
   aiApi.assistantStream(
     {
@@ -1535,6 +1542,7 @@ async function sendAiMessage(): Promise<void> {
         output_node: wf.output_node,
       })),
       askMode: isAskMode,
+      executionLog,
     },
     (text) => {
       aiLoading.value = false;
@@ -1615,6 +1623,7 @@ function retryMessage(failedMessageId: string): void {
   aiAbortController.value = new AbortController();
 
   const historyForRequest = conversationHistory.value.slice(0, -2);
+  const executionLog = getExecutionLogForAssistantRequest();
 
   aiApi.assistantStream(
     {
@@ -1630,6 +1639,7 @@ function retryMessage(failedMessageId: string): void {
         input_fields: wf.input_fields,
         output_node: wf.output_node,
       })),
+      executionLog,
     },
     (text) => {
       aiLoading.value = false;

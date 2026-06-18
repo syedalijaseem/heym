@@ -45,6 +45,19 @@ def _resolve_range(
     return (now - delta, now, bucket)
 
 
+def _apply_source_filter(filters: list, source: str) -> None:
+    """Apply source filter, including legacy expression-builder traces stored as assistant."""
+    if source == "expression_builder":
+        filters.append(
+            or_(
+                LLMTrace.source == "expression_builder",
+                (LLMTrace.source == "assistant") & (LLMTrace.node_label == "Expression Builder"),
+            )
+        )
+    else:
+        filters.append(LLMTrace.source == source)
+
+
 @router.get("", response_model=LLMTraceListResponse)
 async def list_traces(
     limit: int = Query(50, ge=1, le=200),
@@ -66,7 +79,7 @@ async def list_traces(
     if workflow_id:
         filters.append(LLMTrace.workflow_id == workflow_id)
     if source:
-        filters.append(LLMTrace.source == source)
+        _apply_source_filter(filters, source)
     if status_filter == "error":
         filters.append(LLMTrace.error.is_not(None))
     elif status_filter == "success":
@@ -165,7 +178,7 @@ async def get_trace_stats(
     if workflow_id:
         filters.append(LLMTrace.workflow_id == workflow_id)
     if source:
-        filters.append(LLMTrace.source == source)
+        _apply_source_filter(filters, source)
     if status_filter == "error":
         filters.append(LLMTrace.error.is_not(None))
     elif status_filter == "success":

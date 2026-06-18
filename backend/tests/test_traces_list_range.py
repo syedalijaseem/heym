@@ -4,7 +4,9 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.api.traces import list_traces
+from sqlalchemy.dialects import postgresql
+
+from app.api.traces import _apply_source_filter, list_traces
 
 
 class _ExecResult:
@@ -103,3 +105,32 @@ class ListRangeTests(unittest.IsolatedAsyncioTestCase):
         resolve_mock.assert_awaited_once_with(db, self.user.id, [("gpt-4o-mini", 10, 20)])
         self.assertEqual(result.items[0].cost_usd, Decimal("0.000123"))
         self.assertTrue(result.items[0].is_priced)
+
+
+class SourceFilterTests(unittest.TestCase):
+    def test_expression_builder_filter_includes_legacy_assistant_traces(self) -> None:
+        filters: list = []
+        _apply_source_filter(filters, "expression_builder")
+        self.assertEqual(len(filters), 1)
+        compiled = str(
+            filters[0].compile(
+                dialect=postgresql.dialect(),
+                compile_kwargs={"literal_binds": True},
+            )
+        )
+        self.assertIn("expression_builder", compiled)
+        self.assertIn("assistant", compiled)
+        self.assertIn("Expression Builder", compiled)
+
+    def test_other_sources_use_exact_match(self) -> None:
+        filters: list = []
+        _apply_source_filter(filters, "workflow")
+        self.assertEqual(len(filters), 1)
+        compiled = str(
+            filters[0].compile(
+                dialect=postgresql.dialect(),
+                compile_kwargs={"literal_binds": True},
+            )
+        )
+        self.assertIn("workflow", compiled)
+        self.assertNotIn("expression_builder", compiled)
