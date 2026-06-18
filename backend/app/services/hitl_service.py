@@ -339,7 +339,7 @@ async def resume_hitl_request_in_background(request_id: uuid.UUID) -> None:
         hitl_request = result.scalar_one_or_none()
         if hitl_request is None:
             return
-        if hitl_request.status != "pending" or hitl_request.expires_at < datetime.now(timezone.utc):
+        if hitl_request.status != "resolved" or not hitl_request.decision:
             return
 
         workflow = await db.get(Workflow, hitl_request.workflow_id)
