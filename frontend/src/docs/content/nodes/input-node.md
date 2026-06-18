@@ -41,6 +41,16 @@ The **Input** node is the entry point for workflows that receive data from the u
 - `$userInput.query` – query parameters
 - `$userInput.query.param1` – specific query param
 
+## Run Panel File Input
+
+In the editor **Run** tab (Defined webhook mode), each input field supports drag-and-drop and an inline attachment control (bottom-right of the field):
+
+- **Text files** (`.txt`, `.md`, `.json`, `.csv`, and similar) are read as plain text.
+- **Images** (JPEG, PNG, GIF, WebP) are stored as a `data:` URL (base64) in the field value — use field keys such as `imageUrl` or `base64` when downstream nodes expect image data.
+- **PDF** files are converted to extracted text (max 5 MB file, 100k characters of content).
+
+One file per field. You can still edit the textarea after a file is loaded. Generic webhook mode (raw JSON body) does not show per-field file controls.
+
 ## Input Fields vs Generic Webhooks
 
 `inputFields` still describe expected inputs for defined-mode editor forms, sub-workflow mapping, and other metadata-driven surfaces.

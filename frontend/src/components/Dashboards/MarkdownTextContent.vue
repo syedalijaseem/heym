@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onBeforeUnmount, ref, nextTick } from "vue";
 import DOMPurify from "dompurify";
 import { Check } from "lucide-vue-next";
 import { marked } from "marked";
 
 import { preserveExplicitOrderedListNumbers } from "@/lib/markdown";
-import { parseMarkdownBlocks } from "@/lib/markdownTaskList";
+import { parseMarkdownBlocks, type TaskListItem } from "@/lib/markdownTaskList";
 
 const INLINE_ALLOWED_TAGS = ["strong", "em", "u", "s", "code", "a", "br"];
 const INLINE_ALLOWED_ATTR = ["href", "target", "rel"];
+const CLICK_DELAY_MS = 250;
 
 const props = defineProps<{
   text: string;
@@ -18,9 +19,26 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: "toggle", lineIndex: number): void;
+  (e: "update", payload: { lineIndex: number; text: string }): void;
 }>();
 
 const blocks = computed(() => parseMarkdownBlocks(props.text));
+const editingLineIndex = ref<number | null>(null);
+const editDraft = ref("");
+const originalEditText = ref("");
+const editInputRef = ref<HTMLInputElement | null>(null);
+let pendingToggleTimer: ReturnType<typeof setTimeout> | null = null;
+
+function clearPendingToggle(): void {
+  if (pendingToggleTimer !== null) {
+    clearTimeout(pendingToggleTimer);
+    pendingToggleTimer = null;
+  }
+}
+
+onBeforeUnmount(() => {
+  clearPendingToggle();
+});
 
 function renderHtml(content: string): string {
   if (!content.trim()) return "";
@@ -38,9 +56,65 @@ function renderInline(content: string): string {
   });
 }
 
-function onToggle(lineIndex: number): void {
+function onCheckboxClick(lineIndex: number): void {
+  clearPendingToggle();
   if (!props.interactive || props.saving) return;
   emit("toggle", lineIndex);
+}
+
+function onRowClick(event: MouseEvent, lineIndex: number): void {
+  if (!props.interactive || props.saving) return;
+  if (editingLineIndex.value === lineIndex) return;
+  const target = event.target as HTMLElement;
+  if (target.closest('[role="checkbox"]')) return;
+  if (target.closest("a")) return;
+  clearPendingToggle();
+  pendingToggleTimer = setTimeout(() => {
+    pendingToggleTimer = null;
+    emit("toggle", lineIndex);
+  }, CLICK_DELAY_MS);
+}
+
+async function onRowDblClick(event: MouseEvent, item: TaskListItem): Promise<void> {
+  const target = event.target as HTMLElement;
+  if (target.closest('[role="checkbox"]')) return;
+  clearPendingToggle();
+  event.stopPropagation();
+  event.preventDefault();
+  await startEdit(item);
+}
+
+async function startEdit(item: TaskListItem): Promise<void> {
+  if (!props.interactive || props.saving) return;
+  editingLineIndex.value = item.lineIndex;
+  editDraft.value = item.text;
+  originalEditText.value = item.text;
+  await nextTick();
+  editInputRef.value?.focus();
+  editInputRef.value?.select();
+}
+
+function cancelEdit(): void {
+  editingLineIndex.value = null;
+  editDraft.value = "";
+  originalEditText.value = "";
+}
+
+function commitEdit(lineIndex: number): void {
+  if (editingLineIndex.value !== lineIndex) return;
+  const next = editDraft.value;
+  const trimmed = next.trim();
+  if (trimmed === "") {
+    emit("update", { lineIndex, text: "" });
+    cancelEdit();
+    return;
+  }
+  if (next === originalEditText.value) {
+    cancelEdit();
+    return;
+  }
+  emit("update", { lineIndex, text: next });
+  cancelEdit();
 }
 </script>
 
@@ -68,7 +142,8 @@ function onToggle(lineIndex: number): void {
               ? 'cursor-pointer hover:bg-muted/50'
               : 'cursor-default opacity-90'
           "
-          @click.stop="onToggle(item.lineIndex)"
+          @click.stop="onRowClick($event, item.lineIndex)"
+          @dblclick.stop.prevent="onRowDblClick($event, item)"
         >
           <span
             class="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border border-border transition-colors"
@@ -80,6 +155,7 @@ function onToggle(lineIndex: number): void {
             role="checkbox"
             :aria-checked="item.checked"
             :aria-disabled="!interactive || saving"
+            @click.stop="onCheckboxClick(item.lineIndex)"
           >
             <Check
               v-if="item.checked"
@@ -87,8 +163,20 @@ function onToggle(lineIndex: number): void {
               aria-hidden="true"
             />
           </span>
+          <input
+            v-if="editingLineIndex === item.lineIndex"
+            ref="editInputRef"
+            v-model="editDraft"
+            class="min-w-0 flex-1 rounded border border-input bg-background px-1.5 py-0.5 text-sm leading-snug text-foreground outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
+            @click.stop
+            @mousedown.stop
+            @blur="commitEdit(item.lineIndex)"
+            @keyup.enter="commitEdit(item.lineIndex)"
+            @keyup.escape="cancelEdit"
+          >
           <span
-            class="min-w-0 flex-1 leading-snug text-foreground"
+            v-else
+            class="min-w-0 flex-1 leading-snug text-foreground select-none"
             v-html="renderInline(item.text)"
           />
         </li>

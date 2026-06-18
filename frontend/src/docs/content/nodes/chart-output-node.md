@@ -62,6 +62,10 @@ Use GitHub-flavored markdown task list syntax in the static `text` field:
 
 On the [Dashboard](../tabs/dashboard-tab.md), checkboxes render as clickable controls (dark and light mode friendly). Toggling a checkbox updates the widget workflow's `text` field and persists across refreshes.
 
+**Inline editing:** double-click a task item's label to edit it in place. Press Enter or click away to save; press Escape to cancel. Clear the label completely to remove that item from the list.
+
+**Links in task items:** when a label contains a markdown link (`[title](url)`), clicking the link opens the URL without toggling the checkbox. Click elsewhere on the row to toggle.
+
 **Static text only:** interactivity requires GFM task list syntax (`- [ ]` / `- [x]`). Plain dynamic status messages without task items stay read-only. When markdown comes from `valueField`, the first toggle copies it into the static `text` field so changes persist.
 
 ### Numbered lists
