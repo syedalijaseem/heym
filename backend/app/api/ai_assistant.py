@@ -139,11 +139,11 @@ Given the workflow's nodes and edges, write Markdown with these sections, in thi
 ## Improvement areas
 A bulleted list of concrete, actionable suggestions (reliability, error handling, missing validation, cost, clarity). Whenever the workflow handles credentials, user input, external requests, data exposure, injection-prone steps, or anything else security-relevant, include a clear **security** angle here (risks and how to mitigate them). If the workflow already looks solid, say so and suggest small refinements.
 
-## What it does
-A numbered, step-by-step walk through the nodes in execution order, in plain language.
-
 ## Purpose
 One or two sentences on what this workflow is for.
+
+## What it does
+A numbered, step-by-step walk through the nodes in execution order, in plain language.
 
 Output ONLY Markdown. Do not include JSON, code fences around the whole document, or tool calls. Be concise and specific to THIS workflow."""
 

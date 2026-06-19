@@ -266,7 +266,7 @@ onBeforeUnmount(() => {
   <aside
     :class="
       cn(
-        'analysis-panel w-96 max-w-full md:w-[380px] border-r border-border/40 flex flex-col h-full bg-background overflow-hidden',
+        'analysis-panel w-96 max-w-full md:w-[460px] lg:w-[540px] border-r border-border/40 flex flex-col h-full bg-background overflow-hidden',
       )
     "
   >
@@ -442,7 +442,7 @@ onBeforeUnmount(() => {
             New analysis (preview)
           </p>
           <div
-            class="prose prose-sm dark:prose-invert max-w-none rounded-md border border-border p-3 prose-headings:mt-6 prose-headings:mb-3 prose-p:my-3 prose-ul:my-3 prose-ol:my-3 prose-li:my-1.5"
+            class="prose prose-sm dark:prose-invert max-w-none rounded-md border border-border p-3 prose-headings:mt-8 prose-headings:mb-4 prose-p:my-4 prose-ul:my-4 prose-ol:my-4 prose-li:my-2.5 prose-li:leading-relaxed"
             v-html="
               reanalyzeHtml ||
                 (running ? '<em>Running workflow…</em>' : '<em>Generating…</em>')
@@ -474,7 +474,7 @@ onBeforeUnmount(() => {
 
         <div
           v-else
-          class="prose prose-sm dark:prose-invert max-w-none prose-headings:mt-6 prose-headings:mb-3 prose-p:my-3 prose-ul:my-3 prose-ol:my-3 prose-li:my-1.5"
+          class="prose prose-sm dark:prose-invert max-w-none prose-headings:mt-8 prose-headings:mb-4 prose-p:my-4 prose-ul:my-4 prose-ol:my-4 prose-li:my-2.5 prose-li:leading-relaxed"
           v-html="renderedHtml || '<em>No content yet.</em>'"
         />
       </div>
