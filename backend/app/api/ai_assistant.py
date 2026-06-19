@@ -134,16 +134,16 @@ class FixTranscriptionResponse(BaseModel):
 
 WORKFLOW_ANALYZE_SYSTEM_PROMPT = """You analyze an automation workflow and produce a clear Markdown report.
 
-Given the workflow's nodes and edges, write Markdown with these sections:
+Given the workflow's nodes and edges, write Markdown with these sections, in this exact order:
 
-## Purpose
-One or two sentences on what this workflow is for.
+## Improvement areas
+A bulleted list of concrete, actionable suggestions (reliability, error handling, missing validation, cost, clarity). Whenever the workflow handles credentials, user input, external requests, data exposure, injection-prone steps, or anything else security-relevant, include a clear **security** angle here (risks and how to mitigate them). If the workflow already looks solid, say so and suggest small refinements.
 
 ## What it does
 A numbered, step-by-step walk through the nodes in execution order, in plain language.
 
-## Improvement areas
-A bulleted list of concrete, actionable suggestions (reliability, error handling, missing validation, cost, clarity). If the workflow already looks solid, say so and suggest small refinements.
+## Purpose
+One or two sentences on what this workflow is for.
 
 Output ONLY Markdown. Do not include JSON, code fences around the whole document, or tool calls. Be concise and specific to THIS workflow."""
 

@@ -41,7 +41,7 @@ Select an LLM **Credential** and **Model** at the top of the panel (the model li
 
 Both actions first **run the workflow** (when it is valid and runnable) and include the execution results in the analysis prompt, so the report reflects how the workflow actually behaves. If the workflow can't run, the analysis proceeds from its static structure instead.
 
-The generated report covers three sections: the workflow's **Purpose**, **What it does** (a step-by-step walk through the nodes), and **Improvement areas** (concrete suggestions).
+The generated report covers three sections, in order: **Improvement areas** (concrete suggestions, including a **security** angle whenever the workflow touches credentials, user input, external requests, or data exposure), **What it does** (a step-by-step walk through the nodes), and the workflow's **Purpose**.
 
 Each analysis run is recorded in [Traces](../tabs/traces-tab.md) under the **Workflow Analysis** source.
 
