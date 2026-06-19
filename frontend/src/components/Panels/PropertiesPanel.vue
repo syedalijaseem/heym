@@ -10720,11 +10720,13 @@ onUnmounted(() => {
                   />
                 </div>
                 <div class="space-y-2">
-                  <Label>Mentioned User</Label>
+                  <Label>
+                    {{ selectedNode.data.githubOperation === 'getUserIssues' ? 'Mentioned Filter' : 'Mentioned User' }}
+                  </Label>
                   <ExpressionInput
                     ref="githubMentionedExpressionInputRef"
                     :model-value="selectedNode.data.githubMentioned || ''"
-                    placeholder="octocat"
+                    :placeholder="selectedNode.data.githubOperation === 'getUserIssues' ? 'true' : 'octocat'"
                     single-line
                     :nodes="workflowStore.nodes"
                     :node-results="workflowStore.nodeResults"
@@ -10732,6 +10734,13 @@ onUnmounted(() => {
                     :current-node-id="selectedNode.id"
                     @update:model-value="updateNodeData('githubMentioned', $event)"
                   />
+                  <p
+                    v-if="selectedNode.data.githubOperation === 'getUserIssues'"
+                    class="text-xs text-muted-foreground"
+                  >
+                    Set any non-empty value to return issues mentioning the authenticated user
+                    instead of issues assigned to them.
+                  </p>
                 </div>
                 <div class="space-y-2">
                   <Label>Labels</Label>

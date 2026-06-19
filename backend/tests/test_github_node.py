@@ -459,6 +459,51 @@ class GitHubServiceTests(unittest.TestCase):
         self.assertEqual(result["conclusion"], "success")
         self.assertEqual(result["workflow_run"]["id"], 123)
 
+    def test_dispatch_workflow_and_wait_discovers_run_after_no_content_response(self) -> None:
+        client = MagicMock()
+        request = httpx.Request("POST", "https://api.github.com/test")
+        client.request.side_effect = [
+            httpx.Response(status_code=204, request=request),
+            _make_response(
+                200,
+                {
+                    "workflow_runs": [
+                        {
+                            "id": 456,
+                            "event": "workflow_dispatch",
+                            "head_branch": "main",
+                            "created_at": "2099-01-01T00:00:00Z",
+                            "status": "queued",
+                        }
+                    ]
+                },
+            ),
+            _make_response(
+                200,
+                {"id": 456, "status": "completed", "conclusion": "success"},
+            ),
+        ]
+        service = GitHubService(_make_config(), client=client)
+
+        result = service.dispatch_workflow_and_wait(
+            "octo",
+            "repo",
+            "build.yml",
+            "main",
+            timeout_seconds=10,
+            poll_interval_seconds=0.1,
+        )
+
+        self.assertTrue(result["completed"])
+        self.assertEqual(result["workflow_run_id"], 456)
+        self.assertEqual(result["workflow_run"]["id"], 456)
+        discovery_call = client.request.call_args_list[1]
+        self.assertTrue(discovery_call.args[1].endswith("/actions/workflows/build.yml/runs"))
+        self.assertEqual(
+            discovery_call.kwargs["params"],
+            {"event": "workflow_dispatch", "per_page": 100},
+        )
+
     def test_user_actions_use_expected_endpoints(self) -> None:
         client = MagicMock()
         client.request.side_effect = [
@@ -485,7 +530,8 @@ class GitHubServiceTests(unittest.TestCase):
         calls = client.request.call_args_list
         self.assertTrue(calls[0].args[1].endswith("/users/octocat/repos"))
         self.assertTrue(calls[1].args[1].endswith("/issues"))
-        self.assertEqual(calls[1].kwargs["params"]["filter"], "assigned")
+        self.assertEqual(calls[1].kwargs["params"]["filter"], "mentioned")
+        self.assertNotIn("mentioned", calls[1].kwargs["params"])
         self.assertTrue(calls[2].args[1].endswith("/orgs/octo-org/invitations"))
 
     def test_update_release_includes_false_boolean_fields(self) -> None:

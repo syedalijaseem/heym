@@ -2189,7 +2189,7 @@ export const useWorkflowStore = defineStore("workflow", () => {
           });
         }
         if (
-          (operation === "createRelease" || operation === "updateRelease") &&
+          operation === "createRelease" &&
           (!node.data.githubTagName || node.data.githubTagName.trim() === "")
         ) {
           errors.push({

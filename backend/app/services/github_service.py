@@ -1,5 +1,6 @@
 import base64
 import time
+from datetime import datetime
 from typing import Any
 from urllib.parse import quote
 
@@ -516,6 +517,59 @@ class GitHubService:
             raise ValueError("GitHub getWorkflowRun returned an unexpected response")
         return response
 
+    def list_workflow_runs(
+        self,
+        owner: str,
+        repo: str,
+        workflow_id: str,
+        per_page: int = 30,
+    ) -> list[dict[str, Any]]:
+        """List recent workflow-dispatch runs for one workflow."""
+        response = self._request_json(
+            "GET",
+            f"/repos/{owner}/{repo}/actions/workflows/{workflow_id}/runs",
+            params={
+                "event": "workflow_dispatch",
+                "per_page": max(1, min(per_page, 100)),
+            },
+        )
+        if not isinstance(response, dict):
+            return []
+        workflow_runs = response.get("workflow_runs")
+        return workflow_runs if isinstance(workflow_runs, list) else []
+
+    @staticmethod
+    def _created_at_timestamp(workflow_run: dict[str, Any]) -> float | None:
+        created_at = workflow_run.get("created_at")
+        if not isinstance(created_at, str) or not created_at:
+            return None
+        try:
+            return datetime.fromisoformat(created_at.replace("Z", "+00:00")).timestamp()
+        except ValueError:
+            return None
+
+    def _find_dispatched_workflow_run(
+        self,
+        owner: str,
+        repo: str,
+        workflow_id: str,
+        ref: str,
+        dispatched_at: float,
+    ) -> dict[str, Any] | None:
+        workflow_runs = self.list_workflow_runs(owner, repo, workflow_id, per_page=100)
+        candidates: list[dict[str, Any]] = []
+        for workflow_run in workflow_runs:
+            head_branch = str(workflow_run.get("head_branch") or "")
+            if head_branch and head_branch != ref:
+                continue
+            created_at = self._created_at_timestamp(workflow_run)
+            if created_at is not None and created_at < dispatched_at - 1:
+                continue
+            candidates.append(workflow_run)
+        if not candidates:
+            return None
+        return max(candidates, key=lambda workflow_run: int(workflow_run.get("id") or 0))
+
     def dispatch_workflow_and_wait(
         self,
         owner: str,
@@ -527,19 +581,38 @@ class GitHubService:
         poll_interval_seconds: float = 5.0,
     ) -> dict[str, Any]:
         """Dispatch a workflow and poll its run until completion."""
+        dispatched_at = time.time()
         dispatch_result = self.dispatch_workflow(owner, repo, workflow_id, ref, inputs=inputs)
         run_id_value = dispatch_result.get("workflow_run_id")
-        if run_id_value is None:
-            raise ValueError(
-                "GitHub dispatch did not return workflow_run_id; waiting requires "
-                "GitHub's 200 dispatch response"
-            )
-        run_id = int(run_id_value)
         timeout = max(1, timeout_seconds)
         interval = max(0.1, poll_interval_seconds)
         deadline = time.monotonic() + timeout
+        workflow_run: dict[str, Any] | None = None
+        if run_id_value is None:
+            while workflow_run is None:
+                workflow_run = self._find_dispatched_workflow_run(
+                    owner,
+                    repo,
+                    workflow_id,
+                    ref,
+                    dispatched_at,
+                )
+                if workflow_run is not None:
+                    run_id_value = workflow_run.get("id")
+                    break
+                if time.monotonic() >= deadline:
+                    raise ValueError(
+                        "GitHub dispatched the workflow but no matching workflow run "
+                        f"appeared within {timeout} seconds"
+                    )
+                time.sleep(interval)
+        if run_id_value is None:
+            raise ValueError("GitHub workflow run response did not include an id")
+        run_id = int(run_id_value)
+        dispatch_result["workflow_run_id"] = run_id
         while True:
-            workflow_run = self.get_workflow_run(owner, repo, run_id)
+            if workflow_run is None or int(workflow_run.get("id") or 0) != run_id:
+                workflow_run = self.get_workflow_run(owner, repo, run_id)
             if str(workflow_run.get("status") or "").lower() == "completed":
                 return {
                     **dispatch_result,
@@ -553,6 +626,7 @@ class GitHubService:
                     f"GitHub workflow run {run_id} did not complete within {timeout} seconds"
                 )
             time.sleep(interval)
+            workflow_run = None
 
     def get_file(
         self,
@@ -767,14 +841,13 @@ class GitHubService:
         sort: str | None = None,
         direction: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Get issues assigned to the authenticated user."""
+        """Get issues assigned to or mentioning the authenticated user."""
         params: dict[str, Any] = {
-            "filter": "assigned",
+            "filter": "mentioned" if mentioned else "assigned",
             "state": state or "open",
             "per_page": max(1, min(per_page, 100)),
         }
         for key, value in {
-            "mentioned": mentioned,
             "labels": labels,
             "since": since,
             "sort": sort,

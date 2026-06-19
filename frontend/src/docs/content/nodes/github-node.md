@@ -31,9 +31,13 @@ The node currently provides 40 actions:
 Create a **GitHub** credential in the [Credentials Tab](../tabs/credentials-tab.md) with:
 
 - A personal access token
-- Optional API base URL for GitHub Enterprise
+- Optional full REST API base URL for GitHub Enterprise Server
 
 Leave the base URL empty for GitHub.com. Fine-grained PATs are recommended.
+
+For GitHub Enterprise Server, enter the complete REST API endpoint including `/api/v3`, such as
+`https://github.example.com/api/v3`. Do not enter only the web UI root
+(`https://github.example.com`).
 
 If you use GitHub Enterprise Server and later edit the credential to rotate the token, re-enter the `base_url` when saving. The edit dialog masks the stored URL, and saving a new token without it removes the Enterprise endpoint from the credential.
 
@@ -49,9 +53,10 @@ Most operations use:
 `List User Repositories` only requires **Owner** (the username) and does not use the repository field.
 
 `Get User Repositories` mirrors n8n's User → Get Repositories action. `Get User Issues` returns
-issues assigned to the authenticated GitHub user and supports state, mentioned user, labels,
-updated-since, sort, direction, and per-page filters. `Invite User` requires an organization and
-email address and does not use Owner or Repository.
+issues assigned to the authenticated GitHub user by default. Set **Mentioned Filter** to any
+non-empty value to return issues mentioning the authenticated user instead. It also supports
+state, labels, updated-since, sort, direction, and per-page filters. `Invite User` requires an
+organization and email address and does not use Owner or Repository.
 
 ## Repository
 
@@ -160,15 +165,6 @@ reviews the pull request's latest commit.
 
 `Update Release` can explicitly set `draft` / `prerelease` to either `true` or `false`.
 
-### Canvas validation notes
-
-Before you run a workflow from the editor, Heym validates a few GitHub fields more strictly than the runtime API requires:
-
-- `Create Release` – The canvas requires **Name / Title** even though GitHub only requires a tag name at runtime.
-- `Update Release` – The canvas requires **Tag Name** even though runtime updates can change only the release ID, body, or draft flags.
-
-If you hit one of these validation errors, fill the requested field or adjust the operation configuration before executing.
-
 ## Workflows
 
 Workflow operations support:
@@ -185,10 +181,11 @@ this operation may need to migrate when GitHub removes the endpoint.
 `Dispatch Workflow` accepts both GitHub response forms: legacy `204 No Content` and the newer
 `200` response containing `workflow_run_id`, `run_url`, and `html_url`.
 
-`Dispatch Workflow and Wait` dispatches the workflow and polls the returned workflow run until
-its status is `completed`. Configure the timeout and polling interval in seconds. Waiting requires
-GitHub's newer `200` dispatch response containing `workflow_run_id`; older GitHub Enterprise
-servers that return only `204` cannot use this action.
+`Dispatch Workflow and Wait` dispatches the workflow and polls the run until its status is
+`completed`. Configure the timeout and polling interval in seconds. Heym uses
+`workflow_run_id` when GitHub returns the newer `200` response. For the traditional `204 No
+Content` response, Heym discovers the newly created `workflow_dispatch` run for the selected
+workflow and ref, then waits for that run.
 
 ## File Contents
 

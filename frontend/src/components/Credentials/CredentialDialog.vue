@@ -902,7 +902,9 @@ async function handleSave(): Promise<void> {
           :disabled="saving"
         />
         <p class="text-xs text-muted-foreground">
-          Leave empty for GitHub.com. Set this for GitHub Enterprise Server REST API endpoints.
+          Leave empty for GitHub.com. For GitHub Enterprise Server, enter the full REST API
+          endpoint, including <code>/api/v3</code> (for example,
+          <code>https://github.example.com/api/v3</code>), not the web UI URL.
         </p>
       </div>
 

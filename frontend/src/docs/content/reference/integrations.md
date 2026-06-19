@@ -55,7 +55,9 @@ The GitHub credential stores a GitHub personal access token (PAT) so workflows c
 ### Notes
 
 - Fine-grained personal access tokens are recommended when possible because you can scope them to specific repositories and permissions.
-- Leave `base_url` empty for GitHub.com. Set it only when targeting GitHub Enterprise Server.
+- Leave `base_url` empty for GitHub.com. For GitHub Enterprise Server, use the full REST API
+  endpoint including `/api/v3` (for example `https://github.example.com/api/v3`), not the
+  server's web UI root such as `https://github.example.com`.
 - This credential currently models PAT-based auth only. To access organization repositories, use a PAT that has been granted the required organization/repository permissions.
 - GitHub App installation tokens and GitHub App setup flows are not first-class in the Heym UI today.
 - Prefer the [GitHub node](../nodes/github-node.md) for native repository, user, issue, pull request, review, release, Actions workflow, traffic, and file operations. Use the [HTTP node](../nodes/http-node.md) only when you need endpoints or payloads the GitHub node does not cover.
