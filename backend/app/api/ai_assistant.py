@@ -98,6 +98,13 @@ class AIAssistantRequest(BaseModel):
     execution_log: dict | None = None
 
 
+class AnalyzeWorkflowRequest(BaseModel):
+    credential_id: uuid.UUID
+    model: str
+    current_workflow: dict | None = None
+    execution_log: dict | None = None
+
+
 class FileAttachment(BaseModel):
     name: str
     kind: Literal["text", "image", "pdf"]
@@ -123,6 +130,22 @@ class FixTranscriptionRequest(BaseModel):
 
 class FixTranscriptionResponse(BaseModel):
     fixed_text: str
+
+
+WORKFLOW_ANALYZE_SYSTEM_PROMPT = """You analyze an automation workflow and produce a clear Markdown report.
+
+Given the workflow's nodes and edges, write Markdown with these sections, in this exact order:
+
+## Improvement areas
+A bulleted list of concrete, actionable suggestions (reliability, error handling, missing validation, cost, clarity). Whenever the workflow handles credentials, user input, external requests, data exposure, injection-prone steps, or anything else security-relevant, include a clear **security** angle here (risks and how to mitigate them). If the workflow already looks solid, say so and suggest small refinements.
+
+## Purpose
+One or two sentences on what this workflow is for.
+
+## What it does
+A numbered, step-by-step walk through the nodes in execution order, in plain language.
+
+Output ONLY Markdown. Do not include JSON, code fences around the whole document, or tool calls. Be concise and specific to THIS workflow."""
 
 
 MAX_DASHBOARD_CHAT_HISTORY = 25
@@ -3483,6 +3506,72 @@ async def _stream_sse_with_heartbeat(
         if isinstance(item, Exception):
             raise item
         yield item
+
+
+@router.post("/analyze-workflow")
+async def analyze_workflow_stream(
+    request: AnalyzeWorkflowRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> StreamingResponse:
+    credential = await get_credential_for_user(request.credential_id, current_user, db)
+    if not credential:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Credential not found",
+        )
+    if credential.type not in (CredentialType.openai, CredentialType.google, CredentialType.custom):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Credential must be an LLM type (OpenAI, Google, or Custom)",
+        )
+
+    config = decrypt_config(credential.encrypted_config)
+    client, provider = get_openai_client(credential.type, config)
+
+    system_prompt = WORKFLOW_ANALYZE_SYSTEM_PROMPT
+    if request.current_workflow:
+        wf_summary = json.dumps(request.current_workflow, ensure_ascii=False)
+        system_prompt += f"\n\nWorkflow:\n```json\n{wf_summary}\n```"
+    system_prompt = _append_execution_log_to_prompt(system_prompt, request.execution_log)
+
+    workflow_id = None
+    if request.current_workflow:
+        wf_id = request.current_workflow.get("id")
+        if wf_id:
+            workflow_id = uuid.UUID(wf_id) if isinstance(wf_id, str) else wf_id
+
+    trace_context = LLMTraceContext(
+        user_id=current_user.id,
+        credential_id=credential.id,
+        workflow_id=workflow_id,
+        node_label="Workflow Analyze",
+        source="workflow_analyze",
+    )
+
+    messages = [{"role": "user", "content": "Analyze this workflow."}]
+    assistant_stream = stream_llm_response(
+        client,
+        request.model,
+        system_prompt,
+        messages,
+        provider,
+        trace_context,
+        run_type="workflow_assistant",
+    )
+
+    return StreamingResponse(
+        _stream_sse_with_heartbeat(
+            assistant_stream,
+            heartbeat_seconds=WORKFLOW_ASSISTANT_SSE_HEARTBEAT_SECONDS,
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.post("/workflow-assistant")
