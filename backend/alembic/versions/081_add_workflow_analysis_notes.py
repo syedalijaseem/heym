@@ -8,8 +8,9 @@ Create Date: 2026-06-19 00:00:00.000000
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision: str = "081_add_workflow_analysis_notes"
 down_revision: str | Sequence[str] | None = "080_merge_github_supabase_heads"
