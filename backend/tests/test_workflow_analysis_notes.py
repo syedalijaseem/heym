@@ -119,3 +119,47 @@ class SaveAnalysisNoteTests(unittest.IsolatedAsyncioTestCase):
             await save_workflow_analysis_note(uuid.uuid4(), body, current_user=user, db=db)
 
         self.assertEqual(ctx.exception.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class AnalyzeWorkflowEndpointTests(unittest.IsolatedAsyncioTestCase):
+    async def test_rejects_non_llm_credential(self) -> None:
+        from app.api.ai_assistant import AnalyzeWorkflowRequest, analyze_workflow_stream
+        from app.db.models import CredentialType
+
+        user = SimpleNamespace(id=uuid.uuid4(), user_rules=None)
+        credential = SimpleNamespace(
+            id=uuid.uuid4(), type=CredentialType.slack, encrypted_config={}
+        )
+        db = AsyncMock()
+        db.execute = AsyncMock(
+            return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=credential))
+        )
+
+        body = AnalyzeWorkflowRequest(
+            credential_id=credential.id,
+            model="gpt-4o",
+            current_workflow={"id": str(uuid.uuid4())},
+        )
+        with self.assertRaises(HTTPException) as ctx:
+            await analyze_workflow_stream(body, current_user=user, db=db)
+
+        self.assertEqual(ctx.exception.status_code, status.HTTP_400_BAD_REQUEST)
+
+    async def test_404_when_credential_missing(self) -> None:
+        from app.api.ai_assistant import AnalyzeWorkflowRequest, analyze_workflow_stream
+
+        user = SimpleNamespace(id=uuid.uuid4(), user_rules=None)
+        db = AsyncMock()
+        db.execute = AsyncMock(
+            return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=None))
+        )
+
+        body = AnalyzeWorkflowRequest(
+            credential_id=uuid.uuid4(),
+            model="gpt-4o",
+            current_workflow={"id": str(uuid.uuid4())},
+        )
+        with self.assertRaises(HTTPException) as ctx:
+            await analyze_workflow_stream(body, current_user=user, db=db)
+
+        self.assertEqual(ctx.exception.status_code, status.HTTP_404_NOT_FOUND)
