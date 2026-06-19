@@ -39,7 +39,11 @@ Select an LLM **Credential** and **Model** at the top of the panel (the model li
 - **Analyze my workflow** — shown when the document is empty. It streams an AI-generated Markdown report directly into the editor as an unsaved draft. Review and edit it, then **Save**.
 - **Reanalyze** — shown when the document already has content. It streams a fresh report into a separate **preview**, leaving your current document untouched. Choose **Accept** to replace the editor content with the new analysis, or **Discard** to keep what you had.
 
+Both actions first **run the workflow** (when it is valid and runnable) and include the execution results in the analysis prompt, so the report reflects how the workflow actually behaves. If the workflow can't run, the analysis proceeds from its static structure instead.
+
 The generated report covers three sections: the workflow's **Purpose**, **What it does** (a step-by-step walk through the nodes), and **Improvement areas** (concrete suggestions).
+
+Each analysis run is recorded in [Traces](../tabs/traces-tab.md) under the **Workflow Analysis** source.
 
 If no LLM credential is configured, the Analyze button is disabled — add one in the [Credentials Tab](../tabs/credentials-tab.md).
 

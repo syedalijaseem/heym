@@ -3546,7 +3546,7 @@ async def analyze_workflow_stream(
         credential_id=credential.id,
         workflow_id=workflow_id,
         node_label="Workflow Analyze",
-        source="assistant",
+        source="workflow_analyze",
     )
 
     messages = [{"role": "user", "content": "Analyze this workflow."}]

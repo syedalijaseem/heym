@@ -41,6 +41,7 @@ import Textarea from "@/components/ui/Textarea.vue";
 import { onDismissOverlays, pushOverlayState } from "@/composables/useOverlayBackHandler";
 import { getDocPath } from "@/docs/manifest";
 import { joinOriginAndPath } from "@/lib/appUrl";
+import { buildExecutionLogForAssistant } from "@/lib/executionLog";
 import { isPaletteOpenInNewTab } from "@/lib/paletteNavigate";
 import { parseWebhookJson, stringifyWebhookJson } from "@/lib/webhookBody";
 import { useRecentWorkflows } from "@/composables/useRecentWorkflows";
@@ -283,6 +284,29 @@ function toggleAnalysisPanel(): void {
   if (analysisPanelOpen.value) {
     leftPanelOpen.value = false;
   }
+}
+
+// Runs the workflow (best-effort) and returns its execution log so the analysis
+// prompt can include real run results. Returns undefined if it can't run.
+async function runWorkflowForAnalysis(): Promise<
+  Record<string, unknown> | undefined
+> {
+  if (workflowStore.isExecuting || workflowStore.nodes.length === 0) {
+    return undefined;
+  }
+  if (!workflowStore.validateWorkflow().isValid) return undefined;
+  const targets = await workflowStore.validateExecuteTargetsExist();
+  if (!targets.isValid) return undefined;
+  try {
+    await workflowStore.executeWorkflow(workflowStore.buildExecutionRequestBody());
+  } catch {
+    // Errors surface via execution state; analysis still proceeds.
+  }
+  const log = buildExecutionLogForAssistant(
+    workflowStore.nodeResults,
+    workflowStore.executionResult,
+  );
+  return (log as Record<string, unknown> | null) ?? undefined;
 }
 
 // The analysis panel and NodePanel share the left slot; opening one hides the other.
@@ -2076,6 +2100,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
         v-if="analysisPanelOpen"
         :workflow-id="analysisWorkflowId"
         :current-workflow="analysisWorkflowPayload"
+        :run-workflow="runWorkflowForAnalysis"
       />
 
       <div class="flex-1 flex flex-col min-h-0 min-w-0">

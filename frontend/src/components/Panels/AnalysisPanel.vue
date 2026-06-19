@@ -28,6 +28,7 @@ interface AnalysisWorkflowPayload {
 const props = defineProps<{
   workflowId: string;
   currentWorkflow: AnalysisWorkflowPayload | null;
+  runWorkflow?: () => Promise<Record<string, unknown> | undefined>;
 }>();
 
 const workflowStore = useWorkflowStore();
@@ -47,6 +48,7 @@ const models = ref<LLMModel[]>([]);
 const model = ref("");
 
 const analyzing = ref(false);
+const running = ref(false);
 const reanalyzePreview = ref<string | null>(null);
 const conflict = ref<AnalysisNoteResponse | null>(null);
 const errorMsg = ref<string | null>(null);
@@ -54,6 +56,9 @@ let abort: AbortController | null = null;
 
 const dirty = computed(() => draft.value !== savedContent.value);
 const hasContent = computed(() => savedContent.value.trim() !== "");
+// While a reanalyze preview awaits Accept/Discard it owns the body, so the
+// edit/preview/save controls are disabled until the user resolves it.
+const pendingPreview = computed(() => reanalyzePreview.value !== null);
 const isUnsavedWorkflow = computed(() => !props.workflowId);
 const canAnalyze = computed(
   () =>
@@ -128,7 +133,7 @@ async function loadModels(): Promise<void> {
   }
 }
 
-function startAnalyze(): void {
+async function startAnalyze(): Promise<void> {
   if (!canAnalyze.value) return;
   errorMsg.value = null;
   abort?.abort();
@@ -143,11 +148,25 @@ function startAnalyze(): void {
     mode.value = "edit";
   }
 
+  // Run the workflow first so the analysis can reason over real results.
+  let executionLog: Record<string, unknown> | undefined;
+  if (props.runWorkflow) {
+    running.value = true;
+    try {
+      executionLog = await props.runWorkflow();
+    } catch {
+      // Run failures are non-fatal; analyze the static workflow instead.
+    } finally {
+      running.value = false;
+    }
+  }
+
   aiApi.analyzeWorkflowStream(
     {
       credentialId: credentialId.value,
       model: model.value,
       currentWorkflow: props.currentWorkflow ?? undefined,
+      executionLog: executionLog ?? null,
     },
     (text) => {
       if (reanalyze) {
@@ -330,16 +349,18 @@ onBeforeUnmount(() => {
           </button>
           <div class="ml-auto flex items-center gap-1">
             <button
-              class="inline-flex items-center gap-1 text-xs rounded-md px-2 py-1.5 hover:bg-muted"
+              class="inline-flex items-center gap-1 text-xs rounded-md px-2 py-1.5 hover:bg-muted disabled:opacity-50"
               :class="mode === 'edit' ? 'bg-muted text-foreground' : 'text-muted-foreground'"
+              :disabled="pendingPreview"
               title="Edit"
               @click="mode = 'edit'"
             >
               <Pencil class="w-3.5 h-3.5" />
             </button>
             <button
-              class="inline-flex items-center gap-1 text-xs rounded-md px-2 py-1.5 hover:bg-muted"
+              class="inline-flex items-center gap-1 text-xs rounded-md px-2 py-1.5 hover:bg-muted disabled:opacity-50"
               :class="mode === 'preview' ? 'bg-muted text-foreground' : 'text-muted-foreground'"
+              :disabled="pendingPreview"
               title="Preview"
               @click="mode = 'preview'"
             >
@@ -347,7 +368,7 @@ onBeforeUnmount(() => {
             </button>
             <button
               class="inline-flex items-center gap-1.5 text-xs font-medium rounded-md px-2.5 py-1.5 border border-border hover:bg-muted disabled:opacity-50"
-              :disabled="!dirty || saving"
+              :disabled="!dirty || saving || pendingPreview"
               title="Save"
               @click="save()"
             >
@@ -422,7 +443,10 @@ onBeforeUnmount(() => {
           </p>
           <div
             class="prose prose-sm dark:prose-invert max-w-none rounded-md border border-border p-3"
-            v-html="reanalyzeHtml || '<em>Generating…</em>'"
+            v-html="
+              reanalyzeHtml ||
+                (running ? '<em>Running workflow…</em>' : '<em>Generating…</em>')
+            "
           />
           <div class="flex gap-2">
             <button

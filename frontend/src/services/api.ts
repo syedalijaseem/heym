@@ -1456,6 +1456,7 @@ export interface AnalyzeWorkflowRequest {
     nodes: unknown[];
     edges: unknown[];
   };
+  executionLog?: Record<string, unknown> | null;
 }
 
 export interface AIAssistantRequest {
@@ -1977,6 +1978,7 @@ export const aiApi = {
         credential_id: request.credentialId,
         model: request.model,
         current_workflow: request.currentWorkflow,
+        execution_log: request.executionLog ?? null,
       }),
       signal,
     })
