@@ -2002,6 +2002,74 @@ function openPrimaryExpandDialogForSelectedNode(): void {
       }
     };
     nextTick(() => tryOpenDialog());
+  } else if (nodeType === "github") {
+    const tryOpenDialog = (attempts = 0): void => {
+      if (attempts > 20) return;
+      const n = workflowStore.selectedNode;
+      if (!n || n.type !== "github") {
+        return;
+      }
+      const operation = (n.data.githubOperation as string | undefined) || "";
+      const focusField = workflowStore.focusField;
+      if (
+        focusField === "githubCommentBody" &&
+        githubCommentBodyExpressionInputRef.value
+      ) {
+        nextTick(() => githubCommentBodyExpressionInputRef.value?.openExpandDialog());
+      } else if (focusField === "githubBody" && githubBodyExpressionInputRef.value) {
+        nextTick(() => githubBodyExpressionInputRef.value?.openExpandDialog());
+      } else if (
+        focusField === "githubFileContent" &&
+        githubFileContentExpressionInputRef.value
+      ) {
+        nextTick(() => githubFileContentExpressionInputRef.value?.openExpandDialog());
+      } else if (
+        focusField === "githubWorkflowInputs" &&
+        githubWorkflowInputsExpressionInputRef.value
+      ) {
+        nextTick(() => githubWorkflowInputsExpressionInputRef.value?.openExpandDialog());
+      } else if (focusField === "githubOwner" && githubOwnerExpressionInputRef.value) {
+        nextTick(() => githubOwnerExpressionInputRef.value?.openExpandDialog());
+      } else if (
+        operation === "createComment" &&
+        githubCommentBodyExpressionInputRef.value
+      ) {
+        nextTick(() => githubCommentBodyExpressionInputRef.value?.openExpandDialog());
+      } else if (
+        [
+          "createIssue",
+          "updateIssue",
+          "createRelease",
+          "updateRelease",
+        ].includes(operation) &&
+        githubBodyExpressionInputRef.value
+      ) {
+        nextTick(() => githubBodyExpressionInputRef.value?.openExpandDialog());
+      } else if (
+        operation === "upsertFile" &&
+        githubFileContentExpressionInputRef.value
+      ) {
+        nextTick(() => githubFileContentExpressionInputRef.value?.openExpandDialog());
+      } else if (
+        ["dispatchWorkflow", "dispatchWorkflowAndWait"].includes(operation) &&
+        githubWorkflowInputsExpressionInputRef.value
+      ) {
+        nextTick(() => githubWorkflowInputsExpressionInputRef.value?.openExpandDialog());
+      } else if (githubOwnerExpressionInputRef.value) {
+        nextTick(() => githubOwnerExpressionInputRef.value?.openExpandDialog());
+      } else if (githubOrganizationExpressionInputRef.value) {
+        nextTick(() => githubOrganizationExpressionInputRef.value?.openExpandDialog());
+      } else if (githubMentionedExpressionInputRef.value) {
+        nextTick(() => githubMentionedExpressionInputRef.value?.openExpandDialog());
+      } else if (githubRepoExpressionInputRef.value) {
+        nextTick(() => githubRepoExpressionInputRef.value?.openExpandDialog());
+      } else if (githubWorkflowIdExpressionInputRef.value) {
+        nextTick(() => githubWorkflowIdExpressionInputRef.value?.openExpandDialog());
+      } else {
+        setTimeout(() => tryOpenDialog(attempts + 1), 100);
+      }
+    };
+    nextTick(() => tryOpenDialog());
   } else if (nodeType === "throwError") {
     const tryOpenDialog = (attempts = 0): void => {
       if (attempts > 20) return;
@@ -2262,6 +2330,7 @@ function selectedNodeHasPrimaryEvaluateExpandTarget(): boolean {
     case "variable":
     case "redis":
     case "rag":
+    case "github":
     case "throwError":
     case "crawler":
     case "consoleLog":

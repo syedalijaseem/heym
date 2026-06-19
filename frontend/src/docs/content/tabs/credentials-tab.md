@@ -39,7 +39,9 @@ For GitHub, the current credential flow is PAT-based. Fine-grained PATs are reco
 - **Edit** – Update credential values (sensitive values are masked)
 - **Delete** – Remove a credential; workflows using it will need a replacement
 
-When editing a **GitHub** credential on GitHub Enterprise Server, re-enter the optional **GitHub API Base URL** if you change the token. The edit dialog does not display the stored URL, and saving a rotated token without the base URL removes the Enterprise endpoint from the credential.
+When editing a **GitHub** credential on GitHub Enterprise Server, leaving the optional **GitHub
+API Base URL** empty preserves the existing Enterprise endpoint. Enter a new URL only when you
+want to change that endpoint.
 
 ## Sharing
 

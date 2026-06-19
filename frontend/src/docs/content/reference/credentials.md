@@ -32,7 +32,10 @@ Credentials store API keys and secrets used by workflow nodes. You add them in t
 
 For detailed setup (hosts, ports, provider-specific fields), see [Third-Party Integrations](./integrations.md). That includes Telegram bot setup, inbound email via IMAP, and outbound email via SMTP.
 
-GitHub credentials can also include an optional `base_url` when you are targeting GitHub Enterprise Server instead of GitHub.com. When you edit a GitHub credential to rotate the token, re-enter `base_url` if you use Enterprise—the edit dialog does not show the stored URL, and saving without it removes the Enterprise endpoint.
+GitHub credentials can also include an optional `base_url` when you are targeting GitHub
+Enterprise Server instead of GitHub.com. When you edit a GitHub credential to rotate the token,
+leaving `base_url` empty preserves the existing Enterprise endpoint. Enter a new URL only when
+you want to change that endpoint.
 
 ## In Expressions
 

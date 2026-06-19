@@ -659,7 +659,16 @@ async function handleContextMenuEvalAgent(): Promise<void> {
   }
 }
 
-function handleNodeDoubleClick(event: { node: { id: string; data?: { nodeType?: NodeType; ragOperation?: string } } }): void {
+function handleNodeDoubleClick(event: {
+  node: {
+    id: string;
+    data?: {
+      nodeType?: NodeType;
+      ragOperation?: string;
+      githubOperation?: string;
+    };
+  };
+}): void {
   workflowStore.selectNode(event.node.id);
   if (event.node.data?.nodeType === "sticky") return;
   const nodeType = event.node.data?.nodeType;
@@ -678,6 +687,27 @@ function handleNodeDoubleClick(event: { node: { id: string; data?: { nodeType?: 
       fieldToFocus = "documentContent";
     } else if (ragOperation === "search") {
       fieldToFocus = "queryText";
+    }
+  } else if (nodeType === "github") {
+    const githubOperation = event.node.data?.githubOperation;
+    if (githubOperation === "createComment") {
+      fieldToFocus = "githubCommentBody";
+    } else if (
+      githubOperation === "createIssue" ||
+      githubOperation === "updateIssue" ||
+      githubOperation === "createRelease" ||
+      githubOperation === "updateRelease"
+    ) {
+      fieldToFocus = "githubBody";
+    } else if (githubOperation === "upsertFile") {
+      fieldToFocus = "githubFileContent";
+    } else if (
+      githubOperation === "dispatchWorkflow" ||
+      githubOperation === "dispatchWorkflowAndWait"
+    ) {
+      fieldToFocus = "githubWorkflowInputs";
+    } else {
+      fieldToFocus = "githubOwner";
     }
   } else if (nodeType === "throwError") {
     fieldToFocus = "errorMessage";

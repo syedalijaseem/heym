@@ -63,7 +63,8 @@ The GitHub credential stores a GitHub personal access token (PAT) so workflows c
 - Prefer the [GitHub node](../nodes/github-node.md) for native repository, user, issue, pull request, review, release, Actions workflow, traffic, and file operations. Use the [HTTP node](../nodes/http-node.md) only when you need endpoints or payloads the GitHub node does not cover.
 - Use the [Agent node](../nodes/agent-node.md) with MCP by passing `$credentials.YourGitHubCredential` into an MCP connection environment variable such as `GITHUB_PERSONAL_ACCESS_TOKEN`.
 - GitHub's REST API commonly expects `Authorization: Bearer <token>` plus `Accept: application/vnd.github+json`.
-- When editing a GitHub credential, re-enter the GitHub Enterprise `base_url` if you change the token. The edit dialog does not show the stored base URL, and saving a new token without it removes the Enterprise endpoint from the credential.
+- When editing a GitHub credential, leaving the GitHub Enterprise `base_url` empty preserves the
+  existing endpoint. Enter a new URL only when you want to change that endpoint.
 
 ### Used By
 

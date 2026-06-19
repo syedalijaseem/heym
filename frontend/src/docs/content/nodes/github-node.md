@@ -39,7 +39,9 @@ For GitHub Enterprise Server, enter the complete REST API endpoint including `/a
 `https://github.example.com/api/v3`. Do not enter only the web UI root
 (`https://github.example.com`).
 
-If you use GitHub Enterprise Server and later edit the credential to rotate the token, re-enter the `base_url` when saving. The edit dialog masks the stored URL, and saving a new token without it removes the Enterprise endpoint from the credential.
+If you use GitHub Enterprise Server and later edit the credential to rotate the token, leaving
+`base_url` empty preserves the existing Enterprise endpoint. Enter a new URL only when you want
+to change that endpoint.
 
 ## Common Fields
 
