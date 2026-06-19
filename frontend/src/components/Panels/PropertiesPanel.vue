@@ -110,6 +110,10 @@ import {
   mapNodeResultsToEnclosingLoopIterations,
   selectedLoopIterationIndexForNode,
 } from "@/lib/loopNodeDisplay";
+import {
+  getGitHubExpressionFields,
+  type GitHubExpressionFieldKey,
+} from "@/lib/githubExpressionFields";
 import { parseWebhookJson, stringifyWebhookJson } from "@/lib/webhookBody";
 import { cn } from "@/lib/utils";
 import { configApi, credentialsApi, dataTablesApi, filesApi, gristApi, mcpApi, workflowApi } from "@/services/api";
@@ -558,6 +562,7 @@ const githubTagNameExpressionInputRef = ref<InstanceType<typeof ExpressionInput>
 const githubReleaseIdExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const githubWorkflowIdExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const githubWorkflowInputsExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const currentGitHubExpressionFieldIndex = ref(0);
 const googleSheetsSpreadsheetIdExpressionInputRef = ref<InstanceType<
   typeof ExpressionInput
 > | null>(null);
@@ -1771,6 +1776,7 @@ function closeAllExpressionExpandDialogs(): void {
   closeS3ExpressionDialogs();
   closeMCPCallExpressionDialogs();
   closeChartOutputExpressionDialogs();
+  closeGitHubExpressionDialogs();
 }
 
 /** Opens the primary expression evaluate dialog for whichever node is currently selected. */
@@ -2003,68 +2009,22 @@ function openPrimaryExpandDialogForSelectedNode(): void {
     };
     nextTick(() => tryOpenDialog());
   } else if (nodeType === "github") {
+    const startIndex = resolveGitHubExpressionStartIndex();
+    currentGitHubExpressionFieldIndex.value = startIndex;
     const tryOpenDialog = (attempts = 0): void => {
-      if (attempts > 20) return;
+      if (attempts > 20) {
+        return;
+      }
       const n = workflowStore.selectedNode;
       if (!n || n.type !== "github") {
         return;
       }
-      const operation = (n.data.githubOperation as string | undefined) || "";
-      const focusField = workflowStore.focusField;
-      if (
-        focusField === "githubCommentBody" &&
-        githubCommentBodyExpressionInputRef.value
-      ) {
-        nextTick(() => githubCommentBodyExpressionInputRef.value?.openExpandDialog());
-      } else if (focusField === "githubBody" && githubBodyExpressionInputRef.value) {
-        nextTick(() => githubBodyExpressionInputRef.value?.openExpandDialog());
-      } else if (
-        focusField === "githubFileContent" &&
-        githubFileContentExpressionInputRef.value
-      ) {
-        nextTick(() => githubFileContentExpressionInputRef.value?.openExpandDialog());
-      } else if (
-        focusField === "githubWorkflowInputs" &&
-        githubWorkflowInputsExpressionInputRef.value
-      ) {
-        nextTick(() => githubWorkflowInputsExpressionInputRef.value?.openExpandDialog());
-      } else if (focusField === "githubOwner" && githubOwnerExpressionInputRef.value) {
-        nextTick(() => githubOwnerExpressionInputRef.value?.openExpandDialog());
-      } else if (
-        operation === "createComment" &&
-        githubCommentBodyExpressionInputRef.value
-      ) {
-        nextTick(() => githubCommentBodyExpressionInputRef.value?.openExpandDialog());
-      } else if (
-        [
-          "createIssue",
-          "updateIssue",
-          "createRelease",
-          "updateRelease",
-        ].includes(operation) &&
-        githubBodyExpressionInputRef.value
-      ) {
-        nextTick(() => githubBodyExpressionInputRef.value?.openExpandDialog());
-      } else if (
-        operation === "upsertFile" &&
-        githubFileContentExpressionInputRef.value
-      ) {
-        nextTick(() => githubFileContentExpressionInputRef.value?.openExpandDialog());
-      } else if (
-        ["dispatchWorkflow", "dispatchWorkflowAndWait"].includes(operation) &&
-        githubWorkflowInputsExpressionInputRef.value
-      ) {
-        nextTick(() => githubWorkflowInputsExpressionInputRef.value?.openExpandDialog());
-      } else if (githubOwnerExpressionInputRef.value) {
-        nextTick(() => githubOwnerExpressionInputRef.value?.openExpandDialog());
-      } else if (githubOrganizationExpressionInputRef.value) {
-        nextTick(() => githubOrganizationExpressionInputRef.value?.openExpandDialog());
-      } else if (githubMentionedExpressionInputRef.value) {
-        nextTick(() => githubMentionedExpressionInputRef.value?.openExpandDialog());
-      } else if (githubRepoExpressionInputRef.value) {
-        nextTick(() => githubRepoExpressionInputRef.value?.openExpandDialog());
-      } else if (githubWorkflowIdExpressionInputRef.value) {
-        nextTick(() => githubWorkflowIdExpressionInputRef.value?.openExpandDialog());
+      if (githubExpressionFieldCount.value === 0) {
+        return;
+      }
+      const field = githubExpressionFields.value[startIndex];
+      if (field && githubExpressionInputRefForKey(field.key)) {
+        nextTick(() => openGitHubExpressionFieldAtIndex(startIndex));
       } else {
         setTimeout(() => tryOpenDialog(attempts + 1), 100);
       }
@@ -2612,6 +2572,7 @@ watch(
     currentS3ExpressionFieldIndex.value = 0;
     currentPlaywrightExpressionFieldIndex.value = 0;
     currentMCPCallExpressionFieldIndex.value = 0;
+    currentGitHubExpressionFieldIndex.value = 0;
     playwrightExprRefsBySlotKey.value = {};
     currentOutputExpressionFieldIndex.value = 0;
   },
@@ -3031,6 +2992,191 @@ function handleSupabaseExpressionFieldNavigate(direction: "prev" | "next"): void
 
 function onSupabaseRegisterExpressionFieldIndex(index: number): void {
   currentSupabaseExpressionFieldIndex.value = index;
+}
+
+const githubExpressionFields = computed(() => {
+  const n = workflowStore.selectedNode;
+  if (!n || n.type !== "github") {
+    return [];
+  }
+  const operation = (n.data.githubOperation as string | undefined) || "getRepository";
+  return getGitHubExpressionFields(operation);
+});
+
+const githubExpressionFieldCount = computed((): number => githubExpressionFields.value.length);
+
+function githubExpressionFieldIndex(key: GitHubExpressionFieldKey): number {
+  const index = githubExpressionFields.value.findIndex((field) => field.key === key);
+  return index >= 0 ? index : -1;
+}
+
+function githubExpressionFieldLabel(key: GitHubExpressionFieldKey): string {
+  return githubExpressionFields.value.find((field) => field.key === key)?.label ?? "";
+}
+
+function githubExpressionNavBindings(key: GitHubExpressionFieldKey): {
+  navigationEnabled: boolean;
+  navigationIndex: number;
+  navigationTotal: number;
+  dialogNodeLabel: string;
+  dialogKeyLabel: string;
+} {
+  const index = githubExpressionFieldIndex(key);
+  return {
+    navigationEnabled: githubExpressionFieldCount.value > 1 && index >= 0,
+    navigationIndex: index >= 0 ? index : 0,
+    navigationTotal: githubExpressionFieldCount.value,
+    dialogNodeLabel: selectedNodeEvaluateDialogLabel.value,
+    dialogKeyLabel: githubExpressionFieldLabel(key),
+  };
+}
+
+function githubExpressionInputRefForKey(
+  key: GitHubExpressionFieldKey,
+): InstanceType<typeof ExpressionInput> | null {
+  switch (key) {
+    case "githubOwner":
+      return githubOwnerExpressionInputRef.value;
+    case "githubRepo":
+      return githubRepoExpressionInputRef.value;
+    case "githubOrganization":
+      return githubOrganizationExpressionInputRef.value;
+    case "githubInviteEmail":
+      return githubInviteEmailExpressionInputRef.value;
+    case "githubIssueNumber":
+      return githubIssueNumberExpressionInputRef.value;
+    case "githubAssignee":
+      return githubAssigneeExpressionInputRef.value;
+    case "githubCreator":
+      return githubCreatorExpressionInputRef.value;
+    case "githubMentioned":
+      return githubMentionedExpressionInputRef.value;
+    case "githubLabelsFilter":
+      return githubLabelsFilterExpressionInputRef.value;
+    case "githubSince":
+      return githubSinceExpressionInputRef.value;
+    case "githubTitle":
+      return githubTitleExpressionInputRef.value;
+    case "githubBody":
+      return githubBodyExpressionInputRef.value;
+    case "githubCommentBody":
+      return githubCommentBodyExpressionInputRef.value;
+    case "githubLabels":
+      return githubLabelsExpressionInputRef.value;
+    case "githubAssignees":
+      return githubAssigneesExpressionInputRef.value;
+    case "githubHead":
+      return githubHeadExpressionInputRef.value;
+    case "githubBase":
+      return githubBaseExpressionInputRef.value;
+    case "githubPullRequestNumber":
+      return githubPullRequestNumberExpressionInputRef.value;
+    case "githubReviewId":
+      return githubReviewIdExpressionInputRef.value;
+    case "githubReviewBody":
+      return githubReviewBodyExpressionInputRef.value;
+    case "githubCommitId":
+      return githubCommitIdExpressionInputRef.value;
+    case "githubReleaseId":
+      return githubReleaseIdExpressionInputRef.value;
+    case "githubTagName":
+      return githubTagNameExpressionInputRef.value;
+    case "githubBranch":
+      return githubBranchExpressionInputRef.value;
+    case "githubWorkflowId":
+      return githubWorkflowIdExpressionInputRef.value;
+    case "githubWorkflowInputs":
+      return githubWorkflowInputsExpressionInputRef.value;
+    case "githubFilePath":
+      return githubFilePathExpressionInputRef.value;
+    case "githubCommitMessage":
+      return githubCommitMessageExpressionInputRef.value;
+    case "githubFileContent":
+      return githubFileContentExpressionInputRef.value;
+    default:
+      return null;
+  }
+}
+
+function resolveGitHubExpressionStartIndex(): number {
+  const focusField = workflowStore.focusField;
+  if (focusField) {
+    const index = githubExpressionFieldIndex(focusField as GitHubExpressionFieldKey);
+    if (index >= 0) {
+      return index;
+    }
+  }
+  return 0;
+}
+
+function openGitHubExpressionFieldAtIndex(index: number): boolean {
+  const n = selectedNode.value;
+  if (!n || n.type !== "github") {
+    return false;
+  }
+  const field = githubExpressionFields.value[index];
+  if (!field) {
+    return false;
+  }
+  currentGitHubExpressionFieldIndex.value = index;
+  const input = githubExpressionInputRefForKey(field.key);
+  if (!input) {
+    return false;
+  }
+  input.openExpandDialog();
+  return true;
+}
+
+function closeGitHubExpressionDialogs(): void {
+  githubOwnerExpressionInputRef.value?.closeExpandDialog();
+  githubRepoExpressionInputRef.value?.closeExpandDialog();
+  githubOrganizationExpressionInputRef.value?.closeExpandDialog();
+  githubInviteEmailExpressionInputRef.value?.closeExpandDialog();
+  githubIssueNumberExpressionInputRef.value?.closeExpandDialog();
+  githubAssigneeExpressionInputRef.value?.closeExpandDialog();
+  githubCreatorExpressionInputRef.value?.closeExpandDialog();
+  githubMentionedExpressionInputRef.value?.closeExpandDialog();
+  githubLabelsFilterExpressionInputRef.value?.closeExpandDialog();
+  githubSinceExpressionInputRef.value?.closeExpandDialog();
+  githubTitleExpressionInputRef.value?.closeExpandDialog();
+  githubBodyExpressionInputRef.value?.closeExpandDialog();
+  githubCommentBodyExpressionInputRef.value?.closeExpandDialog();
+  githubLabelsExpressionInputRef.value?.closeExpandDialog();
+  githubAssigneesExpressionInputRef.value?.closeExpandDialog();
+  githubHeadExpressionInputRef.value?.closeExpandDialog();
+  githubBaseExpressionInputRef.value?.closeExpandDialog();
+  githubPullRequestNumberExpressionInputRef.value?.closeExpandDialog();
+  githubReviewIdExpressionInputRef.value?.closeExpandDialog();
+  githubReviewBodyExpressionInputRef.value?.closeExpandDialog();
+  githubCommitIdExpressionInputRef.value?.closeExpandDialog();
+  githubReleaseIdExpressionInputRef.value?.closeExpandDialog();
+  githubTagNameExpressionInputRef.value?.closeExpandDialog();
+  githubBranchExpressionInputRef.value?.closeExpandDialog();
+  githubWorkflowIdExpressionInputRef.value?.closeExpandDialog();
+  githubWorkflowInputsExpressionInputRef.value?.closeExpandDialog();
+  githubFilePathExpressionInputRef.value?.closeExpandDialog();
+  githubCommitMessageExpressionInputRef.value?.closeExpandDialog();
+  githubFileContentExpressionInputRef.value?.closeExpandDialog();
+}
+
+function handleGitHubExpressionFieldNavigate(direction: "prev" | "next"): void {
+  const total = githubExpressionFieldCount.value;
+  const newIndex =
+    direction === "prev"
+      ? currentGitHubExpressionFieldIndex.value - 1
+      : currentGitHubExpressionFieldIndex.value + 1;
+  if (newIndex < 0 || newIndex >= total) {
+    return;
+  }
+  closeGitHubExpressionDialogs();
+  currentGitHubExpressionFieldIndex.value = newIndex;
+  nextTick(() => {
+    openGitHubExpressionFieldAtIndex(newIndex);
+  });
+}
+
+function onGitHubRegisterExpressionFieldIndex(index: number): void {
+  currentGitHubExpressionFieldIndex.value = index;
 }
 
 function bqMappingInputRef(index: number, el: InstanceType<typeof ExpressionInput> | null): void {
@@ -10652,6 +10798,9 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  v-bind="githubExpressionNavBindings('githubOwner')"
+                  @navigate="handleGitHubExpressionFieldNavigate"
+                  @register-field-index="onGitHubRegisterExpressionFieldIndex"
                   @update:model-value="updateNodeData('githubOwner', $event)"
                 />
               </div>
@@ -10669,6 +10818,9 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  v-bind="githubExpressionNavBindings('githubRepo')"
+                  @navigate="handleGitHubExpressionFieldNavigate"
+                  @register-field-index="onGitHubRegisterExpressionFieldIndex"
                   @update:model-value="updateNodeData('githubRepo', $event)"
                 />
               </div>
@@ -10686,6 +10838,9 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  v-bind="githubExpressionNavBindings('githubOrganization')"
+                  @navigate="handleGitHubExpressionFieldNavigate"
+                  @register-field-index="onGitHubRegisterExpressionFieldIndex"
                   @update:model-value="updateNodeData('githubOrganization', $event)"
                 />
               </div>
@@ -10700,6 +10855,9 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  v-bind="githubExpressionNavBindings('githubInviteEmail')"
+                  @navigate="handleGitHubExpressionFieldNavigate"
+                  @register-field-index="onGitHubRegisterExpressionFieldIndex"
                   @update:model-value="updateNodeData('githubInviteEmail', $event)"
                 />
               </div>
@@ -10717,6 +10875,9 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  v-bind="githubExpressionNavBindings('githubIssueNumber')"
+                  @navigate="handleGitHubExpressionFieldNavigate"
+                  @register-field-index="onGitHubRegisterExpressionFieldIndex"
                   @update:model-value="updateNodeData('githubIssueNumber', $event)"
                 />
               </div>
@@ -10768,6 +10929,9 @@ onUnmounted(() => {
                     :node-results="workflowStore.nodeResults"
                     :edges="workflowStore.edges"
                     :current-node-id="selectedNode.id"
+                    v-bind="githubExpressionNavBindings('githubAssignee')"
+                    @navigate="handleGitHubExpressionFieldNavigate"
+                    @register-field-index="onGitHubRegisterExpressionFieldIndex"
                     @update:model-value="updateNodeData('githubAssignee', $event)"
                   />
                 </div>
@@ -10785,6 +10949,9 @@ onUnmounted(() => {
                     :node-results="workflowStore.nodeResults"
                     :edges="workflowStore.edges"
                     :current-node-id="selectedNode.id"
+                    v-bind="githubExpressionNavBindings('githubCreator')"
+                    @navigate="handleGitHubExpressionFieldNavigate"
+                    @register-field-index="onGitHubRegisterExpressionFieldIndex"
                     @update:model-value="updateNodeData('githubCreator', $event)"
                   />
                 </div>
@@ -10801,6 +10968,9 @@ onUnmounted(() => {
                     :node-results="workflowStore.nodeResults"
                     :edges="workflowStore.edges"
                     :current-node-id="selectedNode.id"
+                    v-bind="githubExpressionNavBindings('githubMentioned')"
+                    @navigate="handleGitHubExpressionFieldNavigate"
+                    @register-field-index="onGitHubRegisterExpressionFieldIndex"
                     @update:model-value="updateNodeData('githubMentioned', $event)"
                   />
                   <p
@@ -10822,6 +10992,9 @@ onUnmounted(() => {
                     :node-results="workflowStore.nodeResults"
                     :edges="workflowStore.edges"
                     :current-node-id="selectedNode.id"
+                    v-bind="githubExpressionNavBindings('githubLabelsFilter')"
+                    @navigate="handleGitHubExpressionFieldNavigate"
+                    @register-field-index="onGitHubRegisterExpressionFieldIndex"
                     @update:model-value="updateNodeData('githubLabelsFilter', $event)"
                   />
                 </div>
@@ -10837,6 +11010,9 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  v-bind="githubExpressionNavBindings('githubSince')"
+                  @navigate="handleGitHubExpressionFieldNavigate"
+                  @register-field-index="onGitHubRegisterExpressionFieldIndex"
                   @update:model-value="updateNodeData('githubSince', $event)"
                 />
               </div>
@@ -10900,6 +11076,9 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  v-bind="githubExpressionNavBindings('githubTitle')"
+                  @navigate="handleGitHubExpressionFieldNavigate"
+                  @register-field-index="onGitHubRegisterExpressionFieldIndex"
                   @update:model-value="updateNodeData('githubTitle', $event)"
                 />
               </div>
@@ -10916,6 +11095,9 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  v-bind="githubExpressionNavBindings('githubBody')"
+                  @navigate="handleGitHubExpressionFieldNavigate"
+                  @register-field-index="onGitHubRegisterExpressionFieldIndex"
                   @update:model-value="updateNodeData('githubBody', $event)"
                 />
               </div>
@@ -10932,6 +11114,9 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  v-bind="githubExpressionNavBindings('githubCommentBody')"
+                  @navigate="handleGitHubExpressionFieldNavigate"
+                  @register-field-index="onGitHubRegisterExpressionFieldIndex"
                   @update:model-value="updateNodeData('githubCommentBody', $event)"
                 />
               </div>
@@ -10950,6 +11135,9 @@ onUnmounted(() => {
                     :node-results="workflowStore.nodeResults"
                     :edges="workflowStore.edges"
                     :current-node-id="selectedNode.id"
+                    v-bind="githubExpressionNavBindings('githubLabels')"
+                    @navigate="handleGitHubExpressionFieldNavigate"
+                    @register-field-index="onGitHubRegisterExpressionFieldIndex"
                     @update:model-value="updateNodeData('githubLabels', $event)"
                   />
                 </div>
@@ -10964,6 +11152,9 @@ onUnmounted(() => {
                     :node-results="workflowStore.nodeResults"
                     :edges="workflowStore.edges"
                     :current-node-id="selectedNode.id"
+                    v-bind="githubExpressionNavBindings('githubAssignees')"
+                    @navigate="handleGitHubExpressionFieldNavigate"
+                    @register-field-index="onGitHubRegisterExpressionFieldIndex"
                     @update:model-value="updateNodeData('githubAssignees', $event)"
                   />
                 </div>
@@ -10994,6 +11185,9 @@ onUnmounted(() => {
                     :node-results="workflowStore.nodeResults"
                     :edges="workflowStore.edges"
                     :current-node-id="selectedNode.id"
+                    v-bind="githubExpressionNavBindings('githubHead')"
+                    @navigate="handleGitHubExpressionFieldNavigate"
+                    @register-field-index="onGitHubRegisterExpressionFieldIndex"
                     @update:model-value="updateNodeData('githubHead', $event)"
                   />
                 </div>
@@ -11008,6 +11202,9 @@ onUnmounted(() => {
                     :node-results="workflowStore.nodeResults"
                     :edges="workflowStore.edges"
                     :current-node-id="selectedNode.id"
+                    v-bind="githubExpressionNavBindings('githubBase')"
+                    @navigate="handleGitHubExpressionFieldNavigate"
+                    @register-field-index="onGitHubRegisterExpressionFieldIndex"
                     @update:model-value="updateNodeData('githubBase', $event)"
                   />
                 </div>
@@ -11039,6 +11236,9 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  v-bind="githubExpressionNavBindings('githubPullRequestNumber')"
+                  @navigate="handleGitHubExpressionFieldNavigate"
+                  @register-field-index="onGitHubRegisterExpressionFieldIndex"
                   @update:model-value="updateNodeData('githubPullRequestNumber', $event)"
                 />
               </div>
@@ -11056,6 +11256,9 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  v-bind="githubExpressionNavBindings('githubReviewId')"
+                  @navigate="handleGitHubExpressionFieldNavigate"
+                  @register-field-index="onGitHubRegisterExpressionFieldIndex"
                   @update:model-value="updateNodeData('githubReviewId', $event)"
                 />
               </div>
@@ -11083,6 +11286,9 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  v-bind="githubExpressionNavBindings('githubReviewBody')"
+                  @navigate="handleGitHubExpressionFieldNavigate"
+                  @register-field-index="onGitHubRegisterExpressionFieldIndex"
                   @update:model-value="updateNodeData('githubReviewBody', $event)"
                 />
                 <p
@@ -11106,6 +11312,9 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  v-bind="githubExpressionNavBindings('githubCommitId')"
+                  @navigate="handleGitHubExpressionFieldNavigate"
+                  @register-field-index="onGitHubRegisterExpressionFieldIndex"
                   @update:model-value="updateNodeData('githubCommitId', $event)"
                 />
               </div>
@@ -11123,6 +11332,9 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  v-bind="githubExpressionNavBindings('githubReleaseId')"
+                  @navigate="handleGitHubExpressionFieldNavigate"
+                  @register-field-index="onGitHubRegisterExpressionFieldIndex"
                   @update:model-value="updateNodeData('githubReleaseId', $event)"
                 />
               </div>
@@ -11141,6 +11353,9 @@ onUnmounted(() => {
                     :node-results="workflowStore.nodeResults"
                     :edges="workflowStore.edges"
                     :current-node-id="selectedNode.id"
+                    v-bind="githubExpressionNavBindings('githubTagName')"
+                    @navigate="handleGitHubExpressionFieldNavigate"
+                    @register-field-index="onGitHubRegisterExpressionFieldIndex"
                     @update:model-value="updateNodeData('githubTagName', $event)"
                   />
                 </div>
@@ -11155,6 +11370,9 @@ onUnmounted(() => {
                     :node-results="workflowStore.nodeResults"
                     :edges="workflowStore.edges"
                     :current-node-id="selectedNode.id"
+                    v-bind="githubExpressionNavBindings('githubBranch')"
+                    @navigate="handleGitHubExpressionFieldNavigate"
+                    @register-field-index="onGitHubRegisterExpressionFieldIndex"
                     @update:model-value="updateNodeData('githubBranch', $event)"
                   />
                 </div>
@@ -11195,6 +11413,9 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  v-bind="githubExpressionNavBindings('githubWorkflowId')"
+                  @navigate="handleGitHubExpressionFieldNavigate"
+                  @register-field-index="onGitHubRegisterExpressionFieldIndex"
                   @update:model-value="updateNodeData('githubWorkflowId', $event)"
                 />
               </div>
@@ -11212,6 +11433,9 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  v-bind="githubExpressionNavBindings('githubBranch')"
+                  @navigate="handleGitHubExpressionFieldNavigate"
+                  @register-field-index="onGitHubRegisterExpressionFieldIndex"
                   @update:model-value="updateNodeData('githubBranch', $event)"
                 />
               </div>
@@ -11226,6 +11450,9 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  v-bind="githubExpressionNavBindings('githubWorkflowInputs')"
+                  @navigate="handleGitHubExpressionFieldNavigate"
+                  @register-field-index="onGitHubRegisterExpressionFieldIndex"
                   @update:model-value="updateNodeData('githubWorkflowInputs', $event)"
                 />
               </div>
@@ -11267,6 +11494,9 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  v-bind="githubExpressionNavBindings('githubFilePath')"
+                  @navigate="handleGitHubExpressionFieldNavigate"
+                  @register-field-index="onGitHubRegisterExpressionFieldIndex"
                   @update:model-value="updateNodeData('githubFilePath', $event)"
                 />
               </div>
@@ -11281,6 +11511,9 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  v-bind="githubExpressionNavBindings('githubBranch')"
+                  @navigate="handleGitHubExpressionFieldNavigate"
+                  @register-field-index="onGitHubRegisterExpressionFieldIndex"
                   @update:model-value="updateNodeData('githubBranch', $event)"
                 />
               </div>
@@ -11298,6 +11531,9 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  v-bind="githubExpressionNavBindings('githubCommitMessage')"
+                  @navigate="handleGitHubExpressionFieldNavigate"
+                  @register-field-index="onGitHubRegisterExpressionFieldIndex"
                   @update:model-value="updateNodeData('githubCommitMessage', $event)"
                 />
               </div>
@@ -11314,6 +11550,9 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  v-bind="githubExpressionNavBindings('githubFileContent')"
+                  @navigate="handleGitHubExpressionFieldNavigate"
+                  @register-field-index="onGitHubRegisterExpressionFieldIndex"
                   @update:model-value="updateNodeData('githubFileContent', $event)"
                 />
               </div>
