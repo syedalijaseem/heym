@@ -442,7 +442,7 @@ onBeforeUnmount(() => {
             New analysis (preview)
           </p>
           <div
-            class="prose prose-sm dark:prose-invert max-w-none rounded-md border border-border p-3"
+            class="prose prose-sm dark:prose-invert max-w-none rounded-md border border-border p-3 prose-headings:mt-6 prose-headings:mb-3 prose-p:my-3 prose-ul:my-3 prose-ol:my-3 prose-li:my-1.5"
             v-html="
               reanalyzeHtml ||
                 (running ? '<em>Running workflow…</em>' : '<em>Generating…</em>')
@@ -474,7 +474,7 @@ onBeforeUnmount(() => {
 
         <div
           v-else
-          class="prose prose-sm dark:prose-invert max-w-none"
+          class="prose prose-sm dark:prose-invert max-w-none prose-headings:mt-6 prose-headings:mb-3 prose-p:my-3 prose-ul:my-3 prose-ol:my-3 prose-li:my-1.5"
           v-html="renderedHtml || '<em>No content yet.</em>'"
         />
       </div>
