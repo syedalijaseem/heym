@@ -501,8 +501,11 @@ export const useChatStore = defineStore("chat", () => {
     const controller = activeControllersByConv.get(conversationId);
     controller?.abort();
     activeControllersByConv.delete(conversationId);
+    foregroundSubscribedConvIds.delete(conversationId);
     _clearStreamState(conversationId);
     _patchConversationFlag(conversationId, "is_running", false);
+    // Tell the backend to stop the running agent task, not just the local reader.
+    void chatApi.cancelStream(conversationId).catch(() => {});
   }
 
   function _patchConversation(updated: Conversation): void {

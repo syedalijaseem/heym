@@ -186,6 +186,21 @@ async def _get_conversation_or_404(
     return conversation
 
 
+# Maps an in-progress conversation id to the cancel Event of its background task.
+# In-process only: works for the single-worker dev/self-host setup. A multi-worker
+# deployment would need to broadcast the cancel via the Postgres-backed registry.
+_cancel_events: dict[str, Event] = {}
+
+
+def request_chat_cancel(conv_id: str) -> bool:
+    """Signal a running background chat task to stop. Returns True if a task was found."""
+    event = _cancel_events.get(conv_id)
+    if event is None:
+        return False
+    event.set()
+    return True
+
+
 async def _process_chat(
     conv_id: str,
     user_id: uuid.UUID,
@@ -253,6 +268,7 @@ async def _process_chat(
             system_prompt = parts.full_system_prompt
 
             cancel_event = Event()
+            _cancel_events[conv_id] = cancel_event
             assistant_chunks: list[str] = []
             workflow_context_markers: list[str] = []
             workflow_note_ids: set[str] = set()
@@ -297,6 +313,14 @@ async def _process_chat(
             for marker in workflow_context_markers:
                 if marker and marker not in assistant_content:
                     assistant_content += marker
+            # A cancelled run can return before a tool's `tool_end` is emitted,
+            # leaving its tool_call stuck in "running". Normalize so reloads don't
+            # show a perpetual spinner.
+            for entry in tool_calls_for_message:
+                if entry.get("status") == "running":
+                    entry["status"] = "cancelled"
+                    if not entry.get("response_summary"):
+                        entry["response_summary"] = "Cancelled"
             if assistant_content or tool_calls_for_message:
                 db.add(
                     DashboardMessage(
@@ -340,6 +364,8 @@ async def _process_chat(
                 conv_id, f"data: {json.dumps({'type': 'error', 'text': 'Processing failed'})}\n\n"
             )
             await registry.finish(conv_id)
+        finally:
+            _cancel_events.pop(conv_id, None)
 
 
 @router.get("", response_model=ConversationListResponse)
@@ -546,6 +572,20 @@ async def generate_conversation_title(
         await db.refresh(conversation)
 
     return ConversationResponse.model_validate(conversation)
+
+
+@router.post("/{conversation_id}/cancel", status_code=status.HTTP_204_NO_CONTENT)
+async def cancel_conversation_stream(
+    conversation_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Signal the in-progress background chat task to stop at the next tool boundary."""
+    conversation = await _get_conversation_or_404(conversation_id, current_user.id, db)
+    request_chat_cancel(str(conversation_id))
+    if conversation.is_running:
+        conversation.is_running = False
+        await db.commit()
 
 
 @router.post(

@@ -2853,6 +2853,10 @@ export const chatApi = {
     });
   },
 
+  cancelStream: async (id: string): Promise<void> => {
+    await api.post(`/chats/${id}/cancel`);
+  },
+
   subscribeStream: async (
     id: string,
     onChunk: (text: string) => void,
