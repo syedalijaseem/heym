@@ -62,6 +62,7 @@ from app.services.run_history import record_run_history
 from app.services.schedule_range import resolve_schedule_tool_range
 from app.services.timezone_utils import get_configured_timezone
 from app.services.workflow_dsl_prompt import (
+    CLARIFY_PROTOCOL_PROMPT,
     DASHBOARD_WIDGET_PROMPT_HINT,
     build_assistant_prompt,
     is_dashboard_widget_workflow,
@@ -70,6 +71,21 @@ from app.services.workflow_executor import WorkflowCancelledError, execute_workf
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+async def _await_chat_completions(
+    client: OpenAI,
+    cancel_event: Event | None,
+    **kwargs: Any,
+) -> Any | None:
+    """Run a blocking OpenAI chat completion off the event loop; honour cancel_event."""
+    if cancel_event is not None and cancel_event.is_set():
+        return None
+    response = await asyncio.to_thread(client.chat.completions.create, **kwargs)
+    if cancel_event is not None and cancel_event.is_set():
+        return None
+    return response
+
 
 GOOGLE_OPENAI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 
@@ -85,6 +101,8 @@ You can help with:
 
 Do NOT generate workflow JSON or DSL output. Respond in plain language only.
 Respond in the same language the user uses."""
+
+CANVAS_ASK_SYSTEM_PROMPT = CANVAS_ASK_SYSTEM_PROMPT + CLARIFY_PROTOCOL_PROMPT
 
 
 class AIAssistantRequest(BaseModel):
@@ -361,6 +379,8 @@ When the user asks for something you cannot do with your tools (e.g. console log
 13. When the user asks you to create, build, generate, or set up a new workflow/automation and then do the requested job, call create_and_run_workflow. This tool uses the Workflow AI Builder engine to generate Heym DSL, saves it, and runs it immediately. After it succeeds, do not include a separate workflow link in your prose; the chat UI shows a workflow preview card with its own Open workflow link. Do not answer with only instructions, platform alternatives, or raw workflow JSON for these requests.
 14. When the user gives feedback in the same chat about a workflow you just created (for example "make it do X", "change it like this", "add a step", "remove that", "şöyle yap", "böyle değiştir"), call edit_and_run_workflow with the workflow_id from the previous workflow link, hidden workflow context marker, or tool result. Do not create a second workflow for feedback on the existing generated workflow unless the user explicitly asks for a new separate workflow."""
 
+DASHBOARD_CHAT_SYSTEM_PROMPT = DASHBOARD_CHAT_SYSTEM_PROMPT + CLARIFY_PROTOCOL_PROMPT
+
 DASHBOARD_CHAT_TOOLS = [
     {
         "type": "function",
@@ -395,7 +415,7 @@ DASHBOARD_CHAT_TOOLS = [
         "type": "function",
         "function": {
             "name": "create_and_run_workflow",
-            "description": "Create a brand-new workflow using the Workflow AI Builder Heym DSL generator, save it to the user's workflows, and run it immediately. Use this when the user asks to create/build/generate/set up a workflow or automation and wants the multi-step job done. Do not suggest alternative platforms or external setups for these requests. Do not use it for questions about existing workflows.",
+            "description": "Create a brand-new workflow using the Workflow AI Builder Heym DSL generator, save it to the user's workflows, and run it immediately. Use this when the user asks to create/build/generate/set up a workflow or automation and wants the multi-step job done. IMPORTANT: only call this once the request is clear. If the request is ambiguous or under-specified (unclear trigger, goal, data source, output format, routing rules, or any choice you would otherwise guess), DO NOT call this tool — instead reply with a plain-text `heym-clarify` block (see the Clarification Protocol) and wait for the user's answers before building. Do not suggest alternative platforms or external setups for these requests. Do not use it for questions about existing workflows.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -1117,7 +1137,9 @@ async def create_and_run_generated_workflow_tool(
         }
         if not is_reasoning_model(model):
             builder_kwargs["temperature"] = WORKFLOW_BUILDER_TEMPERATURE
-        builder_response = client.chat.completions.create(**builder_kwargs)
+        builder_response = await _await_chat_completions(client, cancel_event, **builder_kwargs)
+        if builder_response is None:
+            return json.dumps({"status": "cancelled", "error": "Execution cancelled"})
         builder_choice = builder_response.choices[0] if builder_response.choices else None
         builder_content = builder_choice.message.content if builder_choice else ""
         workflow_config = _extract_generated_workflow_config(builder_content or "", goal)
@@ -1252,7 +1274,9 @@ async def edit_and_run_generated_workflow_tool(
         }
         if not is_reasoning_model(model):
             builder_kwargs["temperature"] = WORKFLOW_BUILDER_TEMPERATURE
-        builder_response = client.chat.completions.create(**builder_kwargs)
+        builder_response = await _await_chat_completions(client, cancel_event, **builder_kwargs)
+        if builder_response is None:
+            return json.dumps({"status": "cancelled", "error": "Execution cancelled"})
         builder_choice = builder_response.choices[0] if builder_response.choices else None
         builder_content = builder_choice.message.content if builder_choice else ""
         workflow_config = _extract_generated_workflow_config(
@@ -2316,7 +2340,11 @@ async def stream_dashboard_chat(
             last_trace_request = {**kwargs, "messages": kwargs["messages"]}
             round_start = time.time()
             try:
-                response = await asyncio.to_thread(client.chat.completions.create, **kwargs)
+                response = await _await_chat_completions(client, cancel_event, **kwargs)
+                if response is None:
+                    elapsed_ms = (time.time() - start_time) * 1000
+                    _record_dashboard_run("cancelled", round(elapsed_ms, 2))
+                    return
             except Exception as exc:
                 if not _is_context_overflow_error(exc):
                     raise
@@ -2340,7 +2368,11 @@ async def stream_dashboard_chat(
                 }
                 last_trace_request = {**kwargs, "messages": kwargs["messages"]}
                 round_start = time.time()
-                response = await asyncio.to_thread(client.chat.completions.create, **kwargs)
+                response = await _await_chat_completions(client, cancel_event, **kwargs)
+                if response is None:
+                    elapsed_ms = (time.time() - start_time) * 1000
+                    _record_dashboard_run("cancelled", round(elapsed_ms, 2))
+                    return
             round_elapsed_ms = (time.time() - round_start) * 1000
             usage = getattr(response, "usage", None)
             used_tokens = (
