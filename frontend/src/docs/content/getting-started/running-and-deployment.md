@@ -86,6 +86,45 @@ Press `Ctrl+C` to gracefully stop all services.
 
 ---
 
+## End-to-End Tests: `run_e2e.sh`
+
+The frontend Playwright suite runs against the real Vue application, FastAPI backend, and an
+isolated PostgreSQL database:
+
+```bash
+./run_e2e.sh
+```
+
+The suite is a key-path smoke and regression suite, not exhaustive product coverage. It covers
+authentication, core workflow lifecycle and execution, selected dashboard resources, public
+routes, and a mocked HITL review UI. Provider integrations, every node type, sharing/permission
+matrices, and full HITL resume execution remain covered primarily by backend tests or require
+dedicated integration environments.
+
+Each run gets its own temporary PostgreSQL 16 container, random available database/backend/frontend
+ports, authentication state, test results, and HTML report. This allows multiple `run_e2e.sh`
+processes to run concurrently without sharing state or overwriting artifacts. The script removes
+its database container when the run finishes and prints the artifact directory and report path.
+
+Useful commands:
+
+```bash
+./run_e2e.sh --ui         # Interactive Playwright runner with an isolated database
+cd frontend
+bun run test:e2e:report   # Open the most recently completed local run
+```
+
+Direct `bun run test:e2e` and `bun run test:e2e:ui` runs require an explicit `DATABASE_URL` so they
+cannot silently start against the local development database. Use `./run_e2e.sh` for normal local
+runs.
+
+`./check.sh` runs lint, typecheck, formatting, and backend tests without the E2E suite, keeping the
+default local check path fast. Run Playwright E2E tests separately with `./run_e2e.sh`. Pull
+requests always run the Chromium E2E suite in GitHub Actions and retain traces, screenshots,
+videos, and the HTML report when failures occur.
+
+---
+
 ## Production: `deploy.sh`
 
 `deploy.sh` builds and runs the full stack using Docker Compose. All three services — the database, the backend, and the frontend — run as containers. The backend entrypoint automatically runs migrations before starting the server with 8 workers.

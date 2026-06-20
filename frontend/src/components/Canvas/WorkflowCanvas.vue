@@ -1663,6 +1663,7 @@ watch(
 
 <template>
   <div
+    data-testid="workflow-canvas"
     class="w-full h-full select-none relative overflow-x-hidden"
     @drop="handleDrop"
     @dragover="handleDragOver"
