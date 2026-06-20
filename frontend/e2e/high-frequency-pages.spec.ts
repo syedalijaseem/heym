@@ -104,6 +104,21 @@ test("Global Variables supports create and delete", async ({ page }) => {
   await expect(variableRow).toBeHidden();
 });
 
+test("Dashboard header stays within a mobile viewport", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/?tab=dashboard");
+
+  const header = page.getByTestId("dashboard-header");
+  await expect(header.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+  await expect(header.getByRole("button", { name: "Refresh dashboard" })).toBeVisible();
+  await expect(header.getByRole("button", { name: "Add widget" })).toBeVisible();
+
+  const hasHorizontalOverflow = await header.evaluate(
+    (element) => element.scrollWidth > element.clientWidth,
+  );
+  expect(hasHorizontalOverflow).toBe(false);
+});
+
 test("Drive opens and shows the empty state", async ({ page }) => {
   await page.goto("/?tab=drive");
   const main = page.getByRole("main");
