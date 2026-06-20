@@ -1026,7 +1026,10 @@ async def create_workflow(
         edges=[],
     )
     db.add(workflow)
-    await db.flush()
+    # Commit (not just flush) before returning so the new row is durably visible
+    # to immediate follow-up requests (e.g. the import flow's create-then-update),
+    # which would otherwise race the get_db() teardown commit and 404 on the update.
+    await db.commit()
     await db.refresh(workflow)
     return _build_workflow_response(workflow)
 
