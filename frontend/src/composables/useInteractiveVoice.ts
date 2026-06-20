@@ -88,10 +88,13 @@ export function useInteractiveVoice(onUtterance: (text: string) => void): UseInt
       } else if (!muted.value) {
         // Nothing meaningful was said (silence or noise); keep listening.
         listen();
+      } else {
+        setState("idle");
       }
     } catch {
       error.value = "Transcription failed.";
       if (!muted.value) listen();
+      else setState("idle");
     }
   }
 
@@ -115,12 +118,40 @@ export function useInteractiveVoice(onUtterance: (text: string) => void): UseInt
         }
       } else if (speechStarted && silenceTimer === null) {
         silenceTimer = window.setTimeout(() => {
-          if (recorder?.state === "recording") recorder.stop();
+          finalizeUtterance();
         }, SILENCE_MS);
       }
       rafId = window.requestAnimationFrame(tick);
     };
     rafId = window.requestAnimationFrame(tick);
+  }
+
+  // Stop capturing and, if the user has actually spoken, finalize the utterance
+  // so the existing recorder.onstop handler transcribes it (→ onUtterance →
+  // "thinking"). When nothing was captured, just release the recorder and go idle.
+  // Shared by the silence timer and the mic-off button so both paths behave the same.
+  function finalizeUtterance(): void {
+    if (silenceTimer) {
+      window.clearTimeout(silenceTimer);
+      silenceTimer = null;
+    }
+    if (rafId) {
+      window.cancelAnimationFrame(rafId);
+      rafId = null;
+    }
+    level.value = 0;
+    if (recorder?.state === "recording") {
+      if (speechStarted) {
+        // Keep onstop → transcribe → onUtterance.
+        recorder.stop();
+      } else {
+        recorder.onstop = null;
+        recorder.stop();
+        setState("idle");
+      }
+    } else {
+      setState("idle");
+    }
   }
 
   function listen(): void {
@@ -168,10 +199,17 @@ export function useInteractiveVoice(onUtterance: (text: string) => void): UseInt
   function toggleMute(): void {
     muted.value = !muted.value;
     if (muted.value) {
-      stopListening();
-      setState("idle");
+      // Turning the mic off means "I'm done — process what I said."
+      if (state.value === "listening") {
+        finalizeUtterance();
+      }
+      // While speaking/thinking/transcribing, leave state alone: the answer keeps
+      // playing and listening will not auto-resume afterward (muted flag).
     } else {
-      listen();
+      // Re-enable: start listening only if we are not mid-answer.
+      if (state.value === "idle") {
+        listen();
+      }
     }
   }
 

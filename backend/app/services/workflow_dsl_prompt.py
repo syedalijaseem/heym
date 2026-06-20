@@ -4167,7 +4167,7 @@ CLARIFY_PROTOCOL_PROMPT = """
 If the user's request is ambiguous or under-specified (missing trigger, goal, data
 source, output format, credentials, or any choice you would otherwise guess), DO NOT
 generate the workflow yet: do not emit a workflow JSON block, and (in chat) do NOT call
-`create_and_run_workflow` or `edit_and_run_workflow`. Instead, emit exactly ONE fenced
+the workflow create/edit tools. Instead, emit exactly ONE fenced
 block tagged `heym-clarify` containing a JSON object with a `questions` array, then stop
 and wait. The `heym-clarify` block must be plain assistant text, not a tool call.
 

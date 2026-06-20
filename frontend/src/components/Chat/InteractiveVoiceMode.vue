@@ -28,7 +28,7 @@ const voice = useInteractiveVoice((text: string) => {
 });
 
 const stateLabel: Record<VoiceState, string> = {
-  idle: "Paused",
+  idle: "Mic off",
   listening: "Listening…",
   transcribing: "Transcribing…",
   thinking: "Thinking…",
@@ -83,7 +83,12 @@ watch(
           /* ignore synthesis errors */
         }
         await waitForPlaybackEnd();
-        if (props.open && !voice.muted.value) await voice.start();
+        if (props.open && !voice.muted.value) {
+          await voice.start();
+        } else if (props.open) {
+          // Mic is off — return to a clean idle instead of staying in the speaking pulse.
+          voice.setState("idle");
+        }
       }
     }
   },
@@ -175,7 +180,7 @@ onBeforeUnmount(() => {
           type="button"
           class="flex h-16 w-16 items-center justify-center rounded-full border border-border transition-colors"
           :class="voice.muted.value ? 'bg-muted text-muted-foreground' : 'bg-primary text-primary-foreground'"
-          :aria-label="voice.muted.value ? 'Unmute microphone' : 'Mute microphone'"
+          :aria-label="voice.muted.value ? 'Turn microphone on' : 'Turn microphone off'"
           @click="voice.toggleMute()"
         >
           <MicOff

@@ -10,6 +10,7 @@ import {
   Copy,
   Check,
   ExternalLink,
+  Play,
   Square,
   Mic,
   MicOff,
@@ -552,6 +553,17 @@ async function sendVoiceText(text: string): Promise<void> {
   );
 }
 
+async function runWorkflowFromCard(workflow: WorkflowPreview): Promise<void> {
+  if (!selectedCredentialId.value || !selectedModel.value) return;
+  if (isThisConvStreaming.value) return;
+  await chatStore.sendMessage(
+    props.conversationId,
+    `Run the "${workflow.name}" workflow now (id: ${workflow.id}).`,
+    selectedCredentialId.value,
+    selectedModel.value,
+  );
+}
+
 function openFilePicker(): void {
   fileInputRef.value?.click();
 }
@@ -1039,15 +1051,26 @@ onUnmounted(() => {
                     {{ msg.workflowPreview.description }}
                   </p>
                 </div>
-                <a
-                  :href="msg.workflowPreview.url"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border/60 bg-background px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
-                >
-                  <ExternalLink class="h-3.5 w-3.5" />
-                  Open workflow
-                </a>
+                <div class="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    :disabled="isThisConvStreaming"
+                    class="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border/60 bg-primary px-2.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+                    @click="runWorkflowFromCard(msg.workflowPreview)"
+                  >
+                    <Play class="h-3.5 w-3.5" />
+                    Run
+                  </button>
+                  <a
+                    :href="msg.workflowPreview.url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border/60 bg-background px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+                  >
+                    <ExternalLink class="h-3.5 w-3.5" />
+                    Open workflow
+                  </a>
+                </div>
               </div>
               <div
                 :class="[
