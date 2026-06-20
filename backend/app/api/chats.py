@@ -27,7 +27,7 @@ from app.api.ai_assistant import (
     get_workflows_for_user_with_inputs,
     stream_dashboard_chat,
 )
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_current_user, get_current_user_id, get_db
 from app.db.models import (
     CredentialType,
     DashboardChatQuickPrompts,
@@ -186,19 +186,31 @@ async def _get_conversation_or_404(
     return conversation
 
 
-# Maps an in-progress conversation id to the cancel Event of its background task.
-# In-process only: works for the single-worker dev/self-host setup. A multi-worker
-# deployment would need to broadcast the cancel via the Postgres-backed registry.
+# Maps an in-progress conversation id to the cancel Event and asyncio task of its
+# background chat coroutine. In-process only: works for the single-worker dev/self-host
+# setup. A multi-worker deployment would need to broadcast the cancel via the
+# Postgres-backed registry.
 _cancel_events: dict[str, Event] = {}
+_chat_tasks: dict[str, "asyncio.Task[None]"] = {}
 
 
 def request_chat_cancel(conv_id: str) -> bool:
-    """Signal a running background chat task to stop. Returns True if a task was found."""
+    """Stop a running background chat task immediately. Returns True if one was found.
+
+    Sets the cooperative cancel Event (checked at tool boundaries) AND cancels the
+    asyncio task so an in-flight LLM/tool `await` is interrupted right away instead of
+    finishing the current request first.
+    """
+    found = False
     event = _cancel_events.get(conv_id)
-    if event is None:
-        return False
-    event.set()
-    return True
+    if event is not None:
+        event.set()
+        found = True
+    task = _chat_tasks.get(conv_id)
+    if task is not None and not task.done():
+        task.cancel()
+        found = True
+    return found
 
 
 async def _process_chat(
@@ -214,6 +226,11 @@ async def _process_chat(
     """Background coroutine: streams assistant reply, writes to queue, persists to DB."""
     if not await registry.has_task(conv_id):
         return
+
+    # Declared up front so the cancellation handler can persist whatever streamed so far.
+    assistant_chunks: list[str] = []
+    workflow_context_markers: list[str] = []
+    tool_calls_for_message: list[dict] = []
 
     async with async_session_maker() as db:
         try:
@@ -269,10 +286,7 @@ async def _process_chat(
 
             cancel_event = Event()
             _cancel_events[conv_id] = cancel_event
-            assistant_chunks: list[str] = []
-            workflow_context_markers: list[str] = []
             workflow_note_ids: set[str] = set()
-            tool_calls_for_message: list[dict] = []
 
             async for chunk in stream_dashboard_chat(
                 client,
@@ -352,6 +366,39 @@ async def _process_chat(
             await db.commit()
             await registry.finish(conv_id)
 
+        except asyncio.CancelledError:
+            # The user pressed Stop: an in-flight LLM/tool await was interrupted.
+            # Persist whatever streamed so far (with any unfinished tool marked
+            # cancelled), clear is_running, and end the stream cleanly. Use a fresh
+            # session since the active one may be in a broken state after cancellation.
+            assistant_content = "".join(assistant_chunks)
+            for marker in workflow_context_markers:
+                if marker and marker not in assistant_content:
+                    assistant_content += marker
+            for entry in tool_calls_for_message:
+                if entry.get("status") == "running":
+                    entry["status"] = "cancelled"
+                    if not entry.get("response_summary"):
+                        entry["response_summary"] = "Cancelled"
+            async with async_session_maker() as cancel_db:
+                if assistant_content or tool_calls_for_message:
+                    cancel_db.add(
+                        DashboardMessage(
+                            conversation_id=uuid.UUID(conv_id),
+                            role="assistant",
+                            content=assistant_content,
+                            tool_calls=tool_calls_for_message or None,
+                        )
+                    )
+                await cancel_db.execute(
+                    sa.text("UPDATE dashboard_conversations SET is_running = false WHERE id = :id"),
+                    {"id": conv_id},
+                )
+                await cancel_db.commit()
+            await registry.publish(conv_id, f"data: {json.dumps({'type': 'done'})}\n\n")
+            await registry.finish(conv_id)
+            return
+
         except Exception:
             logger.exception("Background chat task failed for conv_id=%s", conv_id)
             async with async_session_maker() as err_db:
@@ -366,6 +413,7 @@ async def _process_chat(
             await registry.finish(conv_id)
         finally:
             _cancel_events.pop(conv_id, None)
+            _chat_tasks.pop(conv_id, None)
 
 
 @router.get("", response_model=ConversationListResponse)
@@ -650,7 +698,7 @@ async def send_message(
     await registry.create_task(conv_id_str)
     public_base_url = build_public_base_url(http_request)
 
-    asyncio.create_task(
+    task = asyncio.create_task(
         _process_chat(
             conv_id=conv_id_str,
             user_id=current_user.id,
@@ -662,6 +710,7 @@ async def send_message(
             should_generate_title=should_generate_title,
         )
     )
+    _chat_tasks[conv_id_str] = task
 
     return SendMessageResponse(conversation_id=conversation_id)
 
@@ -669,15 +718,19 @@ async def send_message(
 @router.get("/{conversation_id}/stream")
 async def stream_conversation(
     conversation_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    user_id: uuid.UUID = Depends(get_current_user_id),
 ) -> StreamingResponse:
-    """SSE endpoint: subscribe to in-progress or already-finished background task."""
-    conversation = await _get_conversation_or_404(conversation_id, current_user.id, db)
+    """SSE endpoint: subscribe to in-progress or already-finished background task.
+
+    Auth and the pre-stream check run in a short-lived session that is released before
+    streaming starts, so a long-lived SSE response never pins a DB connection.
+    """
     conv_id_str = str(conversation_id)
-    if conversation.is_running and not await registry.has_task(conv_id_str):
-        conversation.is_running = False
-        await db.commit()
+    async with async_session_maker() as db:
+        conversation = await _get_conversation_or_404(conversation_id, user_id, db)
+        if conversation.is_running and not await registry.has_task(conv_id_str):
+            conversation.is_running = False
+            await db.commit()
 
     async def event_generator() -> AsyncGenerator[str, None]:
         async with registry.subscribe(conv_id_str) as queue:

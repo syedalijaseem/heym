@@ -72,6 +72,20 @@ from app.services.workflow_executor import WorkflowCancelledError, execute_workf
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+
+async def _await_chat_completions(
+    client: OpenAI,
+    cancel_event: Event | None,
+    **kwargs: Any,
+) -> Any | None:
+    """Run a blocking OpenAI chat completion off the event loop; honour cancel_event."""
+    if cancel_event is not None and cancel_event.is_set():
+        return None
+    response = await asyncio.to_thread(client.chat.completions.create, **kwargs)
+    if cancel_event is not None and cancel_event.is_set():
+        return None
+    return response
+
 GOOGLE_OPENAI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 
 
@@ -1122,7 +1136,9 @@ async def create_and_run_generated_workflow_tool(
         }
         if not is_reasoning_model(model):
             builder_kwargs["temperature"] = WORKFLOW_BUILDER_TEMPERATURE
-        builder_response = client.chat.completions.create(**builder_kwargs)
+        builder_response = await _await_chat_completions(client, cancel_event, **builder_kwargs)
+        if builder_response is None:
+            return json.dumps({"status": "cancelled", "error": "Execution cancelled"})
         builder_choice = builder_response.choices[0] if builder_response.choices else None
         builder_content = builder_choice.message.content if builder_choice else ""
         workflow_config = _extract_generated_workflow_config(builder_content or "", goal)
@@ -1257,7 +1273,9 @@ async def edit_and_run_generated_workflow_tool(
         }
         if not is_reasoning_model(model):
             builder_kwargs["temperature"] = WORKFLOW_BUILDER_TEMPERATURE
-        builder_response = client.chat.completions.create(**builder_kwargs)
+        builder_response = await _await_chat_completions(client, cancel_event, **builder_kwargs)
+        if builder_response is None:
+            return json.dumps({"status": "cancelled", "error": "Execution cancelled"})
         builder_choice = builder_response.choices[0] if builder_response.choices else None
         builder_content = builder_choice.message.content if builder_choice else ""
         workflow_config = _extract_generated_workflow_config(
@@ -2321,7 +2339,11 @@ async def stream_dashboard_chat(
             last_trace_request = {**kwargs, "messages": kwargs["messages"]}
             round_start = time.time()
             try:
-                response = await asyncio.to_thread(client.chat.completions.create, **kwargs)
+                response = await _await_chat_completions(client, cancel_event, **kwargs)
+                if response is None:
+                    elapsed_ms = (time.time() - start_time) * 1000
+                    _record_dashboard_run("cancelled", round(elapsed_ms, 2))
+                    return
             except Exception as exc:
                 if not _is_context_overflow_error(exc):
                     raise
@@ -2345,7 +2367,11 @@ async def stream_dashboard_chat(
                 }
                 last_trace_request = {**kwargs, "messages": kwargs["messages"]}
                 round_start = time.time()
-                response = await asyncio.to_thread(client.chat.completions.create, **kwargs)
+                response = await _await_chat_completions(client, cancel_event, **kwargs)
+                if response is None:
+                    elapsed_ms = (time.time() - start_time) * 1000
+                    _record_dashboard_run("cancelled", round(elapsed_ms, 2))
+                    return
             round_elapsed_ms = (time.time() - round_start) * 1000
             usage = getattr(response, "usage", None)
             used_tokens = (
