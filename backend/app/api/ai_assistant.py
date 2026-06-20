@@ -86,6 +86,7 @@ async def _await_chat_completions(
         return None
     return response
 
+
 GOOGLE_OPENAI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 
 
