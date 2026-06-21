@@ -82,6 +82,138 @@ export async function deleteWorkflow(page: Page, workflowId: string): Promise<vo
   expect([204, 404]).toContain(response.status());
 }
 
+export interface TestDataTable {
+  id: string;
+  name: string;
+}
+
+export async function createDataTable(
+  page: Page,
+  name: string,
+  columns: Record<string, unknown>[] = [],
+): Promise<TestDataTable> {
+  const response = await page.request.post("/api/data-tables", {
+    data: { name, description: "Created by Playwright", columns },
+  });
+  await expectOk(response);
+  return (await response.json()) as TestDataTable;
+}
+
+export async function deleteDataTable(page: Page, tableId: string): Promise<void> {
+  const response = await page.request.delete(`/api/data-tables/${tableId}`);
+  expect([204, 404]).toContain(response.status());
+}
+
+export async function clearDriveFiles(page: Page): Promise<void> {
+  const response = await page.request.delete("/api/files");
+  expect([204, 404]).toContain(response.status());
+}
+
+export async function uploadDriveFile(
+  page: Page,
+  filename: string,
+  contents: string,
+): Promise<{ id: string }> {
+  const response = await page.request.post("/api/files/upload", {
+    multipart: {
+      file: {
+        name: filename,
+        mimeType: "text/plain",
+        buffer: Buffer.from(contents),
+      },
+    },
+  });
+  await expectOk(response);
+  return (await response.json()) as { id: string };
+}
+
+export async function createDashboardWidget(
+  page: Page,
+  title: string,
+  chartType = "bar",
+): Promise<{ id: string; workflow_id: string }> {
+  const response = await page.request.post("/api/dashboards/widgets", {
+    data: {
+      title,
+      description: null,
+      chart_type: chartType,
+      layout: { x: 0, y: 0, w: 4, h: 4 },
+      cache_ttl_seconds: 300,
+    },
+  });
+  await expectOk(response);
+  return (await response.json()) as { id: string; workflow_id: string };
+}
+
+export async function deleteDashboardWidget(page: Page, widgetId: string): Promise<void> {
+  const response = await page.request.delete(`/api/dashboards/widgets/${widgetId}`);
+  expect([204, 404]).toContain(response.status());
+}
+
+export async function clearDashboardWidgets(page: Page): Promise<void> {
+  const response = await page.request.get("/api/dashboards");
+  await expectOk(response);
+  const dashboard = (await response.json()) as { widgets?: { id: string }[] };
+  for (const widget of dashboard.widgets ?? []) {
+    await deleteDashboardWidget(page, widget.id);
+  }
+}
+
+export async function deleteTeam(page: Page, teamId: string): Promise<void> {
+  const response = await page.request.delete(`/api/teams/${teamId}`);
+  expect([204, 404]).toContain(response.status());
+}
+
+export async function deleteEvalSuite(page: Page, suiteId: string): Promise<void> {
+  const response = await page.request.delete(`/api/evals/suites/${suiteId}`);
+  expect([204, 404]).toContain(response.status());
+}
+
+export async function clearEvalSuites(page: Page): Promise<void> {
+  const response = await page.request.get("/api/evals/suites");
+  await expectOk(response);
+  const suites = (await response.json()) as { id: string }[];
+  for (const suite of suites) {
+    await deleteEvalSuite(page, suite.id);
+  }
+}
+
+export async function deleteCredential(page: Page, credentialId: string): Promise<void> {
+  const response = await page.request.delete(`/api/credentials/${credentialId}`);
+  expect([204, 404]).toContain(response.status());
+}
+
+export async function deleteMcpServer(page: Page, serverId: string): Promise<void> {
+  const response = await page.request.delete(`/api/mcp/servers/${serverId}`);
+  expect([204, 404]).toContain(response.status());
+}
+
+export async function createWorkflowTemplate(
+  page: Page,
+  name: string,
+): Promise<{ id: string }> {
+  const response = await page.request.post("/api/templates", {
+    data: {
+      kind: "workflow",
+      workflow: {
+        name,
+        description: "Playwright template",
+        tags: ["e2e"],
+        nodes: [],
+        edges: [],
+        visibility: "everyone",
+      },
+    },
+  });
+  await expectOk(response);
+  return (await response.json()) as { id: string };
+}
+
+export async function deleteWorkflowTemplate(page: Page, templateId: string): Promise<void> {
+  const response = await page.request.delete(`/api/templates/workflow/${templateId}`);
+  expect([204, 404]).toContain(response.status());
+}
+
 export async function expectOk(response: APIResponse): Promise<void> {
   expect(response.ok(), await response.text()).toBeTruthy();
 }
