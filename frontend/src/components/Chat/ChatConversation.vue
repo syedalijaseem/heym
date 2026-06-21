@@ -10,6 +10,7 @@ import {
   Copy,
   Check,
   ExternalLink,
+  Play,
   Square,
   Mic,
   MicOff,
@@ -211,12 +212,16 @@ const contextUsageForBadge = computed(() => {
   if (live) return live;
   return chatStore.contextUsageByConv[props.conversationId] ?? null;
 });
+const interactiveVoiceOpen = ref(false);
 const canFocusInput = computed(
   () =>
     canSendMessage.value &&
     !isThisConvStreaming.value &&
     !isLoadingModels.value &&
     !modelsLoadFailed.value &&
+    // Never steal focus into the chat textarea while the full-screen voice
+    // overlay is open; on mobile that pops up the on-screen keyboard.
+    !interactiveVoiceOpen.value &&
     Boolean(selectedCredentialId.value) &&
     Boolean(selectedModel.value),
 );
@@ -532,13 +537,14 @@ async function readMessageAloud(msg: Message): Promise<void> {
   }
 }
 
-const interactiveVoiceOpen = ref(false);
-
 function openInteractiveVoice(): void {
   if (!tts.isConfigured.value) {
     voiceStore.requestVoiceSettings();
     return;
   }
+  // Drop focus from the chat textarea so the mobile keyboard does not stay up
+  // behind the full-screen voice overlay.
+  chatInputRef.value?.blur();
   interactiveVoiceOpen.value = true;
 }
 
@@ -547,6 +553,17 @@ async function sendVoiceText(text: string): Promise<void> {
   await chatStore.sendMessage(
     props.conversationId,
     text,
+    selectedCredentialId.value,
+    selectedModel.value,
+  );
+}
+
+async function runWorkflowFromCard(workflow: WorkflowPreview): Promise<void> {
+  if (!selectedCredentialId.value || !selectedModel.value) return;
+  if (isThisConvStreaming.value) return;
+  await chatStore.sendMessage(
+    props.conversationId,
+    `Run the "${workflow.name}" workflow now (id: ${workflow.id}).`,
     selectedCredentialId.value,
     selectedModel.value,
   );
@@ -1039,15 +1056,26 @@ onUnmounted(() => {
                     {{ msg.workflowPreview.description }}
                   </p>
                 </div>
-                <a
-                  :href="msg.workflowPreview.url"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border/60 bg-background px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
-                >
-                  <ExternalLink class="h-3.5 w-3.5" />
-                  Open workflow
-                </a>
+                <div class="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    :disabled="isThisConvStreaming"
+                    class="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border/60 bg-primary px-2.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+                    @click="runWorkflowFromCard(msg.workflowPreview)"
+                  >
+                    <Play class="h-3.5 w-3.5" />
+                    Run
+                  </button>
+                  <a
+                    :href="msg.workflowPreview.url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border/60 bg-background px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+                  >
+                    <ExternalLink class="h-3.5 w-3.5" />
+                    Open workflow
+                  </a>
+                </div>
               </div>
               <div
                 :class="[
