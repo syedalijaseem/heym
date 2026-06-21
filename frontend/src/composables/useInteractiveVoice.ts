@@ -15,6 +15,7 @@ interface UseInteractiveVoice {
   start: () => Promise<void>;
   stopListening: () => void;
   toggleMute: () => void;
+  bargeIn: () => void;
   setState: (s: VoiceState) => void;
   teardown: () => void;
 }
@@ -213,6 +214,18 @@ export function useInteractiveVoice(onUtterance: (text: string) => void): UseInt
     }
   }
 
+  // Interrupt the assistant mid-answer: the caller stops TTS playback, and this
+  // immediately starts capturing the user's voice. Reuses the open mic stream
+  // when available so listening starts without re-prompting for permission.
+  function bargeIn(): void {
+    muted.value = false;
+    if (stream) {
+      listen();
+    } else {
+      void start();
+    }
+  }
+
   function teardown(): void {
     stopListening();
     stream?.getTracks().forEach((t) => t.stop());
@@ -224,5 +237,16 @@ export function useInteractiveVoice(onUtterance: (text: string) => void): UseInt
     setState("idle");
   }
 
-  return { state, muted, error, level, start, stopListening, toggleMute, setState, teardown };
+  return {
+    state,
+    muted,
+    error,
+    level,
+    start,
+    stopListening,
+    toggleMute,
+    bargeIn,
+    setState,
+    teardown,
+  };
 }
