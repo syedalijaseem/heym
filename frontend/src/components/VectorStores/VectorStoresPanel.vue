@@ -582,24 +582,19 @@ async function deleteItem(pointId: string): Promise<void> {
         :class="`p-5 transition-all hover:border-primary/50 hover:shadow-md group cursor-pointer ${store.is_shared ? 'border-l-4 border-l-blue-500' : ''}`"
         @click="openItemsDialog(store)"
       >
-        <div class="flex items-start justify-between gap-2 mb-3">
+        <div class="flex items-start justify-between mb-3">
           <div class="flex items-center gap-3">
-            <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-node-rag/10 text-node-rag shrink-0">
+            <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-node-rag/10 text-node-rag">
               <Database class="w-5 h-5" />
             </div>
             <div>
-              <div class="flex items-center gap-2 flex-wrap">
+              <div class="flex items-center gap-2">
                 <h3 class="font-semibold text-base group-hover:text-primary transition-colors">
                   {{ store.name }}
                 </h3>
                 <span
-                  class="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-node-rag/10 text-node-rag shrink-0"
-                >
-                  {{ store.backend === "pgvector" ? "Postgres" : "Qdrant" }}
-                </span>
-                <span
                   v-if="store.is_shared"
-                  class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-blue-500/10 text-blue-500 shrink-0"
+                  class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-blue-500/10 text-blue-500"
                 >
                   <Users class="w-3 h-3" />
                   Shared
@@ -612,7 +607,7 @@ async function deleteItem(pointId: string): Promise<void> {
           </div>
           <div
             v-if="!store.is_shared"
-            class="flex items-center gap-1 shrink-0"
+            class="flex items-center gap-1"
           >
             <Button
               variant="ghost"
@@ -672,12 +667,17 @@ async function deleteItem(pointId: string): Promise<void> {
           <div class="text-xs font-mono text-muted-foreground bg-muted/50 px-2 py-1 rounded">
             {{ store.collection_name }}
           </div>
-          <div class="text-xs text-muted-foreground">
+          <div class="flex items-center justify-between gap-2 text-xs text-muted-foreground">
             <span v-if="store.is_shared && store.shared_by">
               Shared by {{ store.shared_by }}
             </span>
             <span v-else>
               Created {{ formatDate(store.created_at) }}
+            </span>
+            <span
+              class="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-node-rag/10 text-node-rag shrink-0"
+            >
+              {{ store.backend === "pgvector" ? "Postgres" : "Qdrant" }}
             </span>
           </div>
         </div>
