@@ -178,12 +178,16 @@ if docker ps -a --format '{{.Names}}' | grep -q '^heym-postgres$'; then
         echo -e "${GREEN}PostgreSQL started.${NC}"
     fi
 else
+    # Build the Heym Postgres image (postgres:16 + pgvector) so the data dir
+    # keeps the same glibc/collation as a plain postgres:16 — no risky image swap.
+    echo -e "${YELLOW}Building Heym Postgres image (postgres:16 + pgvector)...${NC}"
+    docker build -t heym-postgres:16 -f "$PROJECT_ROOT/docker/postgres.Dockerfile" "$PROJECT_ROOT"
     docker run --name heym-postgres \
         -e POSTGRES_USER=${POSTGRES_USER:-postgres} \
         -e POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres} \
         -e POSTGRES_DB=${POSTGRES_DB:-heym} \
         -p 6543:5432 \
-        -d pgvector/pgvector:pg16
+        -d heym-postgres:16
     echo -e "${GREEN}PostgreSQL container created and started.${NC}"
 fi
 

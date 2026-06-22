@@ -1,6 +1,9 @@
 services:
   postgres:
-    image: pgvector/pgvector:pg16
+    build:
+      context: .
+      dockerfile: docker/postgres.Dockerfile
+    image: heym-postgres:16
     container_name: heym-postgres
     environment:
       TZ: ${TIMEZONE:-Europe/Berlin}
