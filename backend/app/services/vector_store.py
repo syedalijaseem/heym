@@ -152,16 +152,29 @@ class QdrantVectorStoreService:
         if not self.collection_exists(collection_name):
             return None
 
-        info = self.client.get_collection(collection_name)
-        points_count = info.points_count or 0
-        # Modern Qdrant deprecates vectors_count (often None); fall back to points_count.
-        vector_count = info.vectors_count if info.vectors_count is not None else points_count
+        # Use the count API for the point total: it is reliable across Qdrant
+        # versions, unlike CollectionInfo.vectors_count (deprecated / sometimes
+        # removed, which would raise and hide the real count behind "N/A").
+        points_count = self.client.count(collection_name, exact=True).count
+
+        status = "green"
+        indexed_count = 0
+        segments_count = 0
+        try:
+            info = self.client.get_collection(collection_name)
+            status = str(getattr(info, "status", "green"))
+            indexed_count = getattr(info, "indexed_vectors_count", None) or 0
+            segments = getattr(info, "segments", None)
+            segments_count = len(segments) if segments else 0
+        except Exception:
+            pass
+
         return CollectionStats(
-            vector_count=vector_count,
-            indexed_vectors_count=info.indexed_vectors_count or 0,
+            vector_count=points_count,
+            indexed_vectors_count=indexed_count,
             points_count=points_count,
-            segments_count=len(info.segments) if info.segments else 0,
-            status=str(info.status),
+            segments_count=segments_count,
+            status=status,
         )
 
     def insert(

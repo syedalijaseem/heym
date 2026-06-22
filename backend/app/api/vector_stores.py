@@ -1,3 +1,4 @@
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
@@ -43,6 +44,7 @@ from app.services.vector_store import create_vector_store_service_for_credential
 from app.services.vector_store_pg import VectorStoreBackendUnavailableError
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 async def get_credential_config(
@@ -240,7 +242,12 @@ async def _get_store_stats(
                 status=stats.status,
             )
     except Exception:
-        pass
+        logger.warning(
+            "Failed to fetch stats for vector store %s (collection %s)",
+            store.id,
+            store.collection_name,
+            exc_info=True,
+        )
     return None
 
 
