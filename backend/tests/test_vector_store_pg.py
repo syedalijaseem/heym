@@ -43,6 +43,15 @@ class TestPgVectorStoreService(unittest.TestCase):
         svc, engine, emb = self._service()
         self.assertTrue(svc.collection_exists("anything"))
 
+    def test_delete_point_casts_uuid_column_to_text(self):
+        # Guards against "operator does not exist: uuid = text": the id column is
+        # UUID but point ids arrive as strings, so the comparison must cast.
+        svc, engine, emb = self._service()
+        svc.delete_point("col", "d54a25df-f73d-4397-9925-55d39334116d")
+        conn = engine.begin.return_value.__enter__.return_value
+        sql = str(conn.execute.call_args.args[0])
+        self.assertIn("id::text = ANY", sql)
+
 
 class TestPgVectorBackendUnavailable(unittest.TestCase):
     def _service_without_table(self):

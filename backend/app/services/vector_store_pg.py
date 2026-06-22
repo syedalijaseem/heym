@@ -207,7 +207,7 @@ class PgVectorStoreService:
             return True
         with self.engine.begin() as conn:
             conn.execute(
-                text(f"DELETE FROM {TABLE} WHERE collection_name = :c AND id = ANY(:ids)"),
+                text(f"DELETE FROM {TABLE} WHERE collection_name = :c AND id::text = ANY(:ids)"),
                 {"c": collection_name, "ids": [str(p) for p in point_ids]},
             )
         return True
