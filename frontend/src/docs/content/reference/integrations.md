@@ -115,7 +115,7 @@ store, then pick **Postgres (pgvector)** in the RAG node's Database dropdown.
 
 - No host/port is needed — vectors are written to Heym's own database; Heym never connects to a different database.
 - Every RAG feature available with Qdrant (insert, search, metadata filters, Cohere reranking, cloning, sharing) works identically with the Postgres backend.
-- Requires the `vector` extension, which ships with the `pgvector/pgvector:pg16` Postgres image Heym uses by default.
+- Requires the `vector` extension. Heym's bundled Postgres image (`postgres:16` with the `postgresql-16-pgvector` package, built by `run.sh` and `deploy.sh`) includes it by default. If you point Heym at your own external Postgres, install/enable pgvector there to use this backend — without it, Qdrant RAG still works and the Postgres backend stays inactive (the migration skips gracefully).
 
 ### Used By
 

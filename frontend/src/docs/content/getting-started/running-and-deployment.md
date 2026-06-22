@@ -172,6 +172,8 @@ If you prefer not to build the app locally, you can pull the published container
 
 The image starts the frontend and backend together in one container. PostgreSQL is still external, but you can provide either `DATABASE_URL` or the `POSTGRES_*` variables from `.env.example`.
 
+> **Vector store backend.** If you point the prebuilt image at a PostgreSQL you provisioned yourself and want to use the **Postgres (pgvector) RAG backend**, that database needs the `vector` extension (`postgres:16` plus the `postgresql-16-pgvector` package, which is what `run.sh`/`deploy.sh` build automatically). Without it, the startup migration skips the pgvector table gracefully — the deploy still succeeds and Qdrant RAG keeps working; only the Postgres vector backend stays inactive until pgvector is installed.
+
 **Set the keys yourself for direct image runs.** Unlike `run.sh`/`deploy.sh`, the prebuilt image does not auto-generate keys. After `cp .env.example .env`, populate the two empty keys (replacing in place avoids duplicate entries):
 
 ```bash
