@@ -593,6 +593,11 @@ async function deleteItem(pointId: string): Promise<void> {
                   {{ store.name }}
                 </h3>
                 <span
+                  class="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-node-rag/10 text-node-rag"
+                >
+                  {{ store.backend === "pgvector" ? "Postgres" : "Qdrant" }}
+                </span>
+                <span
                   v-if="store.is_shared"
                   class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-blue-500/10 text-blue-500"
                 >
