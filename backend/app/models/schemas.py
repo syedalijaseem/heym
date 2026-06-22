@@ -729,6 +729,10 @@ class CredentialConfigQdrant(BaseModel):
     openai_api_key: str
 
 
+class CredentialConfigPgvector(BaseModel):
+    openai_api_key: str
+
+
 class CredentialConfigGrist(BaseModel):
     api_key: str
     server_url: str

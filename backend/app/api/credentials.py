@@ -100,6 +100,9 @@ def get_masked_value(credential_type: CredentialType, config: dict) -> str | Non
     elif credential_type == CredentialType.qdrant:
         openai_api_key = config.get("openai_api_key", "")
         return mask_api_key(openai_api_key)
+    elif credential_type == CredentialType.pgvector:
+        openai_api_key = config.get("openai_api_key", "")
+        return mask_api_key(openai_api_key)
     elif credential_type == CredentialType.grist:
         api_key = config.get("api_key", "")
         return mask_api_key(api_key)
@@ -1034,6 +1037,12 @@ def validate_credential_config(credential_type: CredentialType, config: dict) ->
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="QDrant credential requires openai_api_key",
+            )
+    elif credential_type == CredentialType.pgvector:
+        if "openai_api_key" not in config or not config["openai_api_key"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Postgres vector credential requires openai_api_key",
             )
     elif credential_type == CredentialType.grist:
         if "api_key" not in config or not config["api_key"]:
