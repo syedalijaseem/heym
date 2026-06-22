@@ -512,3 +512,23 @@ def create_vector_store_service(
         qdrant_api_key=qdrant_api_key,
         openai_api_key=openai_api_key,
     )
+
+
+def create_vector_store_service_for_credential(
+    credential_type: object,
+    config: dict,
+) -> VectorStoreBackend:
+    """Build the vector store backend implied by the credential type."""
+    type_str = credential_type.value if hasattr(credential_type, "value") else str(credential_type)
+    if type_str == "qdrant":
+        return QdrantVectorStoreService(
+            qdrant_host=config.get("qdrant_host", "localhost"),
+            qdrant_port=int(config.get("qdrant_port", 6333)),
+            qdrant_api_key=config.get("qdrant_api_key"),
+            openai_api_key=config["openai_api_key"],
+        )
+    if type_str == "pgvector":
+        from app.services.vector_store_pg import PgVectorStoreService
+
+        return PgVectorStoreService(openai_api_key=config["openai_api_key"])
+    raise ValueError(f"Unsupported vector store credential type: {type_str}")
