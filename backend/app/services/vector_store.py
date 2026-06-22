@@ -1,6 +1,7 @@
 import json
 import uuid
 from dataclasses import dataclass, field
+from typing import Protocol
 
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import (
@@ -59,7 +60,56 @@ class VectorStoreSourceGroup:
     items: list[VectorStoreItem]
 
 
-class VectorStoreService:
+class VectorStoreBackend(Protocol):
+    """Common interface implemented by every vector store backend."""
+
+    def create_collection(self, collection_name: str) -> bool: ...
+    def delete_collection(self, collection_name: str) -> bool: ...
+    def collection_exists(self, collection_name: str) -> bool: ...
+    def get_collection_stats(self, collection_name: str) -> CollectionStats | None: ...
+    def insert(
+        self,
+        collection_name: str,
+        text: str,
+        metadata: dict | None = None,
+        point_id: str | None = None,
+    ) -> str: ...
+    def insert_batch(
+        self,
+        collection_name: str,
+        texts: list[str],
+        metadata_list: list[dict] | None = None,
+    ) -> list[str]: ...
+    def search(
+        self,
+        collection_name: str,
+        query: str,
+        limit: int = 5,
+        metadata_filter: dict | None = None,
+    ) -> list[SearchResult]: ...
+    def delete_points(self, collection_name: str, point_ids: list[str]) -> bool: ...
+    def find_existing_files(
+        self,
+        collection_name: str,
+        files: list[tuple[str, int]],
+    ) -> list[ExistingFile]: ...
+    def delete_by_source(self, collection_name: str, source: str) -> int: ...
+    def clone_collection(
+        self,
+        source_collection: str,
+        target_collection: str,
+        batch_size: int = 100,
+    ) -> int: ...
+    def list_items(
+        self,
+        collection_name: str,
+        limit: int = 100,
+        text_truncate_length: int = 200,
+    ) -> tuple[list[VectorStoreSourceGroup], int]: ...
+    def delete_point(self, collection_name: str, point_id: str) -> bool: ...
+
+
+class QdrantVectorStoreService:
     def __init__(
         self,
         qdrant_host: str,
@@ -446,13 +496,17 @@ class VectorStoreService:
         return True
 
 
+# Backward-compatible alias (existing imports use VectorStoreService).
+VectorStoreService = QdrantVectorStoreService
+
+
 def create_vector_store_service(
     qdrant_host: str,
     qdrant_port: int,
     qdrant_api_key: str | None,
     openai_api_key: str,
-) -> VectorStoreService:
-    return VectorStoreService(
+) -> QdrantVectorStoreService:
+    return QdrantVectorStoreService(
         qdrant_host=qdrant_host,
         qdrant_port=qdrant_port,
         qdrant_api_key=qdrant_api_key,
