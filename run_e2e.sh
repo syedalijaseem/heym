@@ -81,6 +81,12 @@ until docker exec "$CONTAINER_NAME" pg_isready -U postgres -d heym_e2e >/dev/nul
     sleep 1
 done
 
+# Install pgvector into the stock postgres:16 image so the migration's
+# CREATE EXTENSION works (opt-in Postgres RAG backend). Non-fatal.
+docker exec -u root "$CONTAINER_NAME" sh -c \
+    "apt-get update -qq && apt-get install -y -qq --no-install-recommends postgresql-16-pgvector" \
+    >/dev/null 2>&1 || echo "pgvector install skipped for E2E (Qdrant RAG still works)"
+
 echo "Applying E2E database migrations..."
 cd "$REPO_ROOT/backend"
 migration_attempt=0

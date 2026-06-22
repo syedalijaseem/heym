@@ -1828,19 +1828,20 @@ The last node in the iteration body MUST connect BACK to the loop node's `loop` 
 - `$redisNodeLabel.ttl` - TTL value (for set operation with TTL)
 
 ### 21. rag (Vector Store / RAG Operations)
-- **Purpose**: Insert documents into or search documents from a QDrant vector store for RAG (Retrieval Augmented Generation)
+- **Purpose**: Insert documents into or search documents from a vector store (Qdrant or Postgres/pgvector) for RAG (Retrieval Augmented Generation)
 - **Inputs**: 1 | **Outputs**: 1
 - **Data fields**:
   - `label`: Node identifier
   - `operation`: Operation type - "insert" | "search"
   - `vectorStoreId`: UUID of the Vector Store to use
+  - `dbType`: "qdrant" | "pgvector" (optional, default "qdrant"). The vector store backend. This is only a UI hint for filtering the store list; the actual backend is determined by the selected Vector Store's credential, so a valid `vectorStoreId` works regardless of `dbType`.
   - `documentContent`: Document text to insert (only for "insert" operation, supports expressions)
   - `documentMetadata`: JSON object with metadata for the document (only for "insert" operation)
   - `queryText`: Search query text (only for "search" operation, supports expressions)
   - `searchLimit`: Maximum number of results to return (only for "search" operation, default: 3)
   - `metadataFilters`: JSON object with metadata filters for search (only for "search" operation)
 
-**SETUP**: Requires a Vector Store created in the Vector Stores tab with a QDrant + OpenAI Embedding credential.
+**SETUP**: Requires a Vector Store created in the Vector Stores tab with either a "RAG: Qdrant + OpenAI" credential (external Qdrant server) or a "RAG: Psql + OpenAI" credential (vectors stored in Heym's own Postgres database via pgvector — no external service). The same RAG operations, metadata filters, and reranking work identically with both backends.
 
 **RAG Operations**:
 
