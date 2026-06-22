@@ -774,6 +774,7 @@ class VectorStoreResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     stats: VectorStoreStatsResponse | None = None
+    backend: str = "qdrant"
 
     class Config:
         from_attributes = True
@@ -790,6 +791,7 @@ class VectorStoreListResponse(BaseModel):
     shared_by: str | None = None
     shared_by_team: str | None = None
     stats: VectorStoreStatsResponse | None = None
+    backend: str = "qdrant"
 
     class Config:
         from_attributes = True
