@@ -18,6 +18,30 @@ class TestPgvectorCredentialValidation(unittest.TestCase):
         validate_credential_config(CredentialType.pgvector, {"openai_api_key": "sk-test"})
 
 
+class TestCredentialTypeEnumsInSync(unittest.TestCase):
+    def test_schema_and_model_credential_types_match(self):
+        """The API schema enum and the DB model enum must list the same types.
+
+        A POST /api/credentials body is validated against the schema enum, so a
+        type missing there (e.g. pgvector) fails with 422 before reaching the DB.
+        """
+        from app.db.models import CredentialType as ModelType
+        from app.models.schemas import CredentialType as SchemaType
+
+        self.assertEqual(
+            {e.value for e in SchemaType},
+            {e.value for e in ModelType},
+        )
+
+    def test_create_credential_accepts_pgvector(self):
+        from app.models.schemas import CredentialCreate
+
+        cred = CredentialCreate(
+            name="RAG Psql", type="pgvector", config={"openai_api_key": "sk-test"}
+        )
+        self.assertEqual(cred.type.value, "pgvector")
+
+
 class TestVectorStoreFactory(unittest.TestCase):
     def test_qdrant_credential_returns_qdrant_service(self):
         from app.services.vector_store import (

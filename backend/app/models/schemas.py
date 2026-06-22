@@ -457,6 +457,7 @@ class CredentialType(str, Enum):
     smtp = "smtp"
     redis = "redis"
     qdrant = "qdrant"
+    pgvector = "pgvector"
     grist = "grist"
     rabbitmq = "rabbitmq"
     cohere = "cohere"
