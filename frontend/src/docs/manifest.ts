@@ -36,7 +36,7 @@ export const DOCS_MANIFEST: Record<string, DocCategory> = {
       { slug: "websocket-trigger-node", title: "WebSocket Trigger" },
       { slug: "rabbitmq-node", title: "RabbitMQ" },
       { slug: "llm-node", title: "LLM" },
-      { slug: "rag-node", title: "Qdrant RAG" },
+      { slug: "rag-node", title: "RAG / Vector Store" },
       { slug: "condition-node", title: "Condition" },
       { slug: "switch-node", title: "Switch" },
       { slug: "merge-node", title: "Merge" },
