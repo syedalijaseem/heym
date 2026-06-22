@@ -587,9 +587,9 @@ async function deleteItem(pointId: string): Promise<void> {
             <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-node-rag/10 text-node-rag shrink-0">
               <Database class="w-5 h-5" />
             </div>
-            <div class="min-w-0">
+            <div class="min-w-0 flex-1">
               <div class="flex items-center gap-2 min-w-0">
-                <h3 class="font-semibold text-base group-hover:text-primary transition-colors truncate">
+                <h3 class="font-semibold text-base group-hover:text-primary transition-colors truncate min-w-0">
                   {{ store.name }}
                 </h3>
                 <span
