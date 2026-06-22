@@ -14,6 +14,7 @@ export type CredentialType =
   | "smtp"
   | "redis"
   | "qdrant"
+  | "pgvector"
   | "grist"
   | "rabbitmq"
   | "cohere"
@@ -150,6 +151,10 @@ export interface CredentialConfigQdrant {
   openai_api_key: string;
 }
 
+export interface CredentialConfigPgvector {
+  openai_api_key: string;
+}
+
 export interface CredentialConfigGrist {
   api_key: string;
   server_url: string;
@@ -209,6 +214,7 @@ export type CredentialConfig =
   | CredentialConfigSmtp
   | CredentialConfigRedis
   | CredentialConfigQdrant
+  | CredentialConfigPgvector
   | CredentialConfigGrist
   | CredentialConfigRabbitmq
   | CredentialConfigCohere
@@ -265,7 +271,8 @@ export const CREDENTIAL_TYPE_LABELS: Record<CredentialType, string> = {
   imap: "IMAP Email Inbox",
   smtp: "SMTP Email",
   redis: "Redis",
-  qdrant: "QDrant + OpenAI",
+  qdrant: "RAG: Qdrant + OpenAI",
+  pgvector: "RAG: Psql + OpenAI",
   grist: "Grist",
   rabbitmq: "RabbitMQ",
   cohere: "Cohere Reranker",
@@ -293,6 +300,8 @@ export const CREDENTIAL_TYPE_DESCRIPTIONS: Record<CredentialType, string> = {
   smtp: "Send emails via SMTP server",
   redis: "Connect to Redis for caching and data storage",
   qdrant: "Connect to QDrant for vector storage with OpenAI embeddings",
+  pgvector:
+    "Vector storage inside Heym's own Postgres database with OpenAI embeddings (no external DB)",
   grist: "Connect to Grist spreadsheet for data operations",
   rabbitmq: "Connect to RabbitMQ for message queue operations",
   cohere: "Connect to Cohere API for reranking search results",
