@@ -400,6 +400,7 @@ export interface NodeData {
   redisValue?: string;
   redisTtl?: number;
   ragOperation?: RagOperation;
+  dbType?: string;
   vectorStoreId?: string;
   documentContent?: string;
   documentMetadata?: string;

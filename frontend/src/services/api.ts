@@ -1555,6 +1555,7 @@ export interface VectorStoreListItem {
   is_shared: boolean;
   shared_by: string | null;
   stats: VectorStoreStats | null;
+  backend?: string;
 }
 
 export interface VectorStore {
@@ -1567,6 +1568,7 @@ export interface VectorStore {
   created_at: string;
   updated_at: string;
   stats: VectorStoreStats | null;
+  backend?: string;
 }
 
 export interface VectorStoreShare {
