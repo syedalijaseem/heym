@@ -48,7 +48,7 @@ if [ -n "${E2E_POSTGRES_PORT:-}" ]; then
         -e POSTGRES_PASSWORD=postgres \
         -e POSTGRES_DB=heym_e2e \
         -p "127.0.0.1:${E2E_POSTGRES_PORT}:5432" \
-        postgres:16 >/dev/null
+        pgvector/pgvector:pg16 >/dev/null
     POSTGRES_PORT="$E2E_POSTGRES_PORT"
 else
     echo "Starting isolated E2E PostgreSQL on a random host port..."
@@ -58,7 +58,7 @@ else
         -e POSTGRES_PASSWORD=postgres \
         -e POSTGRES_DB=heym_e2e \
         -p "127.0.0.1::5432" \
-        postgres:16 >/dev/null
+        pgvector/pgvector:pg16 >/dev/null
     POSTGRES_PORT="$(docker port "$CONTAINER_NAME" 5432/tcp | sed -n 's/.*:\([0-9][0-9]*\)$/\1/p' | head -1)"
 fi
 
