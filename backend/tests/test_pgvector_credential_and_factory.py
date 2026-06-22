@@ -15,9 +15,7 @@ class TestPgvectorCredentialValidation(unittest.TestCase):
 
     def test_pgvector_valid_config_passes(self):
         # Should not raise.
-        validate_credential_config(
-            CredentialType.pgvector, {"openai_api_key": "sk-test"}
-        )
+        validate_credential_config(CredentialType.pgvector, {"openai_api_key": "sk-test"})
 
 
 class TestVectorStoreFactory(unittest.TestCase):
