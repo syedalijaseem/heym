@@ -153,10 +153,13 @@ class QdrantVectorStoreService:
             return None
 
         info = self.client.get_collection(collection_name)
+        points_count = info.points_count or 0
+        # Modern Qdrant deprecates vectors_count (often None); fall back to points_count.
+        vector_count = info.vectors_count if info.vectors_count is not None else points_count
         return CollectionStats(
-            vector_count=info.vectors_count or 0,
+            vector_count=vector_count,
             indexed_vectors_count=info.indexed_vectors_count or 0,
-            points_count=info.points_count or 0,
+            points_count=points_count,
             segments_count=len(info.segments) if info.segments else 0,
             status=str(info.status),
         )

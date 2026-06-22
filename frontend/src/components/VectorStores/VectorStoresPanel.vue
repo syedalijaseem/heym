@@ -453,7 +453,8 @@ async function removeTeamShare(teamId: string): Promise<void> {
 
 function formatVectorCount(stats: VectorStoreListItem["stats"]): string {
   if (!stats) return "N/A";
-  return stats.vector_count.toLocaleString();
+  const count = stats.vector_count || stats.points_count || 0;
+  return count.toLocaleString();
 }
 
 async function openItemsDialog(store: VectorStoreListItem): Promise<void> {
