@@ -44,5 +44,41 @@ class TestPgVectorStoreService(unittest.TestCase):
         self.assertTrue(svc.collection_exists("anything"))
 
 
+class TestPgVectorBackendUnavailable(unittest.TestCase):
+    def _service_without_table(self):
+        with patch("app.services.vector_store_pg.EmbeddingService") as emb_cls:
+            emb_cls.return_value.embed_text.return_value = [0.0] * 1536
+            from app.services.vector_store_pg import PgVectorStoreService
+
+            engine = MagicMock()
+            # _table_exists() -> to_regclass IS NOT NULL -> False (table missing)
+            conn = engine.connect.return_value.__enter__.return_value
+            conn.exec_driver_sql.return_value.scalar.return_value = False
+            return PgVectorStoreService("sk-test", engine=engine)
+
+    def test_create_collection_raises_clear_error(self):
+        from app.services.vector_store_pg import VectorStoreBackendUnavailableError
+
+        svc = self._service_without_table()
+        with self.assertRaises(VectorStoreBackendUnavailableError):
+            svc.create_collection("col")
+
+    def test_insert_and_search_raise_clear_error(self):
+        from app.services.vector_store_pg import VectorStoreBackendUnavailableError
+
+        svc = self._service_without_table()
+        with self.assertRaises(VectorStoreBackendUnavailableError):
+            svc.insert("col", "text")
+        with self.assertRaises(VectorStoreBackendUnavailableError):
+            svc.search("col", "query")
+
+    def test_reads_degrade_gracefully(self):
+        svc = self._service_without_table()
+        self.assertIsNone(svc.get_collection_stats("col"))
+        self.assertEqual(svc.list_items("col"), ([], 0))
+        self.assertEqual(svc.find_existing_files("col", [("a.txt", 1)]), [])
+        self.assertFalse(svc.collection_exists("col"))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -14,6 +14,17 @@ from app.services.vector_store import (
 
 TABLE = "vector_store_items"
 
+BACKEND_UNAVAILABLE_MSG = (
+    "Postgres vector backend is unavailable: the pgvector extension and the "
+    "vector_store_items table are not present in this database. pgvector is "
+    "opt-in — install the pgvector extension on your Postgres and run "
+    "'alembic upgrade head', or use Qdrant. (Qdrant RAG is unaffected.)"
+)
+
+
+class VectorStoreBackendUnavailableError(ValueError):
+    """Raised when a pgvector operation is attempted but the backend table is missing."""
+
 
 def _vec_literal(embedding: list[float]) -> str:
     return "[" + ",".join(repr(float(x)) for x in embedding) + "]"
@@ -35,13 +46,30 @@ class PgVectorStoreService:
         self.engine = engine
         self.embedding_service = EmbeddingService(openai_api_key)
 
+    def _table_exists(self) -> bool:
+        with self.engine.connect() as conn:
+            return bool(
+                conn.exec_driver_sql(
+                    "SELECT to_regclass('public.vector_store_items') IS NOT NULL"
+                ).scalar()
+            )
+
+    def _require_backend(self) -> None:
+        if not self._table_exists():
+            raise VectorStoreBackendUnavailableError(BACKEND_UNAVAILABLE_MSG)
+
     def create_collection(self, collection_name: str) -> bool:
+        # Validate the backend is provisioned so a store cannot be created on a
+        # database where pgvector operations would later fail.
+        self._require_backend()
         return True
 
     def collection_exists(self, collection_name: str) -> bool:
-        return True
+        return self._table_exists()
 
     def delete_collection(self, collection_name: str) -> bool:
+        if not self._table_exists():
+            return True
         with self.engine.begin() as conn:
             conn.execute(
                 text(f"DELETE FROM {TABLE} WHERE collection_name = :c"),
@@ -50,6 +78,8 @@ class PgVectorStoreService:
         return True
 
     def get_collection_stats(self, collection_name: str) -> CollectionStats | None:
+        if not self._table_exists():
+            return None
         with self.engine.connect() as conn:
             count = (
                 conn.execute(
@@ -73,6 +103,7 @@ class PgVectorStoreService:
         metadata: dict | None = None,
         point_id: str | None = None,
     ) -> str:
+        self._require_backend()
         embedding = self.embedding_service.embed_text(text)
         pid = point_id or str(uuid.uuid4())
         meta = dict(metadata or {})
@@ -101,6 +132,7 @@ class PgVectorStoreService:
     ) -> list[str]:
         if not texts:
             return []
+        self._require_backend()
         embeddings = self.embedding_service.embed_texts(texts)
         rows = []
         ids = []
@@ -138,6 +170,7 @@ class PgVectorStoreService:
         limit: int = 5,
         metadata_filter: dict | None = None,
     ) -> list[SearchResult]:
+        self._require_backend()
         query_embedding = self.embedding_service.embed_text(query)
         params = {
             "c": collection_name,
@@ -183,6 +216,8 @@ class PgVectorStoreService:
         return self.delete_points(collection_name, [point_id])
 
     def delete_by_source(self, collection_name: str, source: str) -> int:
+        if not self._table_exists():
+            return 0
         with self.engine.begin() as conn:
             conn.execute(
                 text(f"DELETE FROM {TABLE} WHERE collection_name = :c AND source = :s"),
@@ -195,7 +230,7 @@ class PgVectorStoreService:
         collection_name: str,
         files: list[tuple[str, int]],
     ) -> list[ExistingFile]:
-        if not files:
+        if not files or not self._table_exists():
             return []
         with self.engine.connect() as conn:
             rows = conn.execute(
@@ -222,6 +257,8 @@ class PgVectorStoreService:
         target_collection: str,
         batch_size: int = 100,
     ) -> int:
+        if not self._table_exists():
+            return 0
         with self.engine.begin() as conn:
             result = conn.execute(
                 text(
@@ -240,6 +277,8 @@ class PgVectorStoreService:
         limit: int = 100,
         text_truncate_length: int = 200,
     ) -> tuple[list[VectorStoreSourceGroup], int]:
+        if not self._table_exists():
+            return [], 0
         with self.engine.connect() as conn:
             rows = conn.execute(
                 text(

@@ -178,20 +178,34 @@ if docker ps -a --format '{{.Names}}' | grep -q '^heym-postgres$'; then
         echo -e "${GREEN}PostgreSQL started.${NC}"
     fi
 else
-    # Build the Heym Postgres image (postgres:16 + pgvector) so the data dir
-    # keeps the same glibc/collation as a plain postgres:16 — no risky image swap.
-    echo -e "${YELLOW}Building Heym Postgres image (postgres:16 + pgvector)...${NC}"
-    docker build -t heym-postgres:16 -f "$PROJECT_ROOT/docker/postgres.Dockerfile" "$PROJECT_ROOT"
     docker run --name heym-postgres \
         -e POSTGRES_USER=${POSTGRES_USER:-postgres} \
         -e POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres} \
         -e POSTGRES_DB=${POSTGRES_DB:-heym} \
         -p 6543:5432 \
-        -d heym-postgres:16
+        -d postgres:16
     echo -e "${GREEN}PostgreSQL container created and started.${NC}"
 fi
 
 sleep 2
+
+# Enable the pgvector extension on the stock postgres:16 image (opt-in Postgres
+# RAG backend). We keep the official postgres:16 image untouched — so existing
+# data dirs and their collation are never changed — and just add the extension
+# package at runtime. Non-fatal: if it cannot be installed (e.g. no network),
+# Qdrant RAG keeps working and the migration skips the pgvector table.
+ensure_pgvector() {
+    if docker exec heym-postgres sh -c "dpkg -s postgresql-16-pgvector >/dev/null 2>&1"; then
+        return 0
+    fi
+    echo -e "${YELLOW}Installing pgvector extension into PostgreSQL...${NC}"
+    docker exec -u root heym-postgres sh -c \
+        "apt-get update -qq && apt-get install -y -qq --no-install-recommends postgresql-16-pgvector" \
+        >/dev/null 2>&1 \
+        && echo -e "${GREEN}pgvector installed.${NC}" \
+        || echo -e "${YELLOW}pgvector install skipped (Qdrant RAG still works).${NC}"
+}
+ensure_pgvector
 
 echo -e "\n${YELLOW}Setting up backend...${NC}"
 cd "$PROJECT_ROOT/backend"

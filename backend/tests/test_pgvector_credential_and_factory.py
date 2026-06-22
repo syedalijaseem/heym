@@ -85,8 +85,6 @@ class TestExecutorRagPgvector(unittest.TestCase):
                 "pgvector", {"openai_api_key": "sk-test"}
             )
         self.assertIsInstance(svc, PgVectorStoreService)
-        # collection_exists is True without a DB round-trip for pgvector
-        self.assertTrue(svc.collection_exists("col"))
 
 
 if __name__ == "__main__":

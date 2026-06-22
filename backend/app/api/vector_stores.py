@@ -40,6 +40,7 @@ from app.services.encryption import decrypt_config
 from app.services.file_processor import create_file_processor
 from app.services.upload_limits import read_upload_file_limited
 from app.services.vector_store import create_vector_store_service_for_credential
+from app.services.vector_store_pg import VectorStoreBackendUnavailableError
 
 router = APIRouter()
 
@@ -283,6 +284,11 @@ async def create_vector_store(
 
     try:
         service.create_collection(collection_name)
+    except VectorStoreBackendUnavailableError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -579,6 +585,11 @@ async def upload_file_to_vector_store(
 
     try:
         point_ids = service.insert_batch(store.collection_name, texts, metadata_list)
+    except VectorStoreBackendUnavailableError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

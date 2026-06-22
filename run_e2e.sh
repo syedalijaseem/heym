@@ -48,7 +48,7 @@ if [ -n "${E2E_POSTGRES_PORT:-}" ]; then
         -e POSTGRES_PASSWORD=postgres \
         -e POSTGRES_DB=heym_e2e \
         -p "127.0.0.1:${E2E_POSTGRES_PORT}:5432" \
-        pgvector/pgvector:pg16 >/dev/null
+        postgres:16 >/dev/null
     POSTGRES_PORT="$E2E_POSTGRES_PORT"
 else
     echo "Starting isolated E2E PostgreSQL on a random host port..."
@@ -58,7 +58,7 @@ else
         -e POSTGRES_PASSWORD=postgres \
         -e POSTGRES_DB=heym_e2e \
         -p "127.0.0.1::5432" \
-        pgvector/pgvector:pg16 >/dev/null
+        postgres:16 >/dev/null
     POSTGRES_PORT="$(docker port "$CONTAINER_NAME" 5432/tcp | sed -n 's/.*:\([0-9][0-9]*\)$/\1/p' | head -1)"
 fi
 
@@ -80,6 +80,12 @@ until docker exec "$CONTAINER_NAME" pg_isready -U postgres -d heym_e2e >/dev/nul
     fi
     sleep 1
 done
+
+# Install pgvector into the stock postgres:16 image so the migration's
+# CREATE EXTENSION works (opt-in Postgres RAG backend). Non-fatal.
+docker exec -u root "$CONTAINER_NAME" sh -c \
+    "apt-get update -qq && apt-get install -y -qq --no-install-recommends postgresql-16-pgvector" \
+    >/dev/null 2>&1 || echo "pgvector install skipped for E2E (Qdrant RAG still works)"
 
 echo "Applying E2E database migrations..."
 cd "$REPO_ROOT/backend"

@@ -172,7 +172,7 @@ If you prefer not to build the app locally, you can pull the published container
 
 The image starts the frontend and backend together in one container. PostgreSQL is still external, but you can provide either `DATABASE_URL` or the `POSTGRES_*` variables from `.env.example`.
 
-> **Vector store backend.** If you point the prebuilt image at a PostgreSQL you provisioned yourself and want to use the **Postgres (pgvector) RAG backend**, that database needs the `vector` extension (`postgres:16` plus the `postgresql-16-pgvector` package, which is what `run.sh`/`deploy.sh` build automatically). Without it, the startup migration skips the pgvector table gracefully — the deploy still succeeds and Qdrant RAG keeps working; only the Postgres vector backend stays inactive until pgvector is installed.
+> **Vector store backend.** `run.sh` and `deploy.sh` run the official `postgres:16` image and auto-install the `postgresql-16-pgvector` package at startup, so the **Postgres (pgvector) RAG backend** works out of the box there with no change to your data. The prebuilt single-container image, however, connects to a PostgreSQL **you** provide — that database must support the `vector` extension to use the Postgres backend. Heym cannot install pgvector into a database it does not manage. Without it, the startup migration skips the pgvector table gracefully — the deploy still succeeds, Qdrant RAG keeps working, and creating or uploading to a Postgres vector store returns a clear "backend unavailable" message until pgvector is enabled.
 
 **Set the keys yourself for direct image runs.** Unlike `run.sh`/`deploy.sh`, the prebuilt image does not auto-generate keys. After `cp .env.example .env`, populate the two empty keys (replacing in place avoids duplicate entries):
 
