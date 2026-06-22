@@ -582,24 +582,24 @@ async function deleteItem(pointId: string): Promise<void> {
         :class="`p-5 transition-all hover:border-primary/50 hover:shadow-md group cursor-pointer ${store.is_shared ? 'border-l-4 border-l-blue-500' : ''}`"
         @click="openItemsDialog(store)"
       >
-        <div class="flex items-start justify-between mb-3">
-          <div class="flex items-center gap-3">
-            <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-node-rag/10 text-node-rag">
+        <div class="flex items-start justify-between gap-2 mb-3">
+          <div class="flex items-center gap-3 min-w-0 flex-1">
+            <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-node-rag/10 text-node-rag shrink-0">
               <Database class="w-5 h-5" />
             </div>
-            <div>
-              <div class="flex items-center gap-2">
-                <h3 class="font-semibold text-base group-hover:text-primary transition-colors">
+            <div class="min-w-0">
+              <div class="flex items-center gap-2 min-w-0">
+                <h3 class="font-semibold text-base group-hover:text-primary transition-colors truncate">
                   {{ store.name }}
                 </h3>
                 <span
-                  class="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-node-rag/10 text-node-rag"
+                  class="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-node-rag/10 text-node-rag shrink-0"
                 >
                   {{ store.backend === "pgvector" ? "Postgres" : "Qdrant" }}
                 </span>
                 <span
                   v-if="store.is_shared"
-                  class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-blue-500/10 text-blue-500"
+                  class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-blue-500/10 text-blue-500 shrink-0"
                 >
                   <Users class="w-3 h-3" />
                   Shared
@@ -612,7 +612,7 @@ async function deleteItem(pointId: string): Promise<void> {
           </div>
           <div
             v-if="!store.is_shared"
-            class="flex items-center gap-1"
+            class="flex items-center gap-1 shrink-0"
           >
             <Button
               variant="ghost"
