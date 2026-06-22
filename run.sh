@@ -183,7 +183,7 @@ else
         -e POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres} \
         -e POSTGRES_DB=${POSTGRES_DB:-heym} \
         -p 6543:5432 \
-        -d postgres:16
+        -d pgvector/pgvector:pg16
     echo -e "${GREEN}PostgreSQL container created and started.${NC}"
 fi
 
