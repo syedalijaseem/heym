@@ -583,13 +583,13 @@ async function deleteItem(pointId: string): Promise<void> {
         @click="openItemsDialog(store)"
       >
         <div class="flex items-start justify-between gap-2 mb-3">
-          <div class="flex items-center gap-3 min-w-0 flex-1">
+          <div class="flex items-center gap-3">
             <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-node-rag/10 text-node-rag shrink-0">
               <Database class="w-5 h-5" />
             </div>
-            <div class="min-w-0 flex-1">
-              <div class="flex items-center gap-2 min-w-0">
-                <h3 class="font-semibold text-base group-hover:text-primary transition-colors truncate min-w-0">
+            <div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <h3 class="font-semibold text-base group-hover:text-primary transition-colors">
                   {{ store.name }}
                 </h3>
                 <span
