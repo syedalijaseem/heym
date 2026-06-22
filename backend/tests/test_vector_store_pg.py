@@ -1,0 +1,48 @@
+import unittest
+from unittest.mock import MagicMock, patch
+
+from app.services.vector_store import SearchResult
+
+
+class TestPgVectorStoreService(unittest.TestCase):
+    def _service(self, embed_return=None):
+        with patch("app.services.vector_store_pg.EmbeddingService") as emb_cls:
+            emb = emb_cls.return_value
+            emb.embed_text.return_value = embed_return or [0.0] * 1536
+            from app.services.vector_store_pg import PgVectorStoreService
+
+            engine = MagicMock()
+            svc = PgVectorStoreService("sk-test", engine=engine)
+            return svc, engine, emb
+
+    def test_search_builds_results_and_score(self):
+        svc, engine, emb = self._service()
+        conn = engine.connect.return_value.__enter__.return_value
+        row = MagicMock()
+        row.id = "11111111-1111-1111-1111-111111111111"
+        row.text = "hello"
+        row.distance = 0.25  # cosine distance -> score 0.75
+        row.metadata = {"source": "a.txt", "file_size": 10}
+        conn.execute.return_value.fetchall.return_value = [row]
+
+        results = svc.search("col1", "query", limit=3)
+
+        self.assertEqual(len(results), 1)
+        self.assertIsInstance(results[0], SearchResult)
+        self.assertEqual(results[0].text, "hello")
+        self.assertAlmostEqual(results[0].score, 0.75, places=5)
+        self.assertEqual(results[0].metadata.get("source"), "a.txt")
+
+    def test_insert_returns_point_id(self):
+        svc, engine, emb = self._service()
+        pid = svc.insert("col1", "doc text", {"source": "a.txt"})
+        self.assertTrue(pid)
+        engine.begin.assert_called()  # write used a transaction
+
+    def test_collection_exists_is_true(self):
+        svc, engine, emb = self._service()
+        self.assertTrue(svc.collection_exists("anything"))
+
+
+if __name__ == "__main__":
+    unittest.main()
