@@ -52,5 +52,20 @@ class TestVectorStoreFactory(unittest.TestCase):
             create_vector_store_service_for_credential("nope", {})
 
 
+class TestExecutorRagPgvector(unittest.TestCase):
+    def test_rag_search_uses_pg_backend_for_pgvector_credential(self):
+        """The RAG branch must build the backend from the store's credential type."""
+        from app.services.vector_store import create_vector_store_service_for_credential
+        from app.services.vector_store_pg import PgVectorStoreService
+
+        with patch("app.services.vector_store_pg.EmbeddingService"):
+            svc = create_vector_store_service_for_credential(
+                "pgvector", {"openai_api_key": "sk-test"}
+            )
+        self.assertIsInstance(svc, PgVectorStoreService)
+        # collection_exists is True without a DB round-trip for pgvector
+        self.assertTrue(svc.collection_exists("col"))
+
+
 if __name__ == "__main__":
     unittest.main()
