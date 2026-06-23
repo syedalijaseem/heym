@@ -121,6 +121,10 @@ import {
   getGitHubExpressionFields,
   type GitHubExpressionFieldKey,
 } from "@/lib/githubExpressionFields";
+import {
+  getNotionExpressionFields,
+  type NotionExpressionFieldKey,
+} from "@/lib/notionExpressionFields";
 import { parseWebhookJson, stringifyWebhookJson } from "@/lib/webhookBody";
 import { cn } from "@/lib/utils";
 import { configApi, credentialsApi, dataTablesApi, filesApi, gristApi, mcpApi, workflowApi } from "@/services/api";
@@ -624,6 +628,17 @@ const notionDataSourceIdExpressionInputRef = ref<InstanceType<typeof ExpressionI
 const notionDataSourceExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const notionBlockIdExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const notionPropertiesExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const notionParentPageIdExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const notionBlockExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const notionIconExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const notionCoverExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const notionChildrenExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const notionFilterExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const notionSortExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const notionSortsExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const notionStartCursorExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const notionAfterBlockIdExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const currentNotionExpressionFieldIndex = ref(0);
 const dataTableRowIdExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const dataTableDataExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const dataTableFilterExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
@@ -1978,18 +1993,55 @@ function closeAllExpressionExpandDialogs(): void {
   googleSheetsSheetNameExpressionInputRef.value?.closeExpandDialog();
   googleSheetsValuesInputRef.value?.closeExpandDialog();
   closeBigQueryExpressionDialogs();
-  notionQueryExpressionInputRef.value?.closeExpandDialog();
-  notionPageIdExpressionInputRef.value?.closeExpandDialog();
-  notionDatabaseIdExpressionInputRef.value?.closeExpandDialog();
-  notionDatabaseExpressionInputRef.value?.closeExpandDialog();
-  notionDataSourceIdExpressionInputRef.value?.closeExpandDialog();
-  notionDataSourceExpressionInputRef.value?.closeExpandDialog();
-  notionBlockIdExpressionInputRef.value?.closeExpandDialog();
-  notionPropertiesExpressionInputRef.value?.closeExpandDialog();
+  closeNotionExpressionDialogs();
   closeS3ExpressionDialogs();
   closeMCPCallExpressionDialogs();
   closeChartOutputExpressionDialogs();
   closeGitHubExpressionDialogs();
+}
+
+const notionExpressionFields = computed(() => {
+  const n = workflowStore.selectedNode;
+  if (!n || n.type !== "notion") {
+    return [];
+  }
+  const operation = (n.data.notionOperation as string | undefined) || "";
+  return getNotionExpressionFields(operation, {
+    dataSourceInputMode: n.data.notionDataSourceInputMode as string | undefined,
+    parentPageInputMode: n.data.notionParentPageInputMode as string | undefined,
+    appendPosition: n.data.notionAppendPosition as string | undefined,
+    afterBlockId: n.data.notionAfterBlockId as string | undefined,
+  });
+});
+
+const notionExpressionFieldCount = computed(
+  (): number => notionExpressionFields.value.length,
+);
+
+function notionExpressionFieldIndex(key: NotionExpressionFieldKey): number {
+  const index = notionExpressionFields.value.findIndex((field) => field.key === key);
+  return index >= 0 ? index : -1;
+}
+
+function notionExpressionFieldLabel(key: NotionExpressionFieldKey): string {
+  return notionExpressionFields.value.find((field) => field.key === key)?.label ?? "";
+}
+
+function notionExpressionNavBindings(key: NotionExpressionFieldKey): {
+  navigationEnabled: boolean;
+  navigationIndex: number;
+  navigationTotal: number;
+  dialogNodeLabel: string;
+  dialogKeyLabel: string;
+} {
+  const index = notionExpressionFieldIndex(key);
+  return {
+    navigationEnabled: notionExpressionFieldCount.value > 1 && index >= 0,
+    navigationIndex: index >= 0 ? index : 0,
+    navigationTotal: notionExpressionFieldCount.value,
+    dialogNodeLabel: selectedNodeEvaluateDialogLabel.value,
+    dialogKeyLabel: notionExpressionFieldLabel(key),
+  };
 }
 
 /** Opens the primary expression evaluate dialog for whichever node is currently selected. */
@@ -2009,13 +2061,103 @@ function notionExpressionInputRefForField(
       return notionDataSourceIdExpressionInputRef.value;
     case "notionDataSource":
       return notionDataSourceExpressionInputRef.value;
+    case "notionParentPageId":
+      return notionParentPageIdExpressionInputRef.value;
     case "notionBlockId":
       return notionBlockIdExpressionInputRef.value;
+    case "notionBlock":
+      return notionBlockExpressionInputRef.value;
     case "notionProperties":
       return notionPropertiesExpressionInputRef.value;
+    case "notionIcon":
+      return notionIconExpressionInputRef.value;
+    case "notionCover":
+      return notionCoverExpressionInputRef.value;
+    case "notionChildren":
+      return notionChildrenExpressionInputRef.value;
+    case "notionFilter":
+      return notionFilterExpressionInputRef.value;
+    case "notionSort":
+      return notionSortExpressionInputRef.value;
+    case "notionSorts":
+      return notionSortsExpressionInputRef.value;
+    case "notionStartCursor":
+      return notionStartCursorExpressionInputRef.value;
+    case "notionAfterBlockId":
+      return notionAfterBlockIdExpressionInputRef.value;
     default:
       return null;
   }
+}
+
+function resolveNotionExpressionStartIndex(): number {
+  const focusField = workflowStore.focusField;
+  if (focusField) {
+    const index = notionExpressionFieldIndex(focusField as NotionExpressionFieldKey);
+    if (index >= 0) {
+      return index;
+    }
+  }
+  return 0;
+}
+
+function openNotionExpressionFieldAtIndex(index: number): boolean {
+  const n = selectedNode.value;
+  if (!n || n.type !== "notion") {
+    return false;
+  }
+  const field = notionExpressionFields.value[index];
+  if (!field) {
+    return false;
+  }
+  currentNotionExpressionFieldIndex.value = index;
+  const input = notionExpressionInputRefForField(field.key);
+  if (!input) {
+    return false;
+  }
+  input.openExpandDialog();
+  return true;
+}
+
+function closeNotionExpressionDialogs(): void {
+  notionQueryExpressionInputRef.value?.closeExpandDialog();
+  notionPageIdExpressionInputRef.value?.closeExpandDialog();
+  notionDatabaseIdExpressionInputRef.value?.closeExpandDialog();
+  notionDatabaseExpressionInputRef.value?.closeExpandDialog();
+  notionDataSourceIdExpressionInputRef.value?.closeExpandDialog();
+  notionDataSourceExpressionInputRef.value?.closeExpandDialog();
+  notionParentPageIdExpressionInputRef.value?.closeExpandDialog();
+  notionBlockIdExpressionInputRef.value?.closeExpandDialog();
+  notionBlockExpressionInputRef.value?.closeExpandDialog();
+  notionPropertiesExpressionInputRef.value?.closeExpandDialog();
+  notionIconExpressionInputRef.value?.closeExpandDialog();
+  notionCoverExpressionInputRef.value?.closeExpandDialog();
+  notionChildrenExpressionInputRef.value?.closeExpandDialog();
+  notionFilterExpressionInputRef.value?.closeExpandDialog();
+  notionSortExpressionInputRef.value?.closeExpandDialog();
+  notionSortsExpressionInputRef.value?.closeExpandDialog();
+  notionStartCursorExpressionInputRef.value?.closeExpandDialog();
+  notionAfterBlockIdExpressionInputRef.value?.closeExpandDialog();
+}
+
+function handleNotionExpressionFieldNavigate(direction: "prev" | "next"): void {
+  const total = notionExpressionFieldCount.value;
+  const newIndex =
+    direction === "prev"
+      ? currentNotionExpressionFieldIndex.value - 1
+      : currentNotionExpressionFieldIndex.value + 1;
+  if (newIndex < 0 || newIndex >= total) {
+    return;
+  }
+  closeNotionExpressionDialogs();
+  currentNotionExpressionFieldIndex.value = newIndex;
+  nextTick(() => {
+    openNotionExpressionFieldAtIndex(newIndex);
+  });
+}
+
+function onNotionRegisterExpressionFieldIndex(index: number): void {
+  currentNotionExpressionFieldIndex.value = index;
 }
 
 function openPrimaryExpandDialogForSelectedNode(): void {
@@ -2269,6 +2411,8 @@ function openPrimaryExpandDialogForSelectedNode(): void {
     };
     nextTick(() => tryOpenDialog());
   } else if (nodeType === "notion") {
+    const startIndex = resolveNotionExpressionStartIndex();
+    currentNotionExpressionFieldIndex.value = startIndex;
     const tryOpenDialog = (attempts = 0): void => {
       if (attempts > 20) {
         return;
@@ -2277,9 +2421,12 @@ function openPrimaryExpandDialogForSelectedNode(): void {
       if (!n || n.type !== "notion") {
         return;
       }
-      const input = notionExpressionInputRefForField(workflowStore.focusField);
-      if (input) {
-        nextTick(() => input.openExpandDialog());
+      if (notionExpressionFieldCount.value === 0) {
+        return;
+      }
+      const field = notionExpressionFields.value[startIndex];
+      if (field && notionExpressionInputRefForField(field.key)) {
+        nextTick(() => openNotionExpressionFieldAtIndex(startIndex));
       } else {
         setTimeout(() => tryOpenDialog(attempts + 1), 100);
       }
@@ -2828,6 +2975,7 @@ watch(
     currentPlaywrightExpressionFieldIndex.value = 0;
     currentMCPCallExpressionFieldIndex.value = 0;
     currentGitHubExpressionFieldIndex.value = 0;
+    currentNotionExpressionFieldIndex.value = 0;
     playwrightExprRefsBySlotKey.value = {};
     currentOutputExpressionFieldIndex.value = 0;
   },
@@ -13086,8 +13234,9 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
-                :dialog-node-label="selectedNodeEvaluateDialogLabel"
-                dialog-key-label="Search Query"
+                v-bind="notionExpressionNavBindings('notionQuery')"
+                @navigate="handleNotionExpressionFieldNavigate"
+                @register-field-index="onNotionRegisterExpressionFieldIndex"
                 @update:model-value="updateNodeData('notionQuery', $event)"
               />
             </div>
@@ -13106,8 +13255,9 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
-                :dialog-node-label="selectedNodeEvaluateDialogLabel"
-                dialog-key-label="Page ID"
+                v-bind="notionExpressionNavBindings('notionPageId')"
+                @navigate="handleNotionExpressionFieldNavigate"
+                @register-field-index="onNotionRegisterExpressionFieldIndex"
                 @update:model-value="updateNodeData('notionPageId', $event)"
               />
             </div>
@@ -13126,8 +13276,9 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
-                :dialog-node-label="selectedNodeEvaluateDialogLabel"
-                dialog-key-label="Database ID"
+                v-bind="notionExpressionNavBindings('notionDatabaseId')"
+                @navigate="handleNotionExpressionFieldNavigate"
+                @register-field-index="onNotionRegisterExpressionFieldIndex"
                 @update:model-value="updateNodeData('notionDatabaseId', $event)"
               />
             </div>
@@ -13147,8 +13298,9 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
-                :dialog-node-label="selectedNodeEvaluateDialogLabel"
-                dialog-key-label="Database Request"
+                v-bind="notionExpressionNavBindings('notionDatabase')"
+                @navigate="handleNotionExpressionFieldNavigate"
+                @register-field-index="onNotionRegisterExpressionFieldIndex"
                 @update:model-value="updateNodeData('notionDatabase', $event)"
               />
               <p class="text-xs text-muted-foreground">
@@ -13237,8 +13389,9 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
-                :dialog-node-label="selectedNodeEvaluateDialogLabel"
-                dialog-key-label="Data Source"
+                v-bind="notionExpressionNavBindings('notionDataSourceId')"
+                @navigate="handleNotionExpressionFieldNavigate"
+                @register-field-index="onNotionRegisterExpressionFieldIndex"
                 @update:model-value="updateNodeData('notionDataSourceId', $event)"
               />
               <p
@@ -13276,8 +13429,9 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
-                :dialog-node-label="selectedNodeEvaluateDialogLabel"
-                dialog-key-label="Data Source Request"
+                v-bind="notionExpressionNavBindings('notionDataSource')"
+                @navigate="handleNotionExpressionFieldNavigate"
+                @register-field-index="onNotionRegisterExpressionFieldIndex"
                 @update:model-value="updateNodeData('notionDataSource', $event)"
               />
               <p class="text-xs text-muted-foreground">
@@ -13356,6 +13510,7 @@ onUnmounted(() => {
                 </Button>
                 <ExpressionInput
                   v-else
+                  ref="notionParentPageIdExpressionInputRef"
                   :model-value="selectedNode.data.notionParentPageId || ''"
                   placeholder="$input.parentPageId or a Notion URL"
                   single-line
@@ -13363,8 +13518,9 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
-                  :dialog-node-label="selectedNodeEvaluateDialogLabel"
-                  dialog-key-label="Parent Page ID"
+                  v-bind="notionExpressionNavBindings('notionParentPageId')"
+                  @navigate="handleNotionExpressionFieldNavigate"
+                  @register-field-index="onNotionRegisterExpressionFieldIndex"
                   @update:model-value="updateNodeData('notionParentPageId', $event)"
                 />
                 <p
@@ -13396,8 +13552,9 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
-                :dialog-node-label="selectedNodeEvaluateDialogLabel"
-                dialog-key-label="Block ID"
+                v-bind="notionExpressionNavBindings('notionBlockId')"
+                @navigate="handleNotionExpressionFieldNavigate"
+                @register-field-index="onNotionRegisterExpressionFieldIndex"
                 @update:model-value="updateNodeData('notionBlockId', $event)"
               />
             </div>
@@ -13408,14 +13565,16 @@ onUnmounted(() => {
             >
               <Label>Block Update (JSON object)</Label>
               <ExpressionInput
+                ref="notionBlockExpressionInputRef"
                 :model-value="selectedNode.data.notionBlock || '{}'"
                 placeholder="{&quot;paragraph&quot;:{&quot;rich_text&quot;:[{&quot;type&quot;:&quot;text&quot;,&quot;text&quot;:{&quot;content&quot;:&quot;Updated&quot;}}]}}"
                 :nodes="workflowStore.nodes"
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
-                :dialog-node-label="selectedNodeEvaluateDialogLabel"
-                dialog-key-label="Block Update"
+                v-bind="notionExpressionNavBindings('notionBlock')"
+                @navigate="handleNotionExpressionFieldNavigate"
+                @register-field-index="onNotionRegisterExpressionFieldIndex"
                 @update:model-value="updateNodeData('notionBlock', $event)"
               />
             </div>
@@ -13433,8 +13592,9 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
-                :dialog-node-label="selectedNodeEvaluateDialogLabel"
-                dialog-key-label="Properties"
+                v-bind="notionExpressionNavBindings('notionProperties')"
+                @navigate="handleNotionExpressionFieldNavigate"
+                @register-field-index="onNotionRegisterExpressionFieldIndex"
                 @update:model-value="updateNodeData('notionProperties', $event)"
               />
             </div>
@@ -13445,14 +13605,16 @@ onUnmounted(() => {
             >
               <Label>Icon (JSON object)</Label>
               <ExpressionInput
+                ref="notionIconExpressionInputRef"
                 :model-value="selectedNode.data.notionIcon || '{}'"
                 placeholder="{&quot;type&quot;:&quot;emoji&quot;,&quot;emoji&quot;:&quot;📌&quot;}"
                 :nodes="workflowStore.nodes"
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
-                :dialog-node-label="selectedNodeEvaluateDialogLabel"
-                dialog-key-label="Icon"
+                v-bind="notionExpressionNavBindings('notionIcon')"
+                @navigate="handleNotionExpressionFieldNavigate"
+                @register-field-index="onNotionRegisterExpressionFieldIndex"
                 @update:model-value="updateNodeData('notionIcon', $event)"
               />
             </div>
@@ -13463,14 +13625,16 @@ onUnmounted(() => {
             >
               <Label>Cover (JSON object)</Label>
               <ExpressionInput
+                ref="notionCoverExpressionInputRef"
                 :model-value="selectedNode.data.notionCover || '{}'"
                 placeholder="{&quot;type&quot;:&quot;external&quot;,&quot;external&quot;:{&quot;url&quot;:&quot;https://example.com/cover.jpg&quot;}}"
                 :nodes="workflowStore.nodes"
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
-                :dialog-node-label="selectedNodeEvaluateDialogLabel"
-                dialog-key-label="Cover"
+                v-bind="notionExpressionNavBindings('notionCover')"
+                @navigate="handleNotionExpressionFieldNavigate"
+                @register-field-index="onNotionRegisterExpressionFieldIndex"
                 @update:model-value="updateNodeData('notionCover', $event)"
               />
             </div>
@@ -13481,14 +13645,16 @@ onUnmounted(() => {
             >
               <Label>Children (JSON array)</Label>
               <ExpressionInput
+                ref="notionChildrenExpressionInputRef"
                 :model-value="selectedNode.data.notionChildren || '[]'"
                 placeholder="[{&quot;object&quot;:&quot;block&quot;,&quot;type&quot;:&quot;paragraph&quot;,&quot;paragraph&quot;:{&quot;rich_text&quot;:[]}}]"
                 :nodes="workflowStore.nodes"
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
-                :dialog-node-label="selectedNodeEvaluateDialogLabel"
-                dialog-key-label="Children"
+                v-bind="notionExpressionNavBindings('notionChildren')"
+                @navigate="handleNotionExpressionFieldNavigate"
+                @register-field-index="onNotionRegisterExpressionFieldIndex"
                 @update:model-value="updateNodeData('notionChildren', $event)"
               />
             </div>
@@ -13499,14 +13665,16 @@ onUnmounted(() => {
             >
               <Label>Filter (JSON object)</Label>
               <ExpressionInput
+                ref="notionFilterExpressionInputRef"
                 :model-value="selectedNode.data.notionFilter || '{}'"
                 placeholder="{}"
                 :nodes="workflowStore.nodes"
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
-                :dialog-node-label="selectedNodeEvaluateDialogLabel"
-                dialog-key-label="Filter"
+                v-bind="notionExpressionNavBindings('notionFilter')"
+                @navigate="handleNotionExpressionFieldNavigate"
+                @register-field-index="onNotionRegisterExpressionFieldIndex"
                 @update:model-value="updateNodeData('notionFilter', $event)"
               />
             </div>
@@ -13517,14 +13685,16 @@ onUnmounted(() => {
             >
               <Label>Sort (JSON object)</Label>
               <ExpressionInput
+                ref="notionSortExpressionInputRef"
                 :model-value="selectedNode.data.notionSort || '{}'"
                 placeholder="{&quot;direction&quot;:&quot;descending&quot;,&quot;timestamp&quot;:&quot;last_edited_time&quot;}"
                 :nodes="workflowStore.nodes"
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
-                :dialog-node-label="selectedNodeEvaluateDialogLabel"
-                dialog-key-label="Sort"
+                v-bind="notionExpressionNavBindings('notionSort')"
+                @navigate="handleNotionExpressionFieldNavigate"
+                @register-field-index="onNotionRegisterExpressionFieldIndex"
                 @update:model-value="updateNodeData('notionSort', $event)"
               />
             </div>
@@ -13535,14 +13705,16 @@ onUnmounted(() => {
             >
               <Label>Sorts (JSON array)</Label>
               <ExpressionInput
+                ref="notionSortsExpressionInputRef"
                 :model-value="selectedNode.data.notionSorts || '[]'"
                 placeholder="[{&quot;property&quot;:&quot;Created&quot;,&quot;direction&quot;:&quot;descending&quot;}]"
                 :nodes="workflowStore.nodes"
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
-                :dialog-node-label="selectedNodeEvaluateDialogLabel"
-                dialog-key-label="Sorts"
+                v-bind="notionExpressionNavBindings('notionSorts')"
+                @navigate="handleNotionExpressionFieldNavigate"
+                @register-field-index="onNotionRegisterExpressionFieldIndex"
                 @update:model-value="updateNodeData('notionSorts', $event)"
               />
             </div>
@@ -13561,6 +13733,7 @@ onUnmounted(() => {
               />
               <Label>Start Cursor</Label>
               <ExpressionInput
+                ref="notionStartCursorExpressionInputRef"
                 :model-value="selectedNode.data.notionStartCursor || ''"
                 placeholder="Optional cursor"
                 single-line
@@ -13568,8 +13741,9 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
-                :dialog-node-label="selectedNodeEvaluateDialogLabel"
-                dialog-key-label="Start Cursor"
+                v-bind="notionExpressionNavBindings('notionStartCursor')"
+                @navigate="handleNotionExpressionFieldNavigate"
+                @register-field-index="onNotionRegisterExpressionFieldIndex"
                 @update:model-value="updateNodeData('notionStartCursor', $event)"
               />
             </div>
@@ -13591,6 +13765,7 @@ onUnmounted(() => {
               </Label>
               <ExpressionInput
                 v-if="(selectedNode.data.notionAppendPosition || (selectedNode.data.notionAfterBlockId ? 'after_block' : 'end')) === 'after_block'"
+                ref="notionAfterBlockIdExpressionInputRef"
                 :model-value="selectedNode.data.notionAfterBlockId || ''"
                 placeholder="Block ID, URL, or expression"
                 single-line
@@ -13598,8 +13773,9 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
-                :dialog-node-label="selectedNodeEvaluateDialogLabel"
-                dialog-key-label="After Block ID"
+                v-bind="notionExpressionNavBindings('notionAfterBlockId')"
+                @navigate="handleNotionExpressionFieldNavigate"
+                @register-field-index="onNotionRegisterExpressionFieldIndex"
                 @update:model-value="updateNodeData('notionAfterBlockId', $event)"
               />
             </div>
