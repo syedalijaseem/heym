@@ -31,6 +31,7 @@ import {
 } from "@/lib/canvasConnectionRules";
 import { buildWorkflowNodeFromNodeTemplate } from "@/lib/nodeFromTemplate";
 import { generateId, replaceInputRefs } from "@/lib/utils";
+import { shouldUseNativeTextClipboard } from "@/lib/keyboardTargets";
 import { buildMeasuredNodeSizeMap, getWorkflowNodeLayoutSize } from "@/lib/workflowLayout";
 import { normalizeWorkflowEdges, resolveRenderedSourceHandle } from "@/lib/workflowEdges";
 import { evalsApi, templatesApi } from "@/services/api";
@@ -1369,8 +1370,7 @@ function handleKeyDown(event: KeyboardEvent): void {
   if (agentMemoryDialogOpen.value) {
     return;
   }
-  const target = event.target as HTMLElement;
-  if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
+  if (shouldUseNativeTextClipboard(event)) {
     return;
   }
 
