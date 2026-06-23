@@ -666,6 +666,7 @@ function handleNodeDoubleClick(event: {
       nodeType?: NodeType;
       ragOperation?: string;
       githubOperation?: string;
+      notionOperation?: string;
     };
   };
 }): void {
@@ -708,6 +709,42 @@ function handleNodeDoubleClick(event: {
       fieldToFocus = "githubWorkflowInputs";
     } else {
       fieldToFocus = "githubOwner";
+    }
+  } else if (nodeType === "notion") {
+    const notionOperation = event.node.data?.notionOperation;
+    if (notionOperation === "search") {
+      fieldToFocus = "notionQuery";
+    } else if (
+      notionOperation === "getPage" ||
+      notionOperation === "updatePage" ||
+      notionOperation === "trashPage" ||
+      notionOperation === "restorePage"
+    ) {
+      fieldToFocus = "notionPageId";
+    } else if (notionOperation === "createPage") {
+      fieldToFocus = "notionProperties";
+    } else if (notionOperation === "createDatabase") {
+      fieldToFocus = "notionDatabase";
+    } else if (
+      notionOperation === "retrieveDatabase" ||
+      notionOperation === "updateDatabase"
+    ) {
+      fieldToFocus = "notionDatabaseId";
+    } else if (
+      notionOperation === "retrieveDataSource" ||
+      notionOperation === "queryDataSource" ||
+      notionOperation === "updateDataSource"
+    ) {
+      fieldToFocus = "notionDataSourceId";
+    } else if (notionOperation === "createDataSource") {
+      fieldToFocus = "notionDataSource";
+    } else if (
+      notionOperation === "getBlockChildren" ||
+      notionOperation === "updateBlock" ||
+      notionOperation === "deleteBlock" ||
+      notionOperation === "appendBlocks"
+    ) {
+      fieldToFocus = "notionBlockId";
     }
   } else if (nodeType === "throwError") {
     fieldToFocus = "errorMessage";
@@ -962,6 +999,7 @@ function getDefaultNodeData(type: NodeType): WorkflowNode["data"] {
     googleSheets: { label: "googleSheets", credentialId: "", gsOperation: undefined, gsSpreadsheetId: "", gsSheetName: "Sheet1", gsStartRow: "1", gsUpdateRow: "1", gsMaxRows: "0", gsHasHeader: true, gsRowCount: "1", gsKeepHeader: false, gsAppendPlacement: "append", gsValuesInputMode: "raw", gsValuesSelectiveRows: "1", gsValuesSelectiveCols: "3", gsValues: "[]" },
     bigquery: { label: "bigquery", credentialId: "", bqOperation: undefined, bqProjectId: "", bqQuery: "", bqMaxResults: "1000", bqDatasetId: "", bqTableId: "", bqRowsInputMode: "raw", bqRows: "[]", bqMappings: [{ key: "field", value: "$input.text" }] },
     supabase: { label: "supabase", credentialId: "", supabaseOperation: undefined, supabaseSchema: "public", supabaseTable: "", supabaseSelectColumns: "*", supabaseFilter: "{}", supabaseLimit: "100", supabaseOrderBy: "", supabaseAscending: true, supabaseRows: "[]", supabaseOnConflict: "", supabaseData: "{}" },
+    notion: { label: "notion", credentialId: "", notionOperation: undefined, notionQuery: "", notionPageId: "", notionDatabaseId: "", notionDatabase: "{}", notionDataSourceId: "", notionDataSource: "{}", notionDataSourceInputMode: "select", notionParentPageId: "", notionParentPageInputMode: "select", notionBlockId: "", notionBlock: "{}", notionProperties: "{}", notionChildren: "[]", notionFilter: "{}", notionSort: "{}", notionSorts: "[]", notionIcon: "{}", notionCover: "{}", notionPageSize: "100", notionStartCursor: "", notionAppendPosition: "end", notionAfterBlockId: "" },
     s3: { label: "amazonS3", credentialId: "", s3Operation: "putObject", s3Bucket: "", s3Key: "$input.filename || 'output.txt'", s3SourceBucket: "", s3SourceKey: "", s3Prefix: "", s3ContinuationToken: "", s3Body: "$input.text", s3ContentType: "text/plain", s3MaxKeys: "100", s3IncludeBinary: false },
     throwError: { label: "throwError", errorMessage: "$input.text", httpStatusCode: 400 },
     rabbitmq: { label: "rabbitmq", credentialId: "", rabbitmqOperation: undefined, rabbitmqExchange: "", rabbitmqRoutingKey: "", rabbitmqQueueName: "", rabbitmqMessageBody: "$input", rabbitmqDelayMs: undefined },

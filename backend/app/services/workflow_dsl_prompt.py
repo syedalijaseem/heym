@@ -2409,6 +2409,84 @@ Each row object includes **`rowIndex`**: the 1-based sheet row number (useful fo
 - `$activeUsers.count` — number of returned or affected rows
 - `$activeUsers.success` — boolean success indicator
 
+### 24B. notion (Notion Databases, Data Sources, Pages, and Blocks)
+- **Purpose**: Search and manage content through the Notion API
+- **Inputs**: 1 | **Outputs**: 1
+- **Credential required**: `notion` credential using an internal token or OAuth workspace access
+- Uses Notion API version `2026-03-11`; databases contain one or more queryable data sources.
+- `notionOperation`: `"search"` | `"getPage"` | `"createPage"` | `"updatePage"` |
+  `"trashPage"` | `"restorePage"` | `"createDatabase"` | `"retrieveDatabase"` |
+  `"updateDatabase"` | `"createDataSource"` | `"retrieveDataSource"` |
+  `"updateDataSource"` | `"queryDataSource"` | `"getBlockChildren"` |
+  `"updateBlock"` | `"deleteBlock"` | `"appendBlocks"`
+- Common fields:
+  - `credentialId`: UUID of the Notion credential
+  - `notionPageId`, `notionDatabaseId`, `notionDataSourceId`, `notionParentPageId`,
+    `notionBlockId`: resource IDs, full Notion URLs, or string expressions resolving to either form
+  - `notionDatabase`: complete Database API request JSON object or full-object expression.
+    `createDatabase` requires `parent`; it can also include `title`, `description`, `is_inline`,
+    `initial_data_source`, `icon`, and `cover`. `updateDatabase` supports the update endpoint fields.
+  - `notionDataSource`: complete Data Source API request JSON object or full-object expression.
+    `createDataSource` requires a `parent` database object and a non-empty `properties` object.
+  - `notionProperties`: Notion page properties JSON object or full-object expression
+  - `notionChildren`: Notion block children JSON array or full-array expression; more than 100
+    top-level children are sent in ordered batches
+  - `notionBlock`: type-specific block update JSON object for `updateBlock`
+  - `notionIcon`, `notionCover`: optional Notion page icon and cover JSON objects
+  - `notionFilter`: search or data source filter JSON object
+  - `notionSort`: search sort JSON object; `notionSorts`: data source sorts JSON array
+  - `notionPageSize`: 1-100, or `"0"` to fetch all pages
+  - `notionStartCursor`: optional pagination cursor
+  - `notionAppendPosition`: `"start"` | `"end"` | `"after_block"` (default `"end"`)
+  - `notionAfterBlockId`: required when append position is `"after_block"`
+
+**Operations Reference**:
+| Operation | Required fields | Output |
+|---|---|---|
+| `search` | optional `notionQuery` | `{results, count, next_cursor, success}` |
+| `getPage` | `notionPageId` | `{page, success}` |
+| `createPage` | one parent ID, `notionProperties` | `{page, id, url, success}` |
+| `updatePage` | `notionPageId`, one of properties/icon/cover | `{page, id, url, success}` |
+| `trashPage` / `restorePage` | `notionPageId` | `{page, success}` |
+| `createDatabase` | `notionDatabase` with `parent` | `{database, id, url, success}` |
+| `retrieveDatabase` | `notionDatabaseId` | `{database, success}` |
+| `updateDatabase` | `notionDatabaseId`, non-empty `notionDatabase` | `{database, id, url, success}` |
+| `createDataSource` | `notionDataSource` with `parent` and non-empty `properties` | `{data_source, id, url, success}` |
+| `retrieveDataSource` | `notionDataSourceId` | `{data_source, success}` |
+| `updateDataSource` | `notionDataSourceId`, non-empty `notionDataSource` | `{data_source, id, url, success}` |
+| `queryDataSource` | `notionDataSourceId` | `{results, count, next_cursor, success}` |
+| `getBlockChildren` | `notionBlockId` | `{results, count, next_cursor, success}` |
+| `updateBlock` | `notionBlockId`, `notionBlock` | `{block, id, success}` |
+| `deleteBlock` | `notionBlockId` | `{block, id, success}` |
+| `appendBlocks` | `notionBlockId`, `notionChildren` | `{results, count, success}` |
+
+Search object filters must use `"data_source"` or `"page"`; legacy `"database"` values are
+normalized to `"data_source"`. Notion limits each rich-text content string to 2,000 characters and
+accepts at most two nested levels of block children per request.
+
+**Example — create a task page**:
+```json
+{
+  "id": "notion1",
+  "type": "notion",
+  "data": {
+    "label": "createTask",
+    "credentialId": "<notion-credential-uuid>",
+    "notionOperation": "createPage",
+    "notionDataSourceId": "<data-source-id>",
+    "notionProperties": "{\"Name\":{\"title\":[{\"text\":{\"content\":\"$input.title\"}}]}}",
+    "notionChildren": "[]"
+  }
+}
+```
+
+**Accessing Notion Output**:
+- `$createTask.page` — created/retrieved/updated page object
+- `$getDatabase.database` — created/retrieved/updated database container
+- `$queryTasks.results` — search, query, or child block results
+- `$queryTasks.count` — result count
+- `$createTask.success` — boolean success indicator
+
 ### 25. dataTable (DataTable Operations)
 - **Purpose**: Read, write, and manage data in Heym DataTables (first-party structured storage)
 - **Inputs**: 1 | **Outputs**: 1
@@ -3892,7 +3970,7 @@ Always include:
 21. **MULTIPLE INPUT FIELDS** - textInput nodes support multiple input fields via `inputFields` array. Define fields like `[{"key": "text"}, {"key": "base64"}]`. Access via `$nodeLabel.body.fieldKey`. Input values are sent in the `body` object.
 22. **⚠️ NO UNNECESSARY textInput!** - NEVER add textInput unless user explicitly needs to provide input data. For static URLs, scheduled tasks, or fixed operations, START DIRECTLY with http, cron, or other nodes. textInput is ONLY for workflows that receive dynamic data from users/API callers.
 23. **⚠️ PRESERVE CREDENTIALS & MODEL** - When modifying an existing workflow, ALWAYS preserve existing `credentialId` and `model` values in nodes. NEVER replace, remove, or change credential IDs or model names unless the user explicitly asks to use a different credential or model. If a node already has a `credentialId` or `model`, keep them exactly as is.
-23a. **⚠️ CREDENTIALS & INTEGRATIONS - OWNED ONLY (NO SHARED)** - For **every** node field that references a credential or secret (`credentialId`, `fallbackCredentialId`, `guardrailCredentialId`, Playwright `aiStep` credential, etc.), use ONLY credentials **owned** by the workflow owner. **NEVER** put shared credentials (shared with you by another user or via team share) in generated JSON—the UI labels these as shared; they must not appear in AI output. Use placeholders such as `YOUR_CREDENTIAL_ID`, `slack-credential-uuid`, `telegram-credential-uuid`, or `imap-credential-uuid` and let the user pick an owned credential in the editor. Applies to: `llm`, `agent`, `slack`, `telegram`, `slackTrigger`, `telegramTrigger`, `imapTrigger`, `sendEmail`, `redis`, `grist`, `googleSheets`, `bigquery`, `supabase`, `rabbitmq`, `crawler`, `playwright` (including `aiStep`), and any other integration that stores a credential id. When modifying an existing workflow (rule 23), still preserve existing ids if they are already non-shared; when **adding** new nodes, never insert shared credential UUIDs.
+23a. **⚠️ CREDENTIALS & INTEGRATIONS - OWNED ONLY (NO SHARED)** - For **every** node field that references a credential or secret (`credentialId`, `fallbackCredentialId`, `guardrailCredentialId`, Playwright `aiStep` credential, etc.), use ONLY credentials **owned** by the workflow owner. **NEVER** put shared credentials (shared with you by another user or via team share) in generated JSON—the UI labels these as shared; they must not appear in AI output. Use placeholders such as `YOUR_CREDENTIAL_ID`, `slack-credential-uuid`, `telegram-credential-uuid`, or `imap-credential-uuid` and let the user pick an owned credential in the editor. Applies to: `llm`, `agent`, `slack`, `telegram`, `slackTrigger`, `telegramTrigger`, `imapTrigger`, `sendEmail`, `redis`, `grist`, `googleSheets`, `bigquery`, `supabase`, `notion`, `rabbitmq`, `crawler`, `playwright` (including `aiStep`), and any other integration that stores a credential id. When modifying an existing workflow (rule 23), still preserve existing ids if they are already non-shared; when **adding** new nodes, never insert shared credential UUIDs.
 24. **EXECUTE NODE OUTPUT** - Execute node returns `{status, outputs, workflow_id, execution_time_ms}`. Access the called workflow's result via `$executeNodeLabel.outputs.output.result`. The `outputs.output` object contains the result from the executed workflow's output node.
 25. **EXECUTE NODE MULTIPLE INPUTS** - When calling a workflow that expects multiple input fields: (1) Add matching `inputFields` to your textInput node to collect all required data, (2) Use `executeInputMappings` array to map each field. Example: If target needs `text` and `imageUrl`, your textInput should have `inputFields: [{"key": "prompt"}, {"key": "image"}]`, then execute node uses `"executeInputMappings": [{"key": "text", "value": "$userInput.body.prompt"}, {"key": "imageUrl", "value": "$userInput.body.image"}]`
 26. **REQUEST BODY, HEADERS & QUERY** - When workflow is executed via API, textInput nodes receive `body`, `headers` and `query` objects. Access via `$textInputLabel.body.fieldName`, `$textInputLabel.headers.headerName` and `$textInputLabel.query.paramName`. Useful for accessing raw request data, authentication, and dynamic behavior.

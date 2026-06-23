@@ -156,6 +156,7 @@ export type NodeType =
   | "googleSheets"
   | "bigquery"
   | "supabase"
+  | "notion"
   | "throwError"
   | "rabbitmq"
   | "imapTrigger"
@@ -601,6 +602,46 @@ export interface NodeData {
   supabaseRows?: string;
   supabaseOnConflict?: string;
   supabaseData?: string;
+  notionOperation?:
+    | "search"
+    | "getPage"
+    | "createPage"
+    | "updatePage"
+    | "trashPage"
+    | "restorePage"
+    | "createDatabase"
+    | "retrieveDatabase"
+    | "updateDatabase"
+    | "retrieveDataSource"
+    | "createDataSource"
+    | "updateDataSource"
+    | "queryDataSource"
+    | "getBlockChildren"
+    | "updateBlock"
+    | "deleteBlock"
+    | "appendBlocks";
+  notionQuery?: string;
+  notionPageId?: string;
+  notionDatabaseId?: string;
+  notionDatabase?: string;
+  notionDataSourceId?: string;
+  notionDataSource?: string;
+  notionDataSourceInputMode?: "select" | "expression";
+  notionParentPageId?: string;
+  notionParentPageInputMode?: "select" | "expression";
+  notionBlockId?: string;
+  notionBlock?: string;
+  notionProperties?: string;
+  notionChildren?: string;
+  notionFilter?: string;
+  notionSort?: string;
+  notionSorts?: string;
+  notionIcon?: string;
+  notionCover?: string;
+  notionPageSize?: string;
+  notionStartCursor?: string;
+  notionAppendPosition?: "start" | "end" | "after_block";
+  notionAfterBlockId?: string;
   gsOperation?: string;
   gsSpreadsheetId?: string;
   gsSheetName?: string;
