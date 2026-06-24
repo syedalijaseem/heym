@@ -10164,6 +10164,46 @@ onUnmounted(() => {
             </div>
 
             <div class="space-y-2">
+              <Label>Cc</Label>
+              <ExpressionInput
+                :model-value="selectedNode.data.cc || ''"
+                placeholder="cc@example.com"
+                :rows="1"
+                :nodes="workflowStore.nodes"
+                :node-results="workflowStore.nodeResults"
+                :edges="workflowStore.edges"
+                :current-node-id="selectedNode.id"
+                :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                dialog-key-label="Cc"
+                field-key="cc"
+                @update:model-value="updateNodeData('cc', $event)"
+              />
+              <p class="text-xs text-muted-foreground">
+                Carbon copy (comma-separated for multiple)
+              </p>
+            </div>
+
+            <div class="space-y-2">
+              <Label>Bcc</Label>
+              <ExpressionInput
+                :model-value="selectedNode.data.bcc || ''"
+                placeholder="bcc@example.com"
+                :rows="1"
+                :nodes="workflowStore.nodes"
+                :node-results="workflowStore.nodeResults"
+                :edges="workflowStore.edges"
+                :current-node-id="selectedNode.id"
+                :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                dialog-key-label="Bcc"
+                field-key="bcc"
+                @update:model-value="updateNodeData('bcc', $event)"
+              />
+              <p class="text-xs text-muted-foreground">
+                Blind carbon copy — hidden from other recipients
+              </p>
+            </div>
+
+            <div class="space-y-2">
               <Label>Subject</Label>
               <ExpressionInput
                 :model-value="selectedNode.data.subject || ''"
@@ -10200,6 +10240,26 @@ onUnmounted(() => {
               />
               <p class="text-xs text-muted-foreground">
                 Use $ expressions like {{ exampleRef }}
+              </p>
+            </div>
+
+            <div class="space-y-2">
+              <Label>Attachments</Label>
+              <ExpressionInput
+                :model-value="selectedNode.data.attachments || ''"
+                placeholder="$drive.id"
+                :rows="1"
+                :nodes="workflowStore.nodes"
+                :node-results="workflowStore.nodeResults"
+                :edges="workflowStore.edges"
+                :current-node-id="selectedNode.id"
+                :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                dialog-key-label="Attachments"
+                field-key="attachments"
+                @update:model-value="updateNodeData('attachments', $event)"
+              />
+              <p class="text-xs text-muted-foreground">
+                Comma-separated Drive file IDs. Use $ expressions, e.g. an upstream Drive node's id.
               </p>
             </div>
           </template>
