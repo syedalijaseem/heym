@@ -68,6 +68,20 @@ def _slugify_tool_name(label: str) -> str:
     return slug[:64] or "node_tool"
 
 
+def _coerce_boolean(value: object, *, default: bool = False) -> bool:
+    """Coerce configured or agent-provided boolean values without treating ``"false"`` as true."""
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "on"}:
+            return True
+        if normalized in {"false", "0", "no", "off", ""}:
+            return False
+        return default
+    if value is None:
+        return default
+    return bool(value)
+
+
 def _build_data_table_filter_clauses(filter_dict: dict, columns: list) -> list:
     """Build SQLAlchemy filter clauses for a DataTable Mongo-style filter.
 
@@ -9123,7 +9137,7 @@ class WorkflowExecutor:
                         body = self.evaluate_message_template(
                             str(node_data.get("githubBody", "") or ""), inputs, node_id
                         )
-                        draft = bool(node_data.get("githubDraft", False))
+                        draft = _coerce_boolean(node_data.get("githubDraft"), default=False)
                         pull_request = service.create_pull_request(
                             owner,
                             repo,
@@ -9307,8 +9321,10 @@ class WorkflowExecutor:
                             name=name or None,
                             body=body or None,
                             target_commitish=target_commitish or None,
-                            draft=bool(node_data.get("githubDraft", False)),
-                            prerelease=bool(node_data.get("githubPrerelease", False)),
+                            draft=_coerce_boolean(node_data.get("githubDraft"), default=False),
+                            prerelease=_coerce_boolean(
+                                node_data.get("githubPrerelease"), default=False
+                            ),
                         )
                         output = {
                             "success": True,
@@ -9346,12 +9362,12 @@ class WorkflowExecutor:
                             if target_commitish_provided
                             else None,
                             draft=(
-                                bool(node_data.get("githubDraft"))
+                                _coerce_boolean(node_data.get("githubDraft"))
                                 if node_data.get("githubDraft") is not None
                                 else None
                             ),
                             prerelease=(
-                                bool(node_data.get("githubPrerelease"))
+                                _coerce_boolean(node_data.get("githubPrerelease"))
                                 if node_data.get("githubPrerelease") is not None
                                 else None
                             ),
@@ -9985,7 +10001,7 @@ class WorkflowExecutor:
                         if raw_order_by_template
                         else ""
                     )
-                    ascending = bool(node_data.get("supabaseAscending", True))
+                    ascending = _coerce_boolean(node_data.get("supabaseAscending"), default=True)
                     output = service.select_rows(
                         table,
                         schema=schema,
@@ -10132,7 +10148,9 @@ class WorkflowExecutor:
                         output = service.get_object(
                             bucket,
                             key,
-                            include_binary=bool(node_data.get("s3IncludeBinary", False)),
+                            include_binary=_coerce_boolean(
+                                node_data.get("s3IncludeBinary"), default=False
+                            ),
                         )
                     elif operation == "createBucket":
                         output = service.create_bucket(

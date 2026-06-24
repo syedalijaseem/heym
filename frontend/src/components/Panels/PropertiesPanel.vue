@@ -11321,6 +11321,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="githubOwner"
                   v-bind="githubExpressionNavBindings('githubOwner')"
                   @navigate="handleGitHubExpressionFieldNavigate"
                   @register-field-index="onGitHubRegisterExpressionFieldIndex"
@@ -11341,6 +11342,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="githubRepo"
                   v-bind="githubExpressionNavBindings('githubRepo')"
                   @navigate="handleGitHubExpressionFieldNavigate"
                   @register-field-index="onGitHubRegisterExpressionFieldIndex"
@@ -11361,6 +11363,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="githubOrganization"
                   v-bind="githubExpressionNavBindings('githubOrganization')"
                   @navigate="handleGitHubExpressionFieldNavigate"
                   @register-field-index="onGitHubRegisterExpressionFieldIndex"
@@ -11378,6 +11381,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="githubInviteEmail"
                   v-bind="githubExpressionNavBindings('githubInviteEmail')"
                   @navigate="handleGitHubExpressionFieldNavigate"
                   @register-field-index="onGitHubRegisterExpressionFieldIndex"
@@ -11398,6 +11402,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="githubIssueNumber"
                   v-bind="githubExpressionNavBindings('githubIssueNumber')"
                   @navigate="handleGitHubExpressionFieldNavigate"
                   @register-field-index="onGitHubRegisterExpressionFieldIndex"
@@ -11412,7 +11417,13 @@ onUnmounted(() => {
                 :class="usesGitHubPerPage(selectedNode.data.githubOperation) ? 'grid-cols-2' : 'grid-cols-1'"
               >
                 <div class="space-y-2">
-                  <Label>State</Label>
+                  <div class="flex items-center justify-between gap-2">
+                    <Label>State</Label>
+                    <AgentFieldToggle
+                      :node-id="selectedNode.id"
+                      field-key="githubState"
+                    />
+                  </div>
                   <Select
                     :model-value="selectedNode.data.githubOperation === 'updateIssue' ? (selectedNode.data.githubState ?? '') : (selectedNode.data.githubState || 'open')"
                     :options="selectedNode.data.githubOperation === 'updateIssue' ? githubUpdateIssueStateOptions : githubStateOptions"
@@ -11423,7 +11434,13 @@ onUnmounted(() => {
                   v-if="usesGitHubPerPage(selectedNode.data.githubOperation)"
                   class="space-y-2"
                 >
-                  <Label>Per Page</Label>
+                  <div class="flex items-center justify-between gap-2">
+                    <Label>Per Page</Label>
+                    <AgentFieldToggle
+                      :node-id="selectedNode.id"
+                      field-key="githubPerPage"
+                    />
+                  </div>
                   <Input
                     type="number"
                     min="1"
@@ -11452,6 +11469,7 @@ onUnmounted(() => {
                     :node-results="workflowStore.nodeResults"
                     :edges="workflowStore.edges"
                     :current-node-id="selectedNode.id"
+                    field-key="githubAssignee"
                     v-bind="githubExpressionNavBindings('githubAssignee')"
                     @navigate="handleGitHubExpressionFieldNavigate"
                     @register-field-index="onGitHubRegisterExpressionFieldIndex"
@@ -11472,6 +11490,7 @@ onUnmounted(() => {
                     :node-results="workflowStore.nodeResults"
                     :edges="workflowStore.edges"
                     :current-node-id="selectedNode.id"
+                    field-key="githubCreator"
                     v-bind="githubExpressionNavBindings('githubCreator')"
                     @navigate="handleGitHubExpressionFieldNavigate"
                     @register-field-index="onGitHubRegisterExpressionFieldIndex"
@@ -11491,6 +11510,7 @@ onUnmounted(() => {
                     :node-results="workflowStore.nodeResults"
                     :edges="workflowStore.edges"
                     :current-node-id="selectedNode.id"
+                    field-key="githubMentioned"
                     v-bind="githubExpressionNavBindings('githubMentioned')"
                     @navigate="handleGitHubExpressionFieldNavigate"
                     @register-field-index="onGitHubRegisterExpressionFieldIndex"
@@ -11515,6 +11535,7 @@ onUnmounted(() => {
                     :node-results="workflowStore.nodeResults"
                     :edges="workflowStore.edges"
                     :current-node-id="selectedNode.id"
+                    field-key="githubLabelsFilter"
                     v-bind="githubExpressionNavBindings('githubLabelsFilter')"
                     @navigate="handleGitHubExpressionFieldNavigate"
                     @register-field-index="onGitHubRegisterExpressionFieldIndex"
@@ -11533,6 +11554,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="githubSince"
                   v-bind="githubExpressionNavBindings('githubSince')"
                   @navigate="handleGitHubExpressionFieldNavigate"
                   @register-field-index="onGitHubRegisterExpressionFieldIndex"
@@ -11544,7 +11566,13 @@ onUnmounted(() => {
             <template v-if="selectedNode.data.githubOperation === 'listIssues' || selectedNode.data.githubOperation === 'getRepositoryIssues' || selectedNode.data.githubOperation === 'getUserIssues' || selectedNode.data.githubOperation === 'listPullRequests' || selectedNode.data.githubOperation === 'getRepositoryPullRequests'">
               <div class="grid grid-cols-2 gap-3">
                 <div class="space-y-2">
-                  <Label>Sort</Label>
+                  <div class="flex items-center justify-between gap-2">
+                    <Label>Sort</Label>
+                    <AgentFieldToggle
+                      :node-id="selectedNode.id"
+                      field-key="githubSort"
+                    />
+                  </div>
                   <Select
                     :model-value="selectedNode.data.githubSort || ''"
                     :options="selectedNode.data.githubOperation === 'listPullRequests' || selectedNode.data.githubOperation === 'getRepositoryPullRequests' ? githubPullRequestSortOptions : githubIssueSortOptions"
@@ -11552,7 +11580,13 @@ onUnmounted(() => {
                   />
                 </div>
                 <div class="space-y-2">
-                  <Label>Direction</Label>
+                  <div class="flex items-center justify-between gap-2">
+                    <Label>Direction</Label>
+                    <AgentFieldToggle
+                      :node-id="selectedNode.id"
+                      field-key="githubDirection"
+                    />
+                  </div>
                   <Select
                     :model-value="selectedNode.data.githubDirection || ''"
                     :options="githubDirectionOptions"
@@ -11564,7 +11598,13 @@ onUnmounted(() => {
 
             <template v-if="selectedNode.data.githubOperation === 'updateIssue'">
               <div class="space-y-2">
-                <Label>State Reason</Label>
+                <div class="flex items-center justify-between gap-2">
+                  <Label>State Reason</Label>
+                  <AgentFieldToggle
+                    :node-id="selectedNode.id"
+                    field-key="githubStateReason"
+                  />
+                </div>
                 <Select
                   :model-value="selectedNode.data.githubStateReason ?? ''"
                   :options="githubIssueStateReasonOptions"
@@ -11575,7 +11615,13 @@ onUnmounted(() => {
 
             <template v-if="usesGitHubPerPage(selectedNode.data.githubOperation) && selectedNode.data.githubOperation !== 'listIssues' && selectedNode.data.githubOperation !== 'listPullRequests'">
               <div class="space-y-2">
-                <Label>Per Page</Label>
+                <div class="flex items-center justify-between gap-2">
+                  <Label>Per Page</Label>
+                  <AgentFieldToggle
+                    :node-id="selectedNode.id"
+                    field-key="githubPerPage"
+                  />
+                </div>
                 <Input
                   type="number"
                   min="1"
@@ -11599,6 +11645,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="githubTitle"
                   v-bind="githubExpressionNavBindings('githubTitle')"
                   @navigate="handleGitHubExpressionFieldNavigate"
                   @register-field-index="onGitHubRegisterExpressionFieldIndex"
@@ -11618,6 +11665,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="githubBody"
                   v-bind="githubExpressionNavBindings('githubBody')"
                   @navigate="handleGitHubExpressionFieldNavigate"
                   @register-field-index="onGitHubRegisterExpressionFieldIndex"
@@ -11637,6 +11685,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="githubCommentBody"
                   v-bind="githubExpressionNavBindings('githubCommentBody')"
                   @navigate="handleGitHubExpressionFieldNavigate"
                   @register-field-index="onGitHubRegisterExpressionFieldIndex"
@@ -11658,6 +11707,7 @@ onUnmounted(() => {
                     :node-results="workflowStore.nodeResults"
                     :edges="workflowStore.edges"
                     :current-node-id="selectedNode.id"
+                    field-key="githubLabels"
                     v-bind="githubExpressionNavBindings('githubLabels')"
                     @navigate="handleGitHubExpressionFieldNavigate"
                     @register-field-index="onGitHubRegisterExpressionFieldIndex"
@@ -11675,6 +11725,7 @@ onUnmounted(() => {
                     :node-results="workflowStore.nodeResults"
                     :edges="workflowStore.edges"
                     :current-node-id="selectedNode.id"
+                    field-key="githubAssignees"
                     v-bind="githubExpressionNavBindings('githubAssignees')"
                     @navigate="handleGitHubExpressionFieldNavigate"
                     @register-field-index="onGitHubRegisterExpressionFieldIndex"
@@ -11686,7 +11737,13 @@ onUnmounted(() => {
 
             <template v-if="selectedNode.data.githubOperation === 'lockIssue'">
               <div class="space-y-2">
-                <Label>Lock Reason</Label>
+                <div class="flex items-center justify-between gap-2">
+                  <Label>Lock Reason</Label>
+                  <AgentFieldToggle
+                    :node-id="selectedNode.id"
+                    field-key="githubLockReason"
+                  />
+                </div>
                 <Select
                   :model-value="selectedNode.data.githubLockReason ?? ''"
                   :options="githubLockReasonOptions"
@@ -11708,6 +11765,7 @@ onUnmounted(() => {
                     :node-results="workflowStore.nodeResults"
                     :edges="workflowStore.edges"
                     :current-node-id="selectedNode.id"
+                    field-key="githubHead"
                     v-bind="githubExpressionNavBindings('githubHead')"
                     @navigate="handleGitHubExpressionFieldNavigate"
                     @register-field-index="onGitHubRegisterExpressionFieldIndex"
@@ -11725,6 +11783,7 @@ onUnmounted(() => {
                     :node-results="workflowStore.nodeResults"
                     :edges="workflowStore.edges"
                     :current-node-id="selectedNode.id"
+                    field-key="githubBase"
                     v-bind="githubExpressionNavBindings('githubBase')"
                     @navigate="handleGitHubExpressionFieldNavigate"
                     @register-field-index="onGitHubRegisterExpressionFieldIndex"
@@ -11744,6 +11803,10 @@ onUnmounted(() => {
                   for="github-draft-pr"
                   class="text-sm cursor-pointer select-none"
                 >Create as draft pull request</label>
+                <AgentFieldToggle
+                  :node-id="selectedNode.id"
+                  field-key="githubDraft"
+                />
               </div>
             </template>
 
@@ -11759,6 +11822,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="githubPullRequestNumber"
                   v-bind="githubExpressionNavBindings('githubPullRequestNumber')"
                   @navigate="handleGitHubExpressionFieldNavigate"
                   @register-field-index="onGitHubRegisterExpressionFieldIndex"
@@ -11779,6 +11843,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="githubReviewId"
                   v-bind="githubExpressionNavBindings('githubReviewId')"
                   @navigate="handleGitHubExpressionFieldNavigate"
                   @register-field-index="onGitHubRegisterExpressionFieldIndex"
@@ -11789,7 +11854,13 @@ onUnmounted(() => {
 
             <template v-if="selectedNode.data.githubOperation === 'createReview'">
               <div class="space-y-2">
-                <Label>Review Event</Label>
+                <div class="flex items-center justify-between gap-2">
+                  <Label>Review Event</Label>
+                  <AgentFieldToggle
+                    :node-id="selectedNode.id"
+                    field-key="githubReviewEvent"
+                  />
+                </div>
                 <Select
                   :model-value="selectedNode.data.githubReviewEvent || 'APPROVE'"
                   :options="githubReviewEventOptions"
@@ -11809,6 +11880,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="githubReviewBody"
                   v-bind="githubExpressionNavBindings('githubReviewBody')"
                   @navigate="handleGitHubExpressionFieldNavigate"
                   @register-field-index="onGitHubRegisterExpressionFieldIndex"
@@ -11835,6 +11907,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="githubCommitId"
                   v-bind="githubExpressionNavBindings('githubCommitId')"
                   @navigate="handleGitHubExpressionFieldNavigate"
                   @register-field-index="onGitHubRegisterExpressionFieldIndex"
@@ -11855,6 +11928,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="githubReleaseId"
                   v-bind="githubExpressionNavBindings('githubReleaseId')"
                   @navigate="handleGitHubExpressionFieldNavigate"
                   @register-field-index="onGitHubRegisterExpressionFieldIndex"
@@ -11876,6 +11950,7 @@ onUnmounted(() => {
                     :node-results="workflowStore.nodeResults"
                     :edges="workflowStore.edges"
                     :current-node-id="selectedNode.id"
+                    field-key="githubTagName"
                     v-bind="githubExpressionNavBindings('githubTagName')"
                     @navigate="handleGitHubExpressionFieldNavigate"
                     @register-field-index="onGitHubRegisterExpressionFieldIndex"
@@ -11893,6 +11968,7 @@ onUnmounted(() => {
                     :node-results="workflowStore.nodeResults"
                     :edges="workflowStore.edges"
                     :current-node-id="selectedNode.id"
+                    field-key="githubBranch"
                     v-bind="githubExpressionNavBindings('githubBranch')"
                     @navigate="handleGitHubExpressionFieldNavigate"
                     @register-field-index="onGitHubRegisterExpressionFieldIndex"
@@ -11911,6 +11987,10 @@ onUnmounted(() => {
                   >
                   <span>Draft release</span>
                 </label>
+                <AgentFieldToggle
+                  :node-id="selectedNode.id"
+                  field-key="githubDraft"
+                />
                 <label class="flex items-center gap-2 text-sm cursor-pointer select-none">
                   <input
                     id="github-release-prerelease"
@@ -11921,6 +12001,10 @@ onUnmounted(() => {
                   >
                   <span>Prerelease</span>
                 </label>
+                <AgentFieldToggle
+                  :node-id="selectedNode.id"
+                  field-key="githubPrerelease"
+                />
               </div>
             </template>
 
@@ -11936,6 +12020,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="githubWorkflowId"
                   v-bind="githubExpressionNavBindings('githubWorkflowId')"
                   @navigate="handleGitHubExpressionFieldNavigate"
                   @register-field-index="onGitHubRegisterExpressionFieldIndex"
@@ -11956,6 +12041,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="githubBranch"
                   v-bind="githubExpressionNavBindings('githubBranch')"
                   @navigate="handleGitHubExpressionFieldNavigate"
                   @register-field-index="onGitHubRegisterExpressionFieldIndex"
@@ -11973,6 +12059,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="githubWorkflowInputs"
                   v-bind="githubExpressionNavBindings('githubWorkflowInputs')"
                   @navigate="handleGitHubExpressionFieldNavigate"
                   @register-field-index="onGitHubRegisterExpressionFieldIndex"
@@ -11984,7 +12071,13 @@ onUnmounted(() => {
             <template v-if="selectedNode.data.githubOperation === 'dispatchWorkflowAndWait'">
               <div class="grid grid-cols-2 gap-3">
                 <div class="space-y-2">
-                  <Label>Wait Timeout (seconds)</Label>
+                  <div class="flex items-center justify-between gap-2">
+                    <Label>Wait Timeout (seconds)</Label>
+                    <AgentFieldToggle
+                      :node-id="selectedNode.id"
+                      field-key="githubWaitTimeoutSeconds"
+                    />
+                  </div>
                   <Input
                     type="number"
                     min="1"
@@ -11993,7 +12086,13 @@ onUnmounted(() => {
                   />
                 </div>
                 <div class="space-y-2">
-                  <Label>Poll Interval (seconds)</Label>
+                  <div class="flex items-center justify-between gap-2">
+                    <Label>Poll Interval (seconds)</Label>
+                    <AgentFieldToggle
+                      :node-id="selectedNode.id"
+                      field-key="githubPollIntervalSeconds"
+                    />
+                  </div>
                   <Input
                     type="number"
                     min="0.1"
@@ -12017,6 +12116,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="githubFilePath"
                   v-bind="githubExpressionNavBindings('githubFilePath')"
                   @navigate="handleGitHubExpressionFieldNavigate"
                   @register-field-index="onGitHubRegisterExpressionFieldIndex"
@@ -12034,6 +12134,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="githubBranch"
                   v-bind="githubExpressionNavBindings('githubBranch')"
                   @navigate="handleGitHubExpressionFieldNavigate"
                   @register-field-index="onGitHubRegisterExpressionFieldIndex"
@@ -12054,6 +12155,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="githubCommitMessage"
                   v-bind="githubExpressionNavBindings('githubCommitMessage')"
                   @navigate="handleGitHubExpressionFieldNavigate"
                   @register-field-index="onGitHubRegisterExpressionFieldIndex"
@@ -12073,6 +12175,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="githubFileContent"
                   v-bind="githubExpressionNavBindings('githubFileContent')"
                   @navigate="handleGitHubExpressionFieldNavigate"
                   @register-field-index="onGitHubRegisterExpressionFieldIndex"
@@ -12788,6 +12891,7 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
+                field-key="supabaseSchema"
                 :navigation-enabled="supabaseExpressionFieldCount > 1"
                 :navigation-index="0"
                 :navigation-total="supabaseExpressionFieldCount"
@@ -12810,6 +12914,7 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
+                field-key="supabaseTable"
                 :navigation-enabled="supabaseExpressionFieldCount > 1"
                 :navigation-index="1"
                 :navigation-total="supabaseExpressionFieldCount"
@@ -12852,6 +12957,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="supabaseSelectColumns"
                   :navigation-enabled="supabaseExpressionFieldCount > 1"
                   :navigation-index="2"
                   :navigation-total="supabaseExpressionFieldCount"
@@ -12918,6 +13024,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="supabaseFilter"
                   :navigation-enabled="supabaseExpressionFieldCount > 1"
                   :navigation-index="3"
                   :navigation-total="supabaseExpressionFieldCount"
@@ -12930,7 +13037,13 @@ onUnmounted(() => {
               </div>
 
               <div class="space-y-2">
-                <Label>Limit <span class="text-muted-foreground font-normal">(0 = unlimited)</span></Label>
+                <div class="flex items-center justify-between gap-2">
+                  <Label>Limit <span class="text-muted-foreground font-normal">(0 = unlimited)</span></Label>
+                  <AgentFieldToggle
+                    :node-id="selectedNode.id"
+                    field-key="supabaseLimit"
+                  />
+                </div>
                 <input
                   type="number"
                   min="0"
@@ -12952,6 +13065,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="supabaseOrderBy"
                   :navigation-enabled="supabaseExpressionFieldCount > 1"
                   :navigation-index="4"
                   :navigation-total="supabaseExpressionFieldCount"
@@ -12961,15 +13075,21 @@ onUnmounted(() => {
                   @navigate="handleSupabaseExpressionFieldNavigate"
                   @register-field-index="onSupabaseRegisterExpressionFieldIndex"
                 />
-                <label class="flex items-center gap-2 text-sm text-muted-foreground">
-                  <input
-                    type="checkbox"
-                    class="rounded border-input"
-                    :checked="selectedNode.data.supabaseAscending !== false"
-                    @change="updateNodeData('supabaseAscending', ($event.target as HTMLInputElement).checked)"
-                  >
-                  Ascending sort
-                </label>
+                <div class="flex items-center justify-between gap-2">
+                  <label class="flex items-center gap-2 text-sm text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      class="rounded border-input"
+                      :checked="selectedNode.data.supabaseAscending !== false"
+                      @change="updateNodeData('supabaseAscending', ($event.target as HTMLInputElement).checked)"
+                    >
+                    Ascending sort
+                  </label>
+                  <AgentFieldToggle
+                    :node-id="selectedNode.id"
+                    field-key="supabaseAscending"
+                  />
+                </div>
               </div>
             </template>
 
@@ -13010,6 +13130,7 @@ onUnmounted(() => {
                     :node-results="workflowStore.nodeResults"
                     :edges="workflowStore.edges"
                     :current-node-id="selectedNode.id"
+                    field-key="supabaseRows"
                     :navigation-enabled="supabaseExpressionFieldCount > 1"
                     :navigation-index="2"
                     :navigation-total="supabaseExpressionFieldCount"
@@ -13027,7 +13148,13 @@ onUnmounted(() => {
                     of objects or upstream <code class="font-mono">rows</code> arrays become many rows.
                   </p>
                   <div class="space-y-2">
-                    <Label class="text-xs text-muted-foreground">Ignore fields</Label>
+                    <div class="flex items-center justify-between gap-2">
+                      <Label class="text-xs text-muted-foreground">Ignore fields</Label>
+                      <AgentFieldToggle
+                        :node-id="selectedNode.id"
+                        field-key="supabaseIgnoredInputFields"
+                      />
+                    </div>
                     <Input
                       :model-value="String(selectedNode.data.supabaseIgnoredInputFields || '')"
                       placeholder="id, created_at"
@@ -13051,6 +13178,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="supabaseOnConflict"
                   :navigation-enabled="supabaseExpressionFieldCount > 1"
                   :navigation-index="(selectedNode.data.supabaseRowsInputMode || 'raw') === 'raw' ? 3 : 2"
                   :navigation-total="supabaseExpressionFieldCount"
@@ -13104,6 +13232,7 @@ onUnmounted(() => {
                     :node-results="workflowStore.nodeResults"
                     :edges="workflowStore.edges"
                     :current-node-id="selectedNode.id"
+                    field-key="supabaseData"
                     :navigation-enabled="supabaseExpressionFieldCount > 1"
                     :navigation-index="2"
                     :navigation-total="supabaseExpressionFieldCount"
@@ -13121,7 +13250,13 @@ onUnmounted(() => {
                     do not want to write.
                   </p>
                   <div class="space-y-2">
-                    <Label class="text-xs text-muted-foreground">Ignore fields</Label>
+                    <div class="flex items-center justify-between gap-2">
+                      <Label class="text-xs text-muted-foreground">Ignore fields</Label>
+                      <AgentFieldToggle
+                        :node-id="selectedNode.id"
+                        field-key="supabaseIgnoredInputFields"
+                      />
+                    </div>
                     <Input
                       :model-value="String(selectedNode.data.supabaseIgnoredInputFields || '')"
                       placeholder="id, created_at"
@@ -13141,6 +13276,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="supabaseFilter"
                   :navigation-enabled="supabaseExpressionFieldCount > 1"
                   :navigation-index="(selectedNode.data.supabaseDataInputMode || 'raw') === 'raw' ? 3 : 2"
                   :navigation-total="supabaseExpressionFieldCount"
@@ -13170,6 +13306,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="supabaseFilter"
                   :navigation-enabled="supabaseExpressionFieldCount > 1"
                   :navigation-index="2"
                   :navigation-total="supabaseExpressionFieldCount"
@@ -13234,6 +13371,7 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
+                field-key="notionQuery"
                 v-bind="notionExpressionNavBindings('notionQuery')"
                 @navigate="handleNotionExpressionFieldNavigate"
                 @register-field-index="onNotionRegisterExpressionFieldIndex"
@@ -13255,6 +13393,7 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
+                field-key="notionPageId"
                 v-bind="notionExpressionNavBindings('notionPageId')"
                 @navigate="handleNotionExpressionFieldNavigate"
                 @register-field-index="onNotionRegisterExpressionFieldIndex"
@@ -13276,6 +13415,7 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
+                field-key="notionDatabaseId"
                 v-bind="notionExpressionNavBindings('notionDatabaseId')"
                 @navigate="handleNotionExpressionFieldNavigate"
                 @register-field-index="onNotionRegisterExpressionFieldIndex"
@@ -13298,6 +13438,7 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
+                field-key="notionDatabase"
                 v-bind="notionExpressionNavBindings('notionDatabase')"
                 @navigate="handleNotionExpressionFieldNavigate"
                 @register-field-index="onNotionRegisterExpressionFieldIndex"
@@ -13319,6 +13460,10 @@ onUnmounted(() => {
               <div class="flex items-center justify-between gap-2">
                 <Label>Data Source</Label>
                 <div class="flex items-center gap-1">
+                  <AgentFieldToggle
+                    :node-id="selectedNode.id"
+                    field-key="notionDataSourceId"
+                  />
                   <Button
                     v-if="(selectedNode.data.notionDataSourceInputMode || 'select') === 'select'"
                     type="button"
@@ -13389,6 +13534,7 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
+                field-key="notionDataSourceId"
                 v-bind="notionExpressionNavBindings('notionDataSourceId')"
                 @navigate="handleNotionExpressionFieldNavigate"
                 @register-field-index="onNotionRegisterExpressionFieldIndex"
@@ -13429,6 +13575,7 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
+                field-key="notionDataSource"
                 v-bind="notionExpressionNavBindings('notionDataSource')"
                 @navigate="handleNotionExpressionFieldNavigate"
                 @register-field-index="onNotionRegisterExpressionFieldIndex"
@@ -13448,6 +13595,10 @@ onUnmounted(() => {
                 <div class="flex items-center justify-between gap-2">
                   <Label>Parent Page</Label>
                   <div class="flex items-center gap-1">
+                    <AgentFieldToggle
+                      :node-id="selectedNode.id"
+                      field-key="notionParentPageId"
+                    />
                     <Button
                       v-if="(selectedNode.data.notionParentPageInputMode || 'select') === 'select'"
                       type="button"
@@ -13518,6 +13669,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="notionParentPageId"
                   v-bind="notionExpressionNavBindings('notionParentPageId')"
                   @navigate="handleNotionExpressionFieldNavigate"
                   @register-field-index="onNotionRegisterExpressionFieldIndex"
@@ -13552,6 +13704,7 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
+                field-key="notionBlockId"
                 v-bind="notionExpressionNavBindings('notionBlockId')"
                 @navigate="handleNotionExpressionFieldNavigate"
                 @register-field-index="onNotionRegisterExpressionFieldIndex"
@@ -13572,6 +13725,7 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
+                field-key="notionBlock"
                 v-bind="notionExpressionNavBindings('notionBlock')"
                 @navigate="handleNotionExpressionFieldNavigate"
                 @register-field-index="onNotionRegisterExpressionFieldIndex"
@@ -13592,6 +13746,7 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
+                field-key="notionProperties"
                 v-bind="notionExpressionNavBindings('notionProperties')"
                 @navigate="handleNotionExpressionFieldNavigate"
                 @register-field-index="onNotionRegisterExpressionFieldIndex"
@@ -13612,6 +13767,7 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
+                field-key="notionIcon"
                 v-bind="notionExpressionNavBindings('notionIcon')"
                 @navigate="handleNotionExpressionFieldNavigate"
                 @register-field-index="onNotionRegisterExpressionFieldIndex"
@@ -13632,6 +13788,7 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
+                field-key="notionCover"
                 v-bind="notionExpressionNavBindings('notionCover')"
                 @navigate="handleNotionExpressionFieldNavigate"
                 @register-field-index="onNotionRegisterExpressionFieldIndex"
@@ -13652,6 +13809,7 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
+                field-key="notionChildren"
                 v-bind="notionExpressionNavBindings('notionChildren')"
                 @navigate="handleNotionExpressionFieldNavigate"
                 @register-field-index="onNotionRegisterExpressionFieldIndex"
@@ -13672,6 +13830,7 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
+                field-key="notionFilter"
                 v-bind="notionExpressionNavBindings('notionFilter')"
                 @navigate="handleNotionExpressionFieldNavigate"
                 @register-field-index="onNotionRegisterExpressionFieldIndex"
@@ -13692,6 +13851,7 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
+                field-key="notionSort"
                 v-bind="notionExpressionNavBindings('notionSort')"
                 @navigate="handleNotionExpressionFieldNavigate"
                 @register-field-index="onNotionRegisterExpressionFieldIndex"
@@ -13712,6 +13872,7 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
+                field-key="notionSorts"
                 v-bind="notionExpressionNavBindings('notionSorts')"
                 @navigate="handleNotionExpressionFieldNavigate"
                 @register-field-index="onNotionRegisterExpressionFieldIndex"
@@ -13723,7 +13884,13 @@ onUnmounted(() => {
               v-if="['search', 'queryDataSource', 'getBlockChildren'].includes(selectedNode.data.notionOperation || '')"
               class="space-y-2"
             >
-              <Label>Page Size <span class="font-normal text-muted-foreground">(0 = fetch all)</span></Label>
+              <div class="flex items-center justify-between gap-2">
+                <Label>Page Size <span class="font-normal text-muted-foreground">(0 = fetch all)</span></Label>
+                <AgentFieldToggle
+                  :node-id="selectedNode.id"
+                  field-key="notionPageSize"
+                />
+              </div>
               <Input
                 type="number"
                 min="0"
@@ -13741,6 +13908,7 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
+                field-key="notionStartCursor"
                 v-bind="notionExpressionNavBindings('notionStartCursor')"
                 @navigate="handleNotionExpressionFieldNavigate"
                 @register-field-index="onNotionRegisterExpressionFieldIndex"
@@ -13752,7 +13920,13 @@ onUnmounted(() => {
               v-if="selectedNode.data.notionOperation === 'appendBlocks'"
               class="space-y-2"
             >
-              <Label>Position</Label>
+              <div class="flex items-center justify-between gap-2">
+                <Label>Position</Label>
+                <AgentFieldToggle
+                  :node-id="selectedNode.id"
+                  field-key="notionAppendPosition"
+                />
+              </div>
               <Select
                 :model-value="selectedNode.data.notionAppendPosition || (selectedNode.data.notionAfterBlockId ? 'after_block' : 'end')"
                 :options="notionAppendPositionOptions"
@@ -13773,6 +13947,7 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
+                field-key="notionAfterBlockId"
                 v-bind="notionExpressionNavBindings('notionAfterBlockId')"
                 @navigate="handleNotionExpressionFieldNavigate"
                 @register-field-index="onNotionRegisterExpressionFieldIndex"
@@ -14188,6 +14363,7 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
+                field-key="s3Bucket"
                 :navigation-enabled="s3ExpressionFieldCount > 1"
                 :navigation-index="0"
                 :navigation-total="s3ExpressionFieldCount"
@@ -14236,6 +14412,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="s3Prefix"
                   :navigation-enabled="s3ExpressionFieldCount > 1"
                   :navigation-index="1"
                   :navigation-total="s3ExpressionFieldCount"
@@ -14247,7 +14424,13 @@ onUnmounted(() => {
                 />
               </div>
               <div class="space-y-2">
-                <Label>Max Keys</Label>
+                <div class="flex items-center justify-between gap-2">
+                  <Label>Max Keys</Label>
+                  <AgentFieldToggle
+                    :node-id="selectedNode.id"
+                    field-key="s3MaxKeys"
+                  />
+                </div>
                 <Input
                   :model-value="selectedNode.data.s3MaxKeys || '100'"
                   type="number"
@@ -14280,6 +14463,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="s3ContinuationToken"
                   :navigation-enabled="s3ExpressionFieldCount > 1"
                   :navigation-index="2"
                   :navigation-total="s3ExpressionFieldCount"
@@ -14307,6 +14491,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="s3Key"
                   :navigation-enabled="s3ExpressionFieldCount > 1"
                   :navigation-index="1"
                   :navigation-total="s3ExpressionFieldCount"
@@ -14356,6 +14541,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="s3SourceBucket"
                   :navigation-enabled="s3ExpressionFieldCount > 1"
                   :navigation-index="1"
                   :navigation-total="s3ExpressionFieldCount"
@@ -14377,6 +14563,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="s3SourceKey"
                   :navigation-enabled="s3ExpressionFieldCount > 1"
                   :navigation-index="2"
                   :navigation-total="s3ExpressionFieldCount"
@@ -14405,6 +14592,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="s3Key"
                   :navigation-enabled="s3ExpressionFieldCount > 1"
                   :navigation-index="3"
                   :navigation-total="s3ExpressionFieldCount"
@@ -14436,6 +14624,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="s3Key"
                   :navigation-enabled="s3ExpressionFieldCount > 1"
                   :navigation-index="1"
                   :navigation-total="s3ExpressionFieldCount"
@@ -14467,6 +14656,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="s3Body"
                   :navigation-enabled="s3ExpressionFieldCount > 1"
                   :navigation-index="2"
                   :navigation-total="s3ExpressionFieldCount"
@@ -14491,6 +14681,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="s3ContentType"
                   :navigation-enabled="s3ExpressionFieldCount > 1"
                   :navigation-index="3"
                   :navigation-total="s3ExpressionFieldCount"
@@ -14507,20 +14698,26 @@ onUnmounted(() => {
                 class="space-y-2"
               >
                 <Label>Options</Label>
-                <div class="flex items-center gap-2">
-                  <input
-                    id="s3-include-binary"
-                    type="checkbox"
-                    class="h-4 w-4 rounded border-input bg-background"
-                    :checked="!!selectedNode.data.s3IncludeBinary"
-                    @change="updateNodeData('s3IncludeBinary', ($event.target as HTMLInputElement).checked)"
-                  >
-                  <Label
-                    for="s3-include-binary"
-                    class="font-normal text-sm"
-                  >
-                    Return binary as base64
-                  </Label>
+                <div class="flex items-center justify-between gap-2">
+                  <div class="flex items-center gap-2">
+                    <input
+                      id="s3-include-binary"
+                      type="checkbox"
+                      class="h-4 w-4 rounded border-input bg-background"
+                      :checked="!!selectedNode.data.s3IncludeBinary"
+                      @change="updateNodeData('s3IncludeBinary', ($event.target as HTMLInputElement).checked)"
+                    >
+                    <Label
+                      for="s3-include-binary"
+                      class="font-normal text-sm"
+                    >
+                      Return binary as base64
+                    </Label>
+                  </div>
+                  <AgentFieldToggle
+                    :node-id="selectedNode.id"
+                    field-key="s3IncludeBinary"
+                  />
                 </div>
               </div>
             </template>
