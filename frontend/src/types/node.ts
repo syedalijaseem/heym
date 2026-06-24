@@ -391,8 +391,11 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
       label: "sendEmail",
       credentialId: "",
       to: "",
+      cc: "",
+      bcc: "",
       subject: "",
       emailBody: "$input.text",
+      attachments: "",
     },
   },
   errorHandler: {

@@ -437,7 +437,13 @@ const slackMessageInputRef = ref<InstanceType<typeof ExpressionInput> | null>(nu
 const discordMessageInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const discordUsernameInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const discordAvatarUrlInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const sendEmailToInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const sendEmailCcInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const sendEmailBccInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const sendEmailSubjectInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const sendEmailBodyInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const sendEmailAttachmentsInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const currentSendEmailExpressionFieldIndex = ref(0);
 const conditionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const redisKeyInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const setMappingInputRefs = ref<Map<number, InstanceType<typeof ExpressionInput>>>(new Map());
@@ -1948,7 +1954,12 @@ function closeAllExpressionExpandDialogs(): void {
   discordMessageInputRef.value?.closeExpandDialog();
   discordUsernameInputRef.value?.closeExpandDialog();
   discordAvatarUrlInputRef.value?.closeExpandDialog();
+  sendEmailToInputRef.value?.closeExpandDialog();
+  sendEmailCcInputRef.value?.closeExpandDialog();
+  sendEmailBccInputRef.value?.closeExpandDialog();
+  sendEmailSubjectInputRef.value?.closeExpandDialog();
   sendEmailBodyInputRef.value?.closeExpandDialog();
+  sendEmailAttachmentsInputRef.value?.closeExpandDialog();
   conditionInputRef.value?.closeExpandDialog();
   redisKeyInputRef.value?.closeExpandDialog();
   variableValueInputRef.value?.closeExpandDialog();
@@ -2297,10 +2308,11 @@ function openPrimaryExpandDialogForSelectedNode(): void {
     };
     nextTick(() => tryOpenDialog());
   } else if (nodeType === "sendEmail") {
+    currentSendEmailExpressionFieldIndex.value = 0;
     const tryOpenDialog = (attempts = 0): void => {
       if (attempts > 20) return;
-      if (sendEmailBodyInputRef.value) {
-        nextTick(() => sendEmailBodyInputRef.value?.openExpandDialog());
+      if (sendEmailToInputRef.value) {
+        nextTick(() => openSendEmailExpressionFieldAtIndex(0));
       } else {
         setTimeout(() => tryOpenDialog(attempts + 1), 100);
       }
@@ -2841,6 +2853,54 @@ function handleLlmExpressionFieldNavigate(direction: "prev" | "next"): void {
   nextTick(() => {
     openLlmExpressionFieldAtIndex(newIndex);
   });
+}
+
+const sendEmailExpressionFieldRefs = computed(
+  (): (InstanceType<typeof ExpressionInput> | null)[] => [
+    sendEmailToInputRef.value,
+    sendEmailCcInputRef.value,
+    sendEmailBccInputRef.value,
+    sendEmailSubjectInputRef.value,
+    sendEmailBodyInputRef.value,
+    sendEmailAttachmentsInputRef.value,
+  ],
+);
+
+const sendEmailExpressionFieldCount = computed((): number => 6);
+
+function openSendEmailExpressionFieldAtIndex(index: number): void {
+  const n = selectedNode.value;
+  if (!n || n.type !== "sendEmail") {
+    return;
+  }
+  currentSendEmailExpressionFieldIndex.value = index;
+  sendEmailExpressionFieldRefs.value[index]?.openExpandDialog();
+}
+
+function handleSendEmailExpressionFieldNavigate(direction: "prev" | "next"): void {
+  const n = selectedNode.value;
+  if (!n || n.type !== "sendEmail") {
+    return;
+  }
+  const total = sendEmailExpressionFieldCount.value;
+  const newIndex =
+    direction === "prev"
+      ? currentSendEmailExpressionFieldIndex.value - 1
+      : currentSendEmailExpressionFieldIndex.value + 1;
+  if (newIndex < 0 || newIndex >= total) {
+    return;
+  }
+  for (const inputRef of sendEmailExpressionFieldRefs.value) {
+    inputRef?.closeExpandDialog();
+  }
+  currentSendEmailExpressionFieldIndex.value = newIndex;
+  nextTick(() => {
+    openSendEmailExpressionFieldAtIndex(newIndex);
+  });
+}
+
+function onSendEmailRegisterExpressionFieldIndex(index: number): void {
+  currentSendEmailExpressionFieldIndex.value = index;
 }
 
 function openAgentExpressionFieldAtIndex(index: number): void {
@@ -10146,6 +10206,7 @@ onUnmounted(() => {
             <div class="space-y-2">
               <Label>To</Label>
               <ExpressionInput
+                ref="sendEmailToInputRef"
                 :model-value="selectedNode.data.to || ''"
                 placeholder="recipient@example.com"
                 :rows="1"
@@ -10153,10 +10214,17 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
+                expandable
+                dialog-title="Edit To"
+                navigation-enabled
+                :navigation-index="0"
+                :navigation-total="sendEmailExpressionFieldCount"
                 :dialog-node-label="selectedNodeEvaluateDialogLabel"
                 dialog-key-label="To"
                 field-key="to"
                 @update:model-value="updateNodeData('to', $event)"
+                @navigate="handleSendEmailExpressionFieldNavigate"
+                @register-field-index="onSendEmailRegisterExpressionFieldIndex"
               />
               <p class="text-xs text-muted-foreground">
                 Recipient email (comma-separated for multiple)
@@ -10164,8 +10232,65 @@ onUnmounted(() => {
             </div>
 
             <div class="space-y-2">
+              <Label>Cc</Label>
+              <ExpressionInput
+                ref="sendEmailCcInputRef"
+                :model-value="selectedNode.data.cc || ''"
+                placeholder="cc@example.com"
+                :rows="1"
+                :nodes="workflowStore.nodes"
+                :node-results="workflowStore.nodeResults"
+                :edges="workflowStore.edges"
+                :current-node-id="selectedNode.id"
+                expandable
+                dialog-title="Edit Cc"
+                navigation-enabled
+                :navigation-index="1"
+                :navigation-total="sendEmailExpressionFieldCount"
+                :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                dialog-key-label="Cc"
+                field-key="cc"
+                @update:model-value="updateNodeData('cc', $event)"
+                @navigate="handleSendEmailExpressionFieldNavigate"
+                @register-field-index="onSendEmailRegisterExpressionFieldIndex"
+              />
+              <p class="text-xs text-muted-foreground">
+                Carbon copy (comma-separated for multiple)
+              </p>
+            </div>
+
+            <div class="space-y-2">
+              <Label>Bcc</Label>
+              <ExpressionInput
+                ref="sendEmailBccInputRef"
+                :model-value="selectedNode.data.bcc || ''"
+                placeholder="bcc@example.com"
+                :rows="1"
+                :nodes="workflowStore.nodes"
+                :node-results="workflowStore.nodeResults"
+                :edges="workflowStore.edges"
+                :current-node-id="selectedNode.id"
+                expandable
+                dialog-title="Edit Bcc"
+                navigation-enabled
+                :navigation-index="2"
+                :navigation-total="sendEmailExpressionFieldCount"
+                :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                dialog-key-label="Bcc"
+                field-key="bcc"
+                @update:model-value="updateNodeData('bcc', $event)"
+                @navigate="handleSendEmailExpressionFieldNavigate"
+                @register-field-index="onSendEmailRegisterExpressionFieldIndex"
+              />
+              <p class="text-xs text-muted-foreground">
+                Blind carbon copy — hidden from other recipients
+              </p>
+            </div>
+
+            <div class="space-y-2">
               <Label>Subject</Label>
               <ExpressionInput
+                ref="sendEmailSubjectInputRef"
                 :model-value="selectedNode.data.subject || ''"
                 placeholder="Email Subject"
                 :rows="1"
@@ -10173,10 +10298,17 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
+                expandable
+                dialog-title="Edit Subject"
+                navigation-enabled
+                :navigation-index="3"
+                :navigation-total="sendEmailExpressionFieldCount"
                 :dialog-node-label="selectedNodeEvaluateDialogLabel"
                 dialog-key-label="Subject"
                 field-key="subject"
                 @update:model-value="updateNodeData('subject', $event)"
+                @navigate="handleSendEmailExpressionFieldNavigate"
+                @register-field-index="onSendEmailRegisterExpressionFieldIndex"
               />
             </div>
 
@@ -10193,13 +10325,46 @@ onUnmounted(() => {
                 :current-node-id="selectedNode.id"
                 expandable
                 dialog-title="Edit Email Body"
+                navigation-enabled
+                :navigation-index="4"
+                :navigation-total="sendEmailExpressionFieldCount"
                 :dialog-node-label="selectedNodeEvaluateDialogLabel"
                 dialog-key-label="Body"
                 field-key="emailBody"
                 @update:model-value="updateNodeData('emailBody', $event)"
+                @navigate="handleSendEmailExpressionFieldNavigate"
+                @register-field-index="onSendEmailRegisterExpressionFieldIndex"
               />
               <p class="text-xs text-muted-foreground">
                 Use $ expressions like {{ exampleRef }}
+              </p>
+            </div>
+
+            <div class="space-y-2">
+              <Label>Attachments</Label>
+              <ExpressionInput
+                ref="sendEmailAttachmentsInputRef"
+                :model-value="selectedNode.data.attachments || ''"
+                placeholder="$drive.id"
+                :rows="1"
+                :nodes="workflowStore.nodes"
+                :node-results="workflowStore.nodeResults"
+                :edges="workflowStore.edges"
+                :current-node-id="selectedNode.id"
+                expandable
+                dialog-title="Edit Attachments"
+                navigation-enabled
+                :navigation-index="5"
+                :navigation-total="sendEmailExpressionFieldCount"
+                :dialog-node-label="selectedNodeEvaluateDialogLabel"
+                dialog-key-label="Attachments"
+                field-key="attachments"
+                @update:model-value="updateNodeData('attachments', $event)"
+                @navigate="handleSendEmailExpressionFieldNavigate"
+                @register-field-index="onSendEmailRegisterExpressionFieldIndex"
+              />
+              <p class="text-xs text-muted-foreground">
+                Comma-separated Drive file IDs. Use $ expressions, e.g. an upstream Drive node's id.
               </p>
             </div>
           </template>

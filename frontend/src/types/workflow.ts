@@ -393,8 +393,11 @@ export interface NodeData {
   isGlobal?: boolean;
   arrayExpression?: string;
   to?: string;
+  cc?: string;
+  bcc?: string;
   subject?: string;
   emailBody?: string;
+  attachments?: string;
   targetNodeLabel?: string;
   redisOperation?: RedisOperation;
   redisKey?: string;
