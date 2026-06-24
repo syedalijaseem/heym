@@ -1409,8 +1409,11 @@ You can enable both retry AND error branching. The node will first exhaust all r
   - `label`: Node identifier
   - `credentialId`: UUID of the SMTP credential
   - `to`: Recipient email address (supports expressions, comma-separated for multiple recipients)
+  - `cc`: (optional) Carbon-copy recipient(s) (supports expressions, comma-separated for multiple)
+  - `bcc`: (optional) Blind carbon-copy recipient(s) (supports expressions, comma-separated); hidden from other recipients
   - `subject`: Email subject line (supports expressions)
   - `emailBody`: Email body content (supports expressions)
+  - `attachments`: (optional) Comma-separated Drive file IDs to attach (supports expressions). Reference an upstream `drive` node's `id` output, e.g. `$drive.id`. Only files owned by the workflow owner can be attached.
 
 **SETUP**: Requires an SMTP credential with server, port, email, and password configured. Common SMTP servers:
 - Gmail: `smtp.gmail.com`, port `587` (requires App Password)
@@ -1422,7 +1425,10 @@ You can enable both retry AND error branching. The node will first exhaust all r
 {
   "status": "sent",
   "to": "recipient@example.com",
-  "subject": "Email Subject"
+  "cc": "",
+  "bcc": "",
+  "subject": "Email Subject",
+  "attachment_count": 0
 }
 ```
 
@@ -1434,8 +1440,11 @@ You can enable both retry AND error branching. The node will first exhaust all r
     "label": "notifyUser",
     "credentialId": "smtp-credential-uuid",
     "to": "$userInput.body.email",
+    "cc": "manager@example.com",
+    "bcc": "audit@example.com",
     "subject": "Your request has been processed",
-    "emailBody": "Hello,\n\nYour request for $userInput.body.text has been completed.\n\nBest regards"
+    "emailBody": "Hello,\n\nYour request for $userInput.body.text has been completed.\n\nBest regards",
+    "attachments": "$drive.id"
   }
 }
 ```

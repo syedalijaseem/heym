@@ -228,5 +228,92 @@ class SendEmailBodyRenderingTests(unittest.TestCase):
         self.assertIn("text/plain", content_types)
 
 
+class SendEmailAgentToolTests(unittest.TestCase):
+    """sendEmail as an agent tool: cc/bcc/attachments are agent-fillable."""
+
+    def _make_agent_tool_workflow(self) -> tuple[list, list]:
+        email_node = {
+            "id": "email1",
+            "type": "sendEmail",
+            "data": {
+                "label": "sendMail",
+                "credentialId": str(uuid.uuid4()),
+                "to": "fixed@x.com",
+                "agentProvidedFields": ["to", "cc", "bcc", "attachments"],
+            },
+        }
+        agent_node = {"id": "agent1", "type": "agent", "data": {"label": "agent"}}
+        nodes = [agent_node, email_node]
+        edges = [
+            {
+                "id": "e1",
+                "source": "email1",
+                "target": "agent1",
+                "targetHandle": "tool-input",
+            }
+        ]
+        return nodes, edges
+
+    def test_tool_schema_exposes_new_fields(self) -> None:
+        from app.services.workflow_executor import WorkflowExecutor
+
+        nodes, edges = self._make_agent_tool_workflow()
+        executor = WorkflowExecutor(nodes=nodes, edges=edges)
+        schemas = executor._build_node_tool_schemas("agent1")
+
+        self.assertEqual(len(schemas), 1)
+        props = schemas[0]["parameters"]["properties"]
+        for field in ("to", "cc", "bcc", "attachments"):
+            self.assertIn(field, props)
+        required = schemas[0]["parameters"]["required"]
+        for field in ("cc", "bcc", "attachments"):
+            self.assertIn(field, required)
+
+    def test_agent_supplied_cc_bcc_used_when_executed(self) -> None:
+        owner = uuid.uuid4()
+        from app.services.workflow_executor import WorkflowExecutor
+
+        nodes, edges = self._make_agent_tool_workflow()
+        executor = WorkflowExecutor(nodes=nodes, edges=edges)
+        executor.trace_user_id = owner
+        executor._get_accessible_credential = MagicMock(
+            return_value=SimpleNamespace(encrypted_config=b"enc")
+        )
+
+        smtp_server = MagicMock()
+        smtp_cm = MagicMock()
+        smtp_cm.__enter__ = MagicMock(return_value=smtp_server)
+        smtp_cm.__exit__ = MagicMock(return_value=False)
+
+        tool_def = {"_source": "node_tool", "_node_id": "email1"}
+        with (
+            patch("app.db.session.SessionLocal", return_value=_make_db_mock([])),
+            patch(
+                "app.services.encryption.decrypt_config",
+                return_value={
+                    "smtp_server": "smtp.test",
+                    "smtp_port": 587,
+                    "smtp_email": "sender@test.com",
+                    "smtp_password": "pw",
+                },
+            ),
+            patch("smtplib.SMTP", return_value=smtp_cm),
+            patch("smtplib.SMTP_SSL", return_value=smtp_cm),
+        ):
+            out = executor._execute_node_tool(
+                tool_def,
+                {"to": "agent@x.com", "cc": "agentcc@x.com", "bcc": "agentbcc@x.com"},
+            )
+
+        self.assertEqual(out.get("status"), "sent")
+        self.assertEqual(out.get("to"), "agent@x.com")
+        self.assertEqual(out.get("cc"), "agentcc@x.com")
+        self.assertEqual(out.get("bcc"), "agentbcc@x.com")
+        envelope, msg = _sent_message(smtp_server)
+        self.assertEqual(msg["Cc"], "agentcc@x.com")
+        self.assertIn("agentbcc@x.com", envelope)
+        self.assertIsNone(msg["Bcc"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -438,6 +438,9 @@ const discordMessageInputRef = ref<InstanceType<typeof ExpressionInput> | null>(
 const discordUsernameInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const discordAvatarUrlInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const sendEmailBodyInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const sendEmailCcInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const sendEmailBccInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const sendEmailAttachmentsInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const conditionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const redisKeyInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const setMappingInputRefs = ref<Map<number, InstanceType<typeof ExpressionInput>>>(new Map());
@@ -1949,6 +1952,9 @@ function closeAllExpressionExpandDialogs(): void {
   discordUsernameInputRef.value?.closeExpandDialog();
   discordAvatarUrlInputRef.value?.closeExpandDialog();
   sendEmailBodyInputRef.value?.closeExpandDialog();
+  sendEmailCcInputRef.value?.closeExpandDialog();
+  sendEmailBccInputRef.value?.closeExpandDialog();
+  sendEmailAttachmentsInputRef.value?.closeExpandDialog();
   conditionInputRef.value?.closeExpandDialog();
   redisKeyInputRef.value?.closeExpandDialog();
   variableValueInputRef.value?.closeExpandDialog();
@@ -10166,6 +10172,7 @@ onUnmounted(() => {
             <div class="space-y-2">
               <Label>Cc</Label>
               <ExpressionInput
+                ref="sendEmailCcInputRef"
                 :model-value="selectedNode.data.cc || ''"
                 placeholder="cc@example.com"
                 :rows="1"
@@ -10173,6 +10180,8 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
+                expandable
+                dialog-title="Edit Cc"
                 :dialog-node-label="selectedNodeEvaluateDialogLabel"
                 dialog-key-label="Cc"
                 field-key="cc"
@@ -10186,6 +10195,7 @@ onUnmounted(() => {
             <div class="space-y-2">
               <Label>Bcc</Label>
               <ExpressionInput
+                ref="sendEmailBccInputRef"
                 :model-value="selectedNode.data.bcc || ''"
                 placeholder="bcc@example.com"
                 :rows="1"
@@ -10193,6 +10203,8 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
+                expandable
+                dialog-title="Edit Bcc"
                 :dialog-node-label="selectedNodeEvaluateDialogLabel"
                 dialog-key-label="Bcc"
                 field-key="bcc"
@@ -10246,6 +10258,7 @@ onUnmounted(() => {
             <div class="space-y-2">
               <Label>Attachments</Label>
               <ExpressionInput
+                ref="sendEmailAttachmentsInputRef"
                 :model-value="selectedNode.data.attachments || ''"
                 placeholder="$drive.id"
                 :rows="1"
@@ -10253,6 +10266,8 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
+                expandable
+                dialog-title="Edit Attachments"
                 :dialog-node-label="selectedNodeEvaluateDialogLabel"
                 dialog-key-label="Attachments"
                 field-key="attachments"
