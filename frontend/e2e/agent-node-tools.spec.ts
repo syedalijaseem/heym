@@ -227,6 +227,8 @@ test("exposes integration inputs to an agent tool", async ({ page }) => {
   try {
     await expect(page.locator(".vue-flow__node")).toHaveCount(6);
     const propertiesPanel = page.locator(".properties-panel");
+    await page.getByRole("button", { name: "Properties", exact: true }).click();
+    await expect(propertiesPanel).toBeVisible();
 
     for (const nodeCase of toolNodeCases) {
       await page.locator(`.vue-flow__node[data-id="${nodeCase.id}"]`).click();
