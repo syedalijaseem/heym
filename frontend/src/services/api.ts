@@ -1796,6 +1796,7 @@ export interface MCPWorkflowItem {
   description: string | null;
   mcp_enabled: boolean;
   input_fields: MCPInputField[];
+  updated_at?: string | null;
 }
 
 export interface MCPConfigResponse {

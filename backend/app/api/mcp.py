@@ -425,6 +425,7 @@ async def get_mcp_config(
                 description=w.description,
                 mcp_enabled=mcp_enabled,
                 input_fields=input_fields,
+                updated_at=w.updated_at,
             )
         )
 
@@ -512,6 +513,7 @@ async def toggle_workflow_mcp(
         description=workflow.description,
         mcp_enabled=mcp_enabled,
         input_fields=input_fields,
+        updated_at=workflow.updated_at,
     )
 
 

@@ -975,6 +975,7 @@ class MCPWorkflowItem(BaseModel):
     description: str | None = None
     mcp_enabled: bool = False
     input_fields: list[InputFieldSchema] = Field(default_factory=list)
+    updated_at: datetime | None = None
 
     class Config:
         from_attributes = True
