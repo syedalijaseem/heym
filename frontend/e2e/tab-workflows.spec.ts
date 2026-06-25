@@ -224,6 +224,38 @@ test("shows the workflow name without overflow on small screens", async ({ page 
   }
 });
 
+test("collapses toolbar labels to icons when tight and keeps them when wide, with tooltips", async ({ page }) => {
+  const workflow = await createWorkflow(page, `Toolbar Workflow ${Date.now()}`);
+  const historyLabel = page
+    .locator("header.editor-header span")
+    .filter({ hasText: /^History$/ });
+
+  try {
+    // Wide screen that comfortably fits both the toolbar labels and the name:
+    // the text labels stay visible (nothing changes for screens that fit).
+    await page.setViewportSize({ width: 1700, height: 800 });
+    await page.goto(`/workflows/${workflow.id}`);
+    await expect(page.getByTestId("workflow-title")).toBeVisible();
+    await expect(historyLabel).toBeVisible();
+
+    // Tighter screen: the workflow name must still be fully visible, and the
+    // toolbar text labels collapse to icons to make room.
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(page.getByTestId("workflow-title")).toBeVisible();
+    await expect(historyLabel).toBeHidden();
+
+    // Hovering an icon-only button reveals its name in a tooltip popup.
+    const themeButton = page
+      .locator("header.editor-header button")
+      .filter({ has: page.locator("svg.lucide-sun, svg.lucide-moon") })
+      .first();
+    await themeButton.hover();
+    await expect(page.getByRole("tooltip")).toContainText(/mode/i);
+  } finally {
+    await deleteWorkflow(page, workflow.id);
+  }
+});
+
 test("shows a failed workflow execution", async ({ page }) => {
   const workflow = await createWorkflow(page, `Failing Workflow ${Date.now()}`);
 

@@ -38,6 +38,7 @@ import Input from "@/components/ui/Input.vue";
 import Label from "@/components/ui/Label.vue";
 import Select from "@/components/ui/Select.vue";
 import Textarea from "@/components/ui/Textarea.vue";
+import Tooltip from "@/components/ui/Tooltip.vue";
 import { onDismissOverlays, pushOverlayState } from "@/composables/useOverlayBackHandler";
 import { getDocPath } from "@/docs/manifest";
 import { joinOriginAndPath } from "@/lib/appUrl";
@@ -1291,17 +1292,21 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
         >
           <Trash2 class="w-4 h-4" />
         </Button>
-        <Button
+        <Tooltip
           v-if="!isDashboardWidget"
-          variant="ghost"
-          size="sm"
-          class="hidden md:inline-flex gap-2 text-destructive hover:text-destructive"
-          :disabled="workflowStore.nodes.length === 0"
-          @click="workflowStore.clearCanvas()"
+          label="Clear"
         >
-          <Trash2 class="w-4 h-4" />
-          <span class="hidden lg:inline">Clear</span>
-        </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            class="hidden md:inline-flex gap-2 text-destructive hover:text-destructive"
+            :disabled="workflowStore.nodes.length === 0"
+            @click="workflowStore.clearCanvas()"
+          >
+            <Trash2 class="w-4 h-4" />
+            <span class="hidden min-[1600px]:inline">Clear</span>
+          </Button>
+        </Tooltip>
         <Button
           v-if="isDashboardWidget"
           variant="ghost"
@@ -1312,17 +1317,20 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
         >
           <ChevronLeft class="w-4 h-4" />
         </Button>
-        <Button
+        <Tooltip
           v-if="isDashboardWidget"
-          variant="ghost"
-          size="sm"
-          class="hidden md:inline-flex gap-2 text-foreground"
-          title="Back to Dashboard"
-          @click="returnToDashboard"
+          label="Back to Dashboard"
         >
-          <ChevronLeft class="w-4 h-4" />
-          <span class="hidden lg:inline">Dashboard</span>
-        </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            class="hidden md:inline-flex gap-2 text-foreground"
+            @click="returnToDashboard"
+          >
+            <ChevronLeft class="w-4 h-4" />
+            <span class="hidden min-[1600px]:inline">Dashboard</span>
+          </Button>
+        </Tooltip>
         <Button
           variant="ghost"
           size="icon"
@@ -1331,136 +1339,165 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
         >
           <History class="w-4 h-4" />
         </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          class="hidden md:inline-flex gap-2 text-foreground"
-          @click="historyOpen = true; pushOverlayState()"
-        >
-          <History class="w-4 h-4" />
-          <span class="hidden lg:inline">History</span>
-        </Button>
+        <Tooltip label="History">
+          <Button
+            variant="ghost"
+            size="sm"
+            class="hidden md:inline-flex gap-2 text-foreground"
+            @click="historyOpen = true; pushOverlayState()"
+          >
+            <History class="w-4 h-4" />
+            <span class="hidden min-[1600px]:inline">History</span>
+          </Button>
+        </Tooltip>
         <Button
           variant="ghost"
           size="icon"
-          class="h-11 w-11 min-h-[44px] min-w-[44px] md:hidden text-foreground"
+          class="h-11 w-11 min-h-[44px] min-w-[44px] hidden sm:flex md:hidden text-foreground"
           @click="editHistoryOpen = true; pushOverlayState()"
         >
           <GitBranch class="w-4 h-4" />
         </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          class="hidden md:inline-flex gap-2 text-foreground"
-          @click="editHistoryOpen = true; pushOverlayState()"
-        >
-          <GitBranch class="w-4 h-4" />
-          <span class="hidden lg:inline">Edit History</span>
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          class="hidden lg:inline-flex gap-2 text-foreground"
-          @click="downloadWorkflow"
-        >
-          <Download class="w-4 h-4" />
-          Download
-        </Button>
-        <Button
+        <Tooltip label="Edit History">
+          <Button
+            variant="ghost"
+            size="sm"
+            class="hidden md:inline-flex gap-2 text-foreground"
+            @click="editHistoryOpen = true; pushOverlayState()"
+          >
+            <GitBranch class="w-4 h-4" />
+            <span class="hidden min-[1600px]:inline">Edit History</span>
+          </Button>
+        </Tooltip>
+        <Tooltip label="Download">
+          <Button
+            variant="ghost"
+            size="sm"
+            class="hidden lg:inline-flex gap-2 text-foreground"
+            @click="downloadWorkflow"
+          >
+            <Download class="w-4 h-4" />
+            <span class="hidden min-[1600px]:inline">Download</span>
+          </Button>
+        </Tooltip>
+        <Tooltip
           v-if="isStandardWorkflow"
-          variant="ghost"
-          size="sm"
-          class="hidden lg:inline-flex gap-2 text-foreground"
-          @click="portalDialogRef?.openDialog(); pushOverlayState()"
+          label="Portal"
         >
-          <Globe class="w-4 h-4" />
-          Portal
-        </Button>
-        <Button
+          <Button
+            variant="ghost"
+            size="sm"
+            class="hidden lg:inline-flex gap-2 text-foreground"
+            @click="portalDialogRef?.openDialog(); pushOverlayState()"
+          >
+            <Globe class="w-4 h-4" />
+            <span class="hidden min-[1600px]:inline">Portal</span>
+          </Button>
+        </Tooltip>
+        <Tooltip
           v-if="isStandardWorkflow"
-          variant="ghost"
-          size="sm"
-          class="hidden lg:inline-flex gap-2 text-foreground"
-          @click="shareOpen = true; pushOverlayState()"
+          label="Share"
         >
-          <Share2 class="w-4 h-4" />
-          Share
-        </Button>
-        <Button
+          <Button
+            variant="ghost"
+            size="sm"
+            class="hidden lg:inline-flex gap-2 text-foreground"
+            @click="shareOpen = true; pushOverlayState()"
+          >
+            <Share2 class="w-4 h-4" />
+            <span class="hidden min-[1600px]:inline">Share</span>
+          </Button>
+        </Tooltip>
+        <Tooltip
           v-if="isStandardWorkflow"
-          variant="ghost"
-          size="sm"
-          class="hidden xl:inline-flex gap-2 text-foreground"
-          title="Save as reusable template"
-          @click="shareTemplateOpen = true"
+          label="Save as reusable template"
         >
-          <LayoutTemplate class="w-4 h-4" />
-          Template
-        </Button>
-        <Button
+          <Button
+            variant="ghost"
+            size="sm"
+            class="hidden xl:inline-flex gap-2 text-foreground"
+            @click="shareTemplateOpen = true"
+          >
+            <LayoutTemplate class="w-4 h-4" />
+            <span class="hidden min-[1600px]:inline">Template</span>
+          </Button>
+        </Tooltip>
+        <Tooltip
           v-if="isStandardWorkflow"
-          variant="ghost"
-          size="sm"
-          class="hidden xl:inline-flex gap-2 text-foreground"
-          @click="curlOpen = true; pushOverlayState()"
+          label="cURL"
         >
-          <TerminalSquare class="w-4 h-4" />
-          cURL
-        </Button>
-        <Button
+          <Button
+            variant="ghost"
+            size="sm"
+            class="hidden xl:inline-flex gap-2 text-foreground"
+            @click="curlOpen = true; pushOverlayState()"
+          >
+            <TerminalSquare class="w-4 h-4" />
+            <span class="hidden min-[1600px]:inline">cURL</span>
+          </Button>
+        </Tooltip>
+        <Tooltip
           v-if="isStandardWorkflow"
-          variant="ghost"
-          size="sm"
-          class="hidden xl:inline-flex gap-2 text-foreground"
-          :class="{ 'text-primary': analysisPanelOpen }"
-          title="Analyze my workflow"
-          @click="toggleAnalysisPanel"
+          label="Analyze my workflow"
         >
-          <Sparkles class="w-4 h-4" />
-          Analyze
-        </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            class="hidden xl:inline-flex gap-2 text-foreground"
+            :class="{ 'text-primary': analysisPanelOpen }"
+            @click="toggleAnalysisPanel"
+          >
+            <Sparkles class="w-4 h-4" />
+            <span class="hidden min-[1600px]:inline">Analyze</span>
+          </Button>
+        </Tooltip>
         <Button
           variant="ghost"
           size="icon"
-          class="h-11 w-11 min-h-[44px] min-w-[44px] md:hidden text-foreground"
+          class="h-11 w-11 min-h-[44px] min-w-[44px] hidden sm:flex md:hidden text-foreground"
           title="Page Guide"
           @click="toggleShowcaseGuide"
         >
           <Compass class="w-4 h-4 text-foreground" />
         </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          class="hidden xl:inline-flex gap-2 text-foreground"
-          @click="toggleShowcaseGuide"
-        >
-          <Compass class="w-4 h-4 text-foreground" />
-          Page Guide
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          class="h-11 w-11 min-h-[44px] min-w-[44px] md:h-9 md:w-9 text-foreground"
-          title="Search (Ctrl+K)"
-          @click="showCommandPalette = true; pushOverlayState()"
-        >
-          <Search class="w-4 h-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          class="h-11 w-11 min-h-[44px] min-w-[44px] md:h-9 md:w-9 text-foreground"
-          @click="themeStore.toggle"
-        >
-          <Sun
-            v-if="themeStore.isDark"
-            class="w-4 h-4"
-          />
-          <Moon
-            v-else
-            class="w-4 h-4"
-          />
-        </Button>
+        <Tooltip label="Page Guide">
+          <Button
+            variant="ghost"
+            size="sm"
+            class="hidden xl:inline-flex gap-2 text-foreground"
+            @click="toggleShowcaseGuide"
+          >
+            <Compass class="w-4 h-4 text-foreground" />
+            <span class="hidden min-[1600px]:inline">Page Guide</span>
+          </Button>
+        </Tooltip>
+        <Tooltip label="Search (Ctrl+K)">
+          <Button
+            variant="ghost"
+            size="icon"
+            class="h-11 w-11 min-h-[44px] min-w-[44px] md:h-9 md:w-9 text-foreground"
+            @click="showCommandPalette = true; pushOverlayState()"
+          >
+            <Search class="w-4 h-4" />
+          </Button>
+        </Tooltip>
+        <Tooltip :label="themeStore.isDark ? 'Switch to light mode' : 'Switch to dark mode'">
+          <Button
+            variant="ghost"
+            size="icon"
+            class="h-11 w-11 min-h-[44px] min-w-[44px] md:h-9 md:w-9 text-foreground"
+            @click="themeStore.toggle"
+          >
+            <Sun
+              v-if="themeStore.isDark"
+              class="w-4 h-4"
+            />
+            <Moon
+              v-else
+              class="w-4 h-4"
+            />
+          </Button>
+        </Tooltip>
         <Button
           variant="gradient"
           size="sm"
