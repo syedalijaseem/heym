@@ -1287,6 +1287,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
           variant="ghost"
           size="icon"
           class="md:hidden text-destructive hover:text-destructive h-11 w-11 min-h-[44px] min-w-[44px]"
+          aria-label="Clear"
           :disabled="workflowStore.nodes.length === 0"
           @click="workflowStore.clearCanvas()"
         >
@@ -1300,6 +1301,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
             variant="ghost"
             size="sm"
             class="hidden md:inline-flex gap-2 text-destructive hover:text-destructive"
+            aria-label="Clear"
             :disabled="workflowStore.nodes.length === 0"
             @click="workflowStore.clearCanvas()"
           >
@@ -1312,6 +1314,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
           variant="ghost"
           size="icon"
           class="h-11 w-11 min-h-[44px] min-w-[44px] md:hidden text-foreground"
+          aria-label="Back to Dashboard"
           title="Back to Dashboard"
           @click="returnToDashboard"
         >
@@ -1325,6 +1328,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
             variant="ghost"
             size="sm"
             class="hidden md:inline-flex gap-2 text-foreground"
+            aria-label="Back to Dashboard"
             @click="returnToDashboard"
           >
             <ChevronLeft class="w-4 h-4" />
@@ -1335,6 +1339,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
           variant="ghost"
           size="icon"
           class="h-11 w-11 min-h-[44px] min-w-[44px] md:hidden text-foreground"
+          aria-label="History"
           @click="historyOpen = true; pushOverlayState()"
         >
           <History class="w-4 h-4" />
@@ -1344,6 +1349,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
             variant="ghost"
             size="sm"
             class="hidden md:inline-flex gap-2 text-foreground"
+            aria-label="History"
             @click="historyOpen = true; pushOverlayState()"
           >
             <History class="w-4 h-4" />
@@ -1354,6 +1360,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
           variant="ghost"
           size="icon"
           class="h-11 w-11 min-h-[44px] min-w-[44px] hidden sm:flex md:hidden text-foreground"
+          aria-label="Edit History"
           @click="editHistoryOpen = true; pushOverlayState()"
         >
           <GitBranch class="w-4 h-4" />
@@ -1363,6 +1370,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
             variant="ghost"
             size="sm"
             class="hidden md:inline-flex gap-2 text-foreground"
+            aria-label="Edit History"
             @click="editHistoryOpen = true; pushOverlayState()"
           >
             <GitBranch class="w-4 h-4" />
@@ -1374,6 +1382,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
             variant="ghost"
             size="sm"
             class="hidden lg:inline-flex gap-2 text-foreground"
+            aria-label="Download"
             @click="downloadWorkflow"
           >
             <Download class="w-4 h-4" />
@@ -1388,6 +1397,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
             variant="ghost"
             size="sm"
             class="hidden lg:inline-flex gap-2 text-foreground"
+            aria-label="Portal"
             @click="portalDialogRef?.openDialog(); pushOverlayState()"
           >
             <Globe class="w-4 h-4" />
@@ -1402,6 +1412,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
             variant="ghost"
             size="sm"
             class="hidden lg:inline-flex gap-2 text-foreground"
+            aria-label="Share"
             @click="shareOpen = true; pushOverlayState()"
           >
             <Share2 class="w-4 h-4" />
@@ -1416,6 +1427,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
             variant="ghost"
             size="sm"
             class="hidden xl:inline-flex gap-2 text-foreground"
+            aria-label="Template"
             @click="shareTemplateOpen = true"
           >
             <LayoutTemplate class="w-4 h-4" />
@@ -1430,6 +1442,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
             variant="ghost"
             size="sm"
             class="hidden xl:inline-flex gap-2 text-foreground"
+            aria-label="cURL"
             @click="curlOpen = true; pushOverlayState()"
           >
             <TerminalSquare class="w-4 h-4" />
@@ -1445,6 +1458,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
             size="sm"
             class="hidden xl:inline-flex gap-2 text-foreground"
             :class="{ 'text-primary': analysisPanelOpen }"
+            aria-label="Analyze"
             @click="toggleAnalysisPanel"
           >
             <Sparkles class="w-4 h-4" />
@@ -1455,6 +1469,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
           variant="ghost"
           size="icon"
           class="h-11 w-11 min-h-[44px] min-w-[44px] hidden sm:flex md:hidden text-foreground"
+          aria-label="Page Guide"
           title="Page Guide"
           @click="toggleShowcaseGuide"
         >
@@ -1465,6 +1480,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
             variant="ghost"
             size="sm"
             class="hidden xl:inline-flex gap-2 text-foreground"
+            aria-label="Page Guide"
             @click="toggleShowcaseGuide"
           >
             <Compass class="w-4 h-4 text-foreground" />
@@ -1476,6 +1492,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
             variant="ghost"
             size="icon"
             class="h-11 w-11 min-h-[44px] min-w-[44px] md:h-9 md:w-9 text-foreground"
+            aria-label="Search (Ctrl+K)"
             @click="showCommandPalette = true; pushOverlayState()"
           >
             <Search class="w-4 h-4" />
@@ -1486,6 +1503,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
             variant="ghost"
             size="icon"
             class="h-11 w-11 min-h-[44px] min-w-[44px] md:h-9 md:w-9 text-foreground"
+            :aria-label="themeStore.isDark ? 'Switch to light mode' : 'Switch to dark mode'"
             @click="themeStore.toggle"
           >
             <Sun
@@ -1505,6 +1523,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
           :disabled="!hasUnsavedChanges"
           :loading="isSaving"
           class="hidden sm:inline-flex"
+          aria-label="Save"
           @click="handleSave"
         >
           <Save class="w-4 h-4" />
@@ -1516,6 +1535,7 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
           :disabled="!hasUnsavedChanges"
           :loading="isSaving"
           class="sm:hidden h-11 w-11 min-h-[44px] min-w-[44px]"
+          aria-label="Save"
           @click="handleSave"
         >
           <Save class="w-4 h-4" />
