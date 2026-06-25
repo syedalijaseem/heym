@@ -1215,16 +1215,15 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
         </router-link>
         <div class="hidden sm:block w-px h-6 bg-border/50 shrink-0" />
         <div
-          class="hidden sm:block min-w-0"
+          class="min-w-0 flex-1"
           data-heym-inline-edit
         >
           <input
             v-if="isTitleEditing"
             ref="titleInputRef"
             v-model="editingTitleValue"
-            class="font-semibold text-sm md:text-base bg-transparent border-b border-primary outline-none"
+            class="w-full max-w-full min-w-0 font-semibold text-sm md:text-base bg-transparent border-b border-primary outline-none"
             maxlength="100"
-            :size="Math.max(12, editingTitleValue.length + 2)"
             @blur="commitTitleEdit"
             @keydown.enter.prevent="commitTitleEdit"
             @keydown.escape="cancelTitleEdit"
@@ -1232,7 +1231,8 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
           <h1
             v-else
             data-testid="workflow-title"
-            class="font-semibold text-sm md:text-base truncate max-w-[120px] sm:max-w-[150px] md:max-w-[250px] cursor-text hover:bg-muted/50 rounded px-0.5 -mx-0.5"
+            class="block w-full font-semibold text-sm md:text-base truncate cursor-text hover:bg-muted/50 rounded px-0.5 -mx-0.5"
+            :title="workflowName"
             @mousedown.prevent="startTitleEdit"
           >
             {{ workflowName }}
@@ -1241,30 +1241,29 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
             v-if="isDescriptionEditing"
             ref="descriptionInputRef"
             v-model="editingDescriptionValue"
-            class="text-xs text-muted-foreground bg-transparent border-b border-primary outline-none"
+            class="hidden sm:block w-full max-w-full min-w-0 text-xs text-muted-foreground bg-transparent border-b border-primary outline-none"
             maxlength="300"
             placeholder="Add description..."
-            :size="Math.max(16, editingDescriptionValue.length + 2)"
             @blur="commitDescriptionEdit"
             @keydown.enter.prevent="commitDescriptionEdit"
             @keydown.escape="cancelDescriptionEdit"
           >
           <p
             v-else-if="hasUnsavedChanges"
-            class="text-xs text-amber-500"
+            class="hidden sm:block text-xs text-amber-500"
           >
             Unsaved changes
           </p>
           <p
             v-else-if="workflowDescription"
-            class="text-xs text-muted-foreground truncate max-w-[120px] sm:max-w-[150px] md:max-w-[250px] cursor-text hover:bg-muted/50 rounded px-0.5 -mx-0.5"
+            class="hidden sm:block w-full text-xs text-muted-foreground truncate cursor-text hover:bg-muted/50 rounded px-0.5 -mx-0.5"
             @mousedown.prevent="startDescriptionEdit"
           >
             {{ workflowDescription }}
           </p>
           <p
             v-else
-            class="text-xs text-muted-foreground/40 truncate max-w-[120px] sm:max-w-[150px] md:max-w-[250px] cursor-text hover:bg-muted/50 rounded px-0.5 -mx-0.5"
+            class="hidden sm:block w-full text-xs text-muted-foreground/40 truncate cursor-text hover:bg-muted/50 rounded px-0.5 -mx-0.5"
             @mousedown.prevent="startDescriptionEdit"
           >
             Add description...

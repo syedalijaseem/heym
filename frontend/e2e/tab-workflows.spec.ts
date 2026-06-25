@@ -186,6 +186,44 @@ test("renders multiple connected nodes and persists the edge", async ({ page }) 
   await deleteWorkflow(page, workflow.id);
 });
 
+test("shows the workflow name without overflow on small screens", async ({ page }) => {
+  const longName = `Small Screen Workflow ${Date.now()} With A Very Long Name That Should Truncate`;
+  const workflow = await createWorkflow(page, longName);
+
+  try {
+    // Emulate a small / narrow viewport where the header has little horizontal room.
+    await page.setViewportSize({ width: 380, height: 720 });
+    await page.goto(`/workflows/${workflow.id}`);
+
+    const title = page.getByTestId("workflow-title");
+    // The name must remain visible on small screens, not hidden away.
+    await expect(title).toBeVisible();
+    await expect(title).toHaveText(longName);
+
+    // The title must stay within the viewport (truncated), never overflowing horizontally.
+    const box = await title.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(380);
+
+    // The element is actually clipped (truncated) rather than rendering its full width.
+    const overflow = await title.evaluate(
+      (el) => ({ scrollWidth: el.scrollWidth, clientWidth: el.clientWidth }),
+    );
+    expect(overflow.scrollWidth).toBeGreaterThan(overflow.clientWidth);
+
+    // Inline editing must not blow out the header width either.
+    await title.dispatchEvent("mousedown");
+    const titleInput = page.locator("[data-heym-inline-edit] input").first();
+    await expect(titleInput).toBeVisible();
+    const inputBox = await titleInput.boundingBox();
+    expect(inputBox).not.toBeNull();
+    expect(inputBox!.x + inputBox!.width).toBeLessThanOrEqual(380);
+  } finally {
+    await deleteWorkflow(page, workflow.id);
+  }
+});
+
 test("shows a failed workflow execution", async ({ page }) => {
   const workflow = await createWorkflow(page, `Failing Workflow ${Date.now()}`);
 
