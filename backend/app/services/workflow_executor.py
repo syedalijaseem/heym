@@ -6233,21 +6233,46 @@ class WorkflowExecutor:
         *,
         coerce_bool: bool,
     ) -> Any:
-        """Evaluate Python text after ``$...`` spans were replaced (shared by condition vs value)."""
+        """Evaluate Python text after ``$...`` spans were replaced (shared by condition vs value).
+
+        SECURITY: This must NEVER use Python's built-in `eval()`. Clearing `__builtins__`
+        does not stop attribute traversal — exposing real Python types (`str`, `int`,
+        `len`) in the locals lets a workflow author reach `object.__subclasses__()`
+        and from there any class loaded in the interpreter (sandbox escape -> RCE).
+        The verified gadget is `str.__class__.__bases__[0].__subclasses__()` -> pick a
+        class whose `__init__.__globals__` exposes `__builtins__["__import__"]`.
+
+        We route through `HeymExpressionEval` (a `simpleeval.EvalWithCompoundTypes`
+        subclass) which walks an AST and refuses dunder attribute access. The JS-style
+        literal aliases (`true`/`false`/`null`/`undefined`) are passed via `names`
+        because simpleeval only recognises Python's `True`/`False`/`None` natively;
+        without them, conditions like `$x == true` raise `NameNotDefined`.
+
+        See security advisory GHSA-pm6h-x3h5-j38h, finding C1.
+        """
         processed = _normalize_js_logical_ops_for_eval(processed)
-        local_vars = {
-            "len": len,
-            "str": str,
-            "int": int,
-            "float": float,
-            "bool": bool,
-            "None": None,
-            "null": None,
-            "undefined": None,
-            "true": True,
-            "false": False,
-        }
-        result = eval(processed, {"__builtins__": {}}, local_vars)
+        evaluator = HeymExpressionEval(
+            functions=self._get_evaluator_functions(),
+            names={
+                # JS-style literal aliases — simpleeval doesn't recognise these
+                # as Python literals, so they must be in `names`. `True`/`False`/
+                # `None` are Python literals and simpleeval handles them natively.
+                "true": True,
+                "false": False,
+                "null": None,
+                "undefined": None,
+            },
+        )
+        try:
+            result = evaluator.eval(processed)
+        except Exception as exc:
+            # Re-raise as ValueError so callers (evaluate_condition) can fall back
+            # to False without surfacing internal exception types. The service path
+            # (ExpressionEvaluatorService.evaluate) catches this ValueError and
+            # returns ExpressionEvaluateResponse(result=None, result_type="null",
+            # error=str(exc)) -- so the executor raises and the service returns an
+            # error response, but both reject the same payloads.
+            raise ValueError(f"Invalid condition expression: {exc}") from exc
         return bool(result) if coerce_bool else result
 
     def evaluate_expression_tail_strict(
