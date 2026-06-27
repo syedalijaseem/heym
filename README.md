@@ -9,12 +9,20 @@
 ### AI-Native Workflow Automation Platform
 
 <p align="center">
-  <strong>Build, visualize, and run intelligent AI workflows — without writing code.</strong><br/>
+  <strong>Build, visualize, and run intelligent AI workflows without writing code.</strong><br/>
   Drag-and-drop canvas · LLM & Agent nodes · RAG pipelines · Multi-agent orchestration · MCP support
 </p>
 
 <p align="center">
   <a href="https://heym.run">heym.run</a>
+</p>
+
+<p align="center">
+  <strong>Try locally:</strong> <code>git clone https://github.com/heymrun/heym.git && cd heym && ./run.sh</code><br/>
+  <a href="#-quick-start">Quick Start</a> ·
+  <a href="#deploy--call-workflows">Deploy & Call Workflows</a> ·
+  <a href="#extending-heym">Extending Heym</a> ·
+  <a href="SECURITY.md">Security</a>
 </p>
 
 <br/>
@@ -28,6 +36,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://typescriptlang.org)
 [![Bun](https://img.shields.io/badge/Bun-runtime-14151A?style=flat-square&logo=bun&logoColor=white)](https://bun.sh)
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?style=flat-square&logo=docker&logoColor=white)](https://docker.com)
+[![Security](https://img.shields.io/badge/Security-policy-2A6F97?style=flat-square)](SECURITY.md)
 
 <br/>
 
@@ -46,6 +55,12 @@ Heym is an **AI-native automation platform** built from the ground up around LLM
 Unlike platforms that started as classic trigger-action automation and layered AI on later, in Heym **AI is the execution model**.
 
 Explore the product site at **[heym.run](https://heym.run)**.
+
+## Build, Observe, Call
+
+| Build | Observe | Call |
+|-------|---------|------|
+| Create workflows from a visual canvas, natural language, voice, templates, or Agent skills. | Inspect executions with run history, LLM traces, evals, logs, OpenTelemetry export, and real USD cost tracking. | Invoke the same workflow from the canvas, REST execution endpoints, SSE streaming, MCP clients, or a public Portal chat UI. |
 
 <div align="center">
 
@@ -74,16 +89,6 @@ Our enterprise offering is for commercial licensing, deployment help, dedicated 
 The demos below illustrate an **agent–subagent** layout instead of a purely step-by-step, single-thread agent chain. For a request like “How do I get from Berlin to Frankfurt?” *and* “What should I eat there?”, subagents can work on those parts **in parallel**. That tends to finish faster, keeps each model turn focused (less context bloat), and avoids pressuring one model to produce two large, unrelated answers in a single reply.
 
 You can still answer with **two separate LLM calls** (one per question) or run **several calls in sequence** and merge the results in a final step—those patterns work—but for this kind of multi-part ask they are usually **slower** than parallel subagents behind an orchestrator.
-
-### Watch Heym Tutorials
-
-<div align="center">
-
-<a href="https://www.youtube.com/playlist?list=PLPXd_ZbA4wgEHP5PXoaRqbsDJdat7OSd4">
-  <img src="./docs/readme-assets/tutorial-videos-playlist.png" width="100%" alt="Watch Heym tutorial videos on YouTube"/>
-</a>
-
-</div>
 
 ### Generate Workflows from Natural Language
 
@@ -159,7 +164,7 @@ Turn a workflow into a chat experience so users can invoke the orchestration wit
 
 </div>
 
-- **Visual Workflow Editor** — Drag-and-drop canvas powered by Vue Flow with 30+ node types
+- **Visual Workflow Editor** — Drag-and-drop canvas powered by Vue Flow with a broad node library
 - **AI Assistant** — Describe what you want in natural language (or voice) and the assistant generates and wires nodes on the canvas automatically
 - **Chat with Docs** — Ask context-aware questions directly from the documentation header while the current article path is prioritized in the prompt
 - **AI Skill Builder** — Create new Agent skills or revise existing ones from a modal chat with live `SKILL.md` and Python file previews
@@ -311,6 +316,14 @@ Open the editor in your browser at port `4017` in either setup.
 For direct `docker run` setups, the `data/files` mount keeps Drive uploads and skill-generated files available across container restarts.
 The Docker socket mount supports Docker-based MCP stdio tools and grants broad host control. Docker log access remains disabled unless you also set `DOCKER_LOGS_ENABLED=true` and `DOCKER_LOGS_ALLOWED_EMAILS=admin@example.com` for trusted users. Create the trusted admin account before enabling Docker logs, or keep `ALLOW_REGISTER=false`, so an unverified self-registration cannot claim an allow-listed email.
 
+## Deploy & Call Workflows
+
+Heym workflows are not limited to the editor. Run them from the canvas, call them through `/execute`, stream progress through `/execute/stream`, expose them as MCP tools at `/api/mcp/sse`, or publish them as Portal chat apps at `/chat/{slug}`. The same workflow can serve people, backend services, and AI clients without rebuilding the automation.
+
+## Production Readiness
+
+Heym is built to be inspected and operated in your own infrastructure. Docker deployment, JWT auth, team controls, shared credentials, `SECURITY.md`, execution history, logs, LLM traces, OpenTelemetry export, evals, and per-model USD cost tracking all live in the core self-hostable product.
+
 <details>
 <summary><b>🐳 Docker Production Deployment</b></summary>
 
@@ -407,7 +420,7 @@ cp .env.example .env
 
 ## 🧩 Node Library
 
-**30+ nodes** across six categories:
+**A broad node library** across workflow categories:
 
 | Category | Nodes |
 |----------|-------|
@@ -418,6 +431,19 @@ cp .env.example .env
 | **Integrations** | HTTP, Slack, Send Email, Redis, RabbitMQ Send, Grist, Drive.. |
 | **Automation** | Crawler, Playwright |
 | **Utilities** | Wait, Output, Console Log, Throw Error, Disable Node, Sticky Note |
+
+---
+
+## Extending Heym
+
+Extend Heym at the layer that matches the job. Add first-class canvas behavior with custom nodes, give agents portable capabilities with skills, connect outside tools through MCP, or expose a finished workflow as a callable tool for other apps and AI clients.
+
+| Extension path | Best for | How it works |
+|----------------|----------|--------------|
+| Custom nodes | Product-grade workflow steps and integrations | Add a typed node with editor configuration, execution behavior, and schema metadata. |
+| Agent skills | Portable agent abilities | Attach a `SKILL.md` file and optional Python tools to Agent nodes, or generate them with AI Build. |
+| MCP | External tools and AI clients | Agent nodes consume MCP servers, and Heym workflows can be exposed as MCP tools. |
+| Workflow as tool | Reusable automations | Call workflows through REST, SSE, Portal chat, or MCP without duplicating the logic. |
 
 ---
 
@@ -635,6 +661,18 @@ cd backend  && uv run ruff check . && uv run ruff format .
 This project is licensed under the **[MIT License](LICENSE)** with the **[Commons Clause](COMMONS-CLAUSE.md)** condition applied. In other words, Heym is **source-available** rather than OSI-open-source. See both files for details.
 
 **TL;DR:** You are free to use, modify, distribute, and self-host this software — but you may **not sell** it or offer it as a paid service. Commercial licensing is available for teams that need those rights.
+
+---
+
+## Watch Heym Tutorials
+
+<div align="center">
+
+<a href="https://www.youtube.com/playlist?list=PLPXd_ZbA4wgEHP5PXoaRqbsDJdat7OSd4">
+  <img src="./docs/readme-assets/tutorial-videos-playlist.png" width="100%" alt="Watch Heym tutorial videos on YouTube"/>
+</a>
+
+</div>
 
 ---
 
