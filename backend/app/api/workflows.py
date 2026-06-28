@@ -1140,6 +1140,29 @@ async def update_workflow(
         workflow.sse_node_config = sanitized_sse_node_config
     if workflow_data.auto_recover_runs is not None:
         workflow.auto_recover_runs = workflow_data.auto_recover_runs
+    if workflow_data.error_workflow_id is not None:
+        # Empty UUID (all-zeros) clears the setting; a workflow cannot target itself.
+        if workflow_data.error_workflow_id == uuid.UUID(int=0):
+            workflow.error_workflow_id = None
+        elif workflow_data.error_workflow_id == workflow_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A workflow cannot be its own error workflow",
+            )
+        else:
+            target = await get_workflow_for_user(
+                db, workflow_data.error_workflow_id, current_user.id
+            )
+            if target is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Error workflow not found or not accessible",
+                )
+            workflow.error_workflow_id = workflow_data.error_workflow_id
+    if workflow_data.minutes_saved_per_run is not None:
+        workflow.minutes_saved_per_run = (
+            workflow_data.minutes_saved_per_run if workflow_data.minutes_saved_per_run > 0 else None
+        )
 
     # Keep the dashboard widget metadata/cache in sync when its hidden workflow
     # is edited on the canvas (canvas -> dashboard direction).
@@ -2469,6 +2492,17 @@ async def execute_workflow_endpoint(
             execution_time_ms=execution_result.execution_time_ms,
         )
         await db.flush()
+        if execution_result.status == "error":
+            from app.services.error_workflow_runner import maybe_run_error_workflow
+
+            await maybe_run_error_workflow(
+                db,
+                workflow,
+                status=execution_result.status,
+                node_results=execution_result.node_results,
+                run_id=str(history_entry.id) if history_entry else None,
+                actor_user_id=credentials_owner_id,
+            )
         if execution_result.allow_downstream_pending:
             if background_tasks is None:
                 background_tasks = BackgroundTasks()

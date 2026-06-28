@@ -23,6 +23,8 @@ interface AnalysisWorkflowPayload {
   description?: string | null;
   nodes: unknown[];
   edges: unknown[];
+  error_workflow_id?: string | null;
+  minutes_saved_per_run?: number | null;
 }
 
 const props = defineProps<{
@@ -177,6 +179,8 @@ async function startAnalyze(): Promise<void> {
     },
     () => {
       analyzing.value = false;
+      // A fresh (non-reanalyze) report finishes straight into preview mode.
+      if (!reanalyze) mode.value = "preview";
     },
     (err) => {
       analyzing.value = false;
@@ -190,7 +194,7 @@ async function startAnalyze(): Promise<void> {
 function acceptReanalyze(): void {
   if (reanalyzePreview.value !== null) {
     draft.value = reanalyzePreview.value;
-    mode.value = "edit";
+    mode.value = "preview";
   }
   reanalyzePreview.value = null;
 }
@@ -214,6 +218,7 @@ async function save(baseRevision?: number): Promise<void> {
     updatedBy.value = note.updated_by;
     updatedAt.value = note.updated_at;
     conflict.value = null;
+    void workflowStore.refreshAnalysisNoteEmpty();
   } catch (err) {
     if (isAxiosError(err) && err.response?.status === 409) {
       conflict.value = err.response.data as AnalysisNoteResponse;

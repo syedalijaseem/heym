@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { ArrowDown, ArrowUp, ArrowUpDown, BarChart3, ExternalLink, TrendingDown, TrendingUp, Zap } from "lucide-vue-next";
+import { ArrowDown, ArrowUp, ArrowUpDown, BarChart3, Clock, ExternalLink, TrendingDown, TrendingUp, Zap } from "lucide-vue-next";
 import type {
   AnalyticsDateRange,
   AnalyticsQueryOptions,
@@ -595,6 +595,23 @@ function formatLatency(ms: number): string {
   return `${(ms / 1000).toFixed(2)}s`;
 }
 
+function formatTimeSaved(minutes: number): string {
+  if (!minutes || minutes <= 0) return "0m";
+  const total = Math.round(minutes);
+  const hrs = Math.floor(total / 60);
+  const mins = total % 60;
+  // Large hour counts get compact units (K, M, B…) to avoid overflowing the card.
+  if (hrs >= 10000) {
+    const compact = new Intl.NumberFormat("en-US", {
+      notation: "compact",
+      maximumFractionDigits: 1,
+    }).format(hrs);
+    return `${compact}h`;
+  }
+  if (hrs > 0) return `${hrs.toLocaleString("en-US")}h ${mins}m`;
+  return `${mins}m`;
+}
+
 function formatDateRangeLabel(range: AnalyticsDateRange): string {
   const start = new Date(range.startAt);
   const end = new Date(Math.max(new Date(range.endAt).getTime() - 1, start.getTime()));
@@ -728,7 +745,7 @@ function goToWorkflow(): void {
       v-else-if="stats"
       class="space-y-6"
     >
-      <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <Card class="p-4">
           <div class="flex items-center justify-between">
             <div>
@@ -794,6 +811,23 @@ function goToWorkflow(): void {
               </p>
             </div>
             <Zap class="h-8 w-8 text-yellow-500" />
+          </div>
+        </Card>
+
+        <Card class="p-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm text-muted-foreground">
+                Time Saved
+              </p>
+              <p class="text-2xl font-bold">
+                {{ formatTimeSaved(stats.time_saved_minutes) }}
+              </p>
+              <p class="text-xs text-muted-foreground mt-1">
+                Based on per-workflow estimates
+              </p>
+            </div>
+            <Clock class="h-8 w-8 text-blue-500" />
           </div>
         </Card>
       </div>

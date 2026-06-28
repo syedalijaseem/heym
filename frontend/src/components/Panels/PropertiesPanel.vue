@@ -96,6 +96,7 @@ import type {
   PlaywrightStep,
   PlaywrightStepAction,
   ReasoningEffort,
+  WorkflowListItem,
 } from "@/types/workflow";
 import { createAgentSkillZipBlob, getSkillZipFileName, parseSkillZip } from "@/lib/skillZipParser";
 
@@ -332,6 +333,72 @@ async function onToggleAutoRecover(value: boolean): Promise<void> {
   } catch {
     wf.auto_recover_runs = previous;
   }
+}
+
+const otherWorkflows = ref<WorkflowListItem[]>([]);
+
+async function loadOtherWorkflows(): Promise<void> {
+  try {
+    const all = await workflowApi.list();
+    const currentId = workflowStore.currentWorkflow?.id;
+    otherWorkflows.value = all.filter((w) => w.id !== currentId);
+  } catch {
+    otherWorkflows.value = [];
+  }
+}
+
+onMounted(() => {
+  void loadOtherWorkflows();
+});
+
+const errorWorkflowId = computed(
+  () => workflowStore.currentWorkflow?.error_workflow_id ?? "",
+);
+
+const EMPTY_UUID = "00000000-0000-0000-0000-000000000000";
+
+async function onChangeErrorWorkflow(value: string): Promise<void> {
+  const wf = workflowStore.currentWorkflow;
+  if (!wf || !isWorkflowOwner.value) return;
+  const previous = wf.error_workflow_id;
+  const next = value === "" ? null : value;
+  wf.error_workflow_id = next;
+  try {
+    await workflowApi.update(wf.id, {
+      error_workflow_id: next === null ? EMPTY_UUID : next,
+    });
+  } catch {
+    wf.error_workflow_id = previous;
+  }
+}
+
+const minutesSavedPerRun = computed(
+  () => workflowStore.currentWorkflow?.minutes_saved_per_run ?? null,
+);
+
+async function onChangeMinutesSaved(raw: string): Promise<void> {
+  const wf = workflowStore.currentWorkflow;
+  if (!wf || !isWorkflowOwner.value) return;
+  const parsed = raw === "" ? null : Number(raw);
+  const next = parsed !== null && Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  const previous = wf.minutes_saved_per_run;
+  wf.minutes_saved_per_run = next;
+  try {
+    await workflowApi.update(wf.id, { minutes_saved_per_run: next ?? 0 });
+  } catch {
+    wf.minutes_saved_per_run = previous;
+  }
+}
+
+const showRunAnalyzer = computed(
+  () =>
+    workflowStore.nodes.length > 0 &&
+    workflowStore.analysisNoteEmpty &&
+    !workflowStore.analysisPanelOpen,
+);
+
+function openAnalyzer(): void {
+  workflowStore.analysisPanelOpen = true;
 }
 
 const activeTab = computed({
@@ -7852,7 +7919,7 @@ onUnmounted(() => {
         v-if="!selectedNode"
         class="flex-1 flex flex-col overflow-y-auto"
       >
-        <div class="p-8 text-center text-muted-foreground">
+        <div class="flex-1 flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
           <Settings class="w-10 h-10 mx-auto mb-3 opacity-50" />
           <p class="text-sm">
             Select a node to view its properties
@@ -7861,8 +7928,62 @@ onUnmounted(() => {
 
         <div
           v-if="workflowStore.currentWorkflow"
-          class="px-4 pb-6 mt-auto"
+          class="px-4 pb-6"
         >
+          <div class="pb-4">
+            <div class="flex items-center gap-2 mb-2">
+              <AlertTriangle class="w-4 h-4 text-muted-foreground shrink-0" />
+              <span class="text-sm font-medium">On error, run workflow</span>
+            </div>
+            <div class="relative">
+              <select
+                class="w-full appearance-none text-sm rounded-md border border-border bg-background pl-2 pr-9 py-1.5 disabled:opacity-50"
+                :value="errorWorkflowId"
+                :disabled="!isWorkflowOwner"
+                @change="onChangeErrorWorkflow(($event.target as HTMLSelectElement).value)"
+              >
+                <option value="">
+                  None
+                </option>
+                <option
+                  v-for="w in otherWorkflows"
+                  :key="w.id"
+                  :value="w.id"
+                >
+                  {{ w.name }}
+                </option>
+              </select>
+              <ChevronDown
+                class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"
+              />
+            </div>
+            <p class="text-xs text-muted-foreground mt-2 leading-relaxed">
+              Runs the selected workflow if this one fails — unless the canvas
+              already has an Error Handler node.
+            </p>
+          </div>
+
+          <div class="border-t border-border/40 pt-4 pb-4">
+            <div class="flex items-center gap-2 mb-2">
+              <Clock class="w-4 h-4 text-muted-foreground shrink-0" />
+              <span class="text-sm font-medium">Time saved per run (min)</span>
+            </div>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              class="w-full text-sm rounded-md border border-border bg-background px-2 py-1.5 disabled:opacity-50"
+              :value="minutesSavedPerRun ?? ''"
+              :disabled="!isWorkflowOwner"
+              placeholder="e.g. 15"
+              @change="onChangeMinutesSaved(($event.target as HTMLInputElement).value)"
+            >
+            <p class="text-xs text-muted-foreground mt-2 leading-relaxed">
+              Estimated minutes this automation saves per successful run.
+              Surfaced as total Time Saved in Analytics.
+            </p>
+          </div>
+
           <div class="border-t border-border/40 pt-4">
             <div class="flex items-center justify-between gap-3">
               <div class="flex items-center gap-2 min-w-0">
@@ -7888,6 +8009,24 @@ onUnmounted(() => {
               If the server restarts mid-run, re-runs it from scratch with the
               same inputs. Off = mark interrupted runs as
               <span class="font-medium">skipped</span>.
+            </p>
+          </div>
+
+          <div
+            v-if="showRunAnalyzer"
+            class="border-t border-border/40 pt-4"
+          >
+            <button
+              type="button"
+              class="w-full inline-flex items-center justify-center gap-2 text-sm font-medium rounded-md px-3 py-2 bg-primary text-primary-foreground hover:opacity-90"
+              @click="openAnalyzer"
+            >
+              <Sparkles class="w-4 h-4" />
+              Run Analyzer
+            </button>
+            <p class="text-xs text-muted-foreground mt-2 leading-relaxed">
+              This workflow has no analysis yet. Open the analyzer to generate
+              a report.
             </p>
           </div>
         </div>
