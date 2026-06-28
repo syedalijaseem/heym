@@ -12172,6 +12172,7 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
+                field-key="linearLimit"
                 v-bind="linearExpressionNavBindings('linearLimit')"
                 @update:model-value="updateNodeData('linearLimit', $event)"
                 @navigate="handleLinearExpressionFieldNavigate"
@@ -12194,6 +12195,7 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
+                field-key="linearAfter"
                 v-bind="linearExpressionNavBindings('linearAfter')"
                 @update:model-value="updateNodeData('linearAfter', $event)"
                 @navigate="handleLinearExpressionFieldNavigate"
@@ -12219,6 +12221,7 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
+                field-key="linearTeamId"
                 v-bind="linearExpressionNavBindings('linearTeamId')"
                 @update:model-value="updateNodeData('linearTeamId', $event)"
                 @navigate="handleLinearExpressionFieldNavigate"
@@ -12240,6 +12243,7 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
+                field-key="linearProjectId"
                 v-bind="linearExpressionNavBindings('linearProjectId')"
                 @update:model-value="updateNodeData('linearProjectId', $event)"
                 @navigate="handleLinearExpressionFieldNavigate"
@@ -12265,6 +12269,7 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
+                field-key="linearIssueId"
                 v-bind="linearExpressionNavBindings('linearIssueId')"
                 @update:model-value="updateNodeData('linearIssueId', $event)"
                 @navigate="handleLinearExpressionFieldNavigate"
@@ -12289,6 +12294,7 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
+                field-key="linearTitle"
                 v-bind="linearExpressionNavBindings('linearTitle')"
                 @update:model-value="updateNodeData('linearTitle', $event)"
                 @navigate="handleLinearExpressionFieldNavigate"
@@ -12309,6 +12315,7 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
+                field-key="linearDescription"
                 v-bind="linearExpressionNavBindings('linearDescription')"
                 @update:model-value="updateNodeData('linearDescription', $event)"
                 @navigate="handleLinearExpressionFieldNavigate"
@@ -12330,6 +12337,7 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
+                field-key="linearStateId"
                 v-bind="linearExpressionNavBindings('linearStateId')"
                 @update:model-value="updateNodeData('linearStateId', $event)"
                 @navigate="handleLinearExpressionFieldNavigate"
@@ -12354,6 +12362,7 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
+                field-key="linearIssueLinkUrl"
                 v-bind="linearExpressionNavBindings('linearIssueLinkUrl')"
                 @update:model-value="updateNodeData('linearIssueLinkUrl', $event)"
                 @navigate="handleLinearExpressionFieldNavigate"
@@ -12376,6 +12385,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="linearAssigneeId"
                   v-bind="linearExpressionNavBindings('linearAssigneeId')"
                   @update:model-value="updateNodeData('linearAssigneeId', $event)"
                   @navigate="handleLinearExpressionFieldNavigate"
@@ -12393,6 +12403,7 @@ onUnmounted(() => {
                   :node-results="workflowStore.nodeResults"
                   :edges="workflowStore.edges"
                   :current-node-id="selectedNode.id"
+                  field-key="linearPriority"
                   v-bind="linearExpressionNavBindings('linearPriority')"
                   @update:model-value="updateNodeData('linearPriority', $event)"
                   @navigate="handleLinearExpressionFieldNavigate"
@@ -12427,6 +12438,7 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
+                field-key="linearCommentId"
                 v-bind="linearExpressionNavBindings('linearCommentId')"
                 @update:model-value="updateNodeData('linearCommentId', $event)"
                 @navigate="handleLinearExpressionFieldNavigate"
@@ -12448,6 +12460,7 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
+                field-key="linearCommentBody"
                 v-bind="linearExpressionNavBindings('linearCommentBody')"
                 @update:model-value="updateNodeData('linearCommentBody', $event)"
                 @navigate="handleLinearExpressionFieldNavigate"
@@ -12470,6 +12483,7 @@ onUnmounted(() => {
                 :node-results="workflowStore.nodeResults"
                 :edges="workflowStore.edges"
                 :current-node-id="selectedNode.id"
+                field-key="linearParentCommentId"
                 v-bind="linearExpressionNavBindings('linearParentCommentId')"
                 @update:model-value="updateNodeData('linearParentCommentId', $event)"
                 @navigate="handleLinearExpressionFieldNavigate"
@@ -13083,10 +13097,6 @@ onUnmounted(() => {
                   for="github-draft-pr"
                   class="text-sm cursor-pointer select-none"
                 >Create as draft pull request</label>
-                <AgentFieldToggle
-                  :node-id="selectedNode.id"
-                  field-key="githubDraft"
-                />
               </div>
             </template>
 
@@ -13267,10 +13277,6 @@ onUnmounted(() => {
                   >
                   <span>Draft release</span>
                 </label>
-                <AgentFieldToggle
-                  :node-id="selectedNode.id"
-                  field-key="githubDraft"
-                />
                 <label class="flex items-center gap-2 text-sm cursor-pointer select-none">
                   <input
                     id="github-release-prerelease"
@@ -13281,10 +13287,6 @@ onUnmounted(() => {
                   >
                   <span>Prerelease</span>
                 </label>
-                <AgentFieldToggle
-                  :node-id="selectedNode.id"
-                  field-key="githubPrerelease"
-                />
               </div>
             </template>
 
@@ -14355,21 +14357,15 @@ onUnmounted(() => {
                   @navigate="handleSupabaseExpressionFieldNavigate"
                   @register-field-index="onSupabaseRegisterExpressionFieldIndex"
                 />
-                <div class="flex items-center justify-between gap-2">
-                  <label class="flex items-center gap-2 text-sm text-muted-foreground">
-                    <input
-                      type="checkbox"
-                      class="rounded border-input"
-                      :checked="selectedNode.data.supabaseAscending !== false"
-                      @change="updateNodeData('supabaseAscending', ($event.target as HTMLInputElement).checked)"
-                    >
-                    Ascending sort
-                  </label>
-                  <AgentFieldToggle
-                    :node-id="selectedNode.id"
-                    field-key="supabaseAscending"
-                  />
-                </div>
+                <label class="flex items-center gap-2 text-sm text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    class="rounded border-input"
+                    :checked="selectedNode.data.supabaseAscending !== false"
+                    @change="updateNodeData('supabaseAscending', ($event.target as HTMLInputElement).checked)"
+                  >
+                  Ascending sort
+                </label>
               </div>
             </template>
 
@@ -16309,26 +16305,20 @@ onUnmounted(() => {
                 class="space-y-2"
               >
                 <Label>Options</Label>
-                <div class="flex items-center justify-between gap-2">
-                  <div class="flex items-center gap-2">
-                    <input
-                      id="s3-include-binary"
-                      type="checkbox"
-                      class="h-4 w-4 rounded border-input bg-background"
-                      :checked="!!selectedNode.data.s3IncludeBinary"
-                      @change="updateNodeData('s3IncludeBinary', ($event.target as HTMLInputElement).checked)"
-                    >
-                    <Label
-                      for="s3-include-binary"
-                      class="font-normal text-sm"
-                    >
-                      Return binary as base64
-                    </Label>
-                  </div>
-                  <AgentFieldToggle
-                    :node-id="selectedNode.id"
-                    field-key="s3IncludeBinary"
-                  />
+                <div class="flex items-center gap-2">
+                  <input
+                    id="s3-include-binary"
+                    type="checkbox"
+                    class="h-4 w-4 rounded border-input bg-background"
+                    :checked="!!selectedNode.data.s3IncludeBinary"
+                    @change="updateNodeData('s3IncludeBinary', ($event.target as HTMLInputElement).checked)"
+                  >
+                  <Label
+                    for="s3-include-binary"
+                    class="font-normal text-sm"
+                  >
+                    Return binary as base64
+                  </Label>
                 </div>
               </div>
             </template>
