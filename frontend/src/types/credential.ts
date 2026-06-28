@@ -2,6 +2,7 @@ export type CredentialType =
   | "openai"
   | "google"
   | "github"
+  | "linear"
   | "custom"
   | "bearer"
   | "header"
@@ -82,6 +83,16 @@ export interface CredentialConfigGoogle {
 export interface CredentialConfigGitHub {
   api_key: string;
   base_url?: string;
+}
+
+export interface CredentialConfigLinear {
+  api_key?: string;
+  auth_mode?: "api_key" | "oauth";
+  client_id?: string;
+  client_secret?: string;
+  access_token?: string;
+  refresh_token?: string;
+  token_expiry?: string;
 }
 
 export interface CredentialConfigElevenLabs {
@@ -221,6 +232,7 @@ export type CredentialConfig =
   | CredentialConfigOpenAI
   | CredentialConfigGoogle
   | CredentialConfigGitHub
+  | CredentialConfigLinear
   | CredentialConfigCustom
   | CredentialConfigBearer
   | CredentialConfigHeader
@@ -317,6 +329,7 @@ export const CREDENTIAL_TYPE_LABELS: Record<CredentialType, string> = {
   openai: "OpenAI",
   google: "Google AI",
   github: "GitHub",
+  linear: "Linear",
   custom: "Custom (OpenAI Compatible)",
   bearer: "Authorization Bearer Token",
   header: "Header Authorization",
@@ -347,6 +360,7 @@ export const CREDENTIAL_TYPE_DESCRIPTIONS: Record<CredentialType, string> = {
   openai: "Connect to OpenAI API for GPT models",
   google: "Connect to Google AI for Gemini models",
   github: "Store a GitHub personal access token for GitHub API, MCP, and agent workflows",
+  linear: "Connect to Linear for workspace, project, issue, and comment automation",
   custom: "Connect to any OpenAI-compatible API endpoint",
   bearer: "Store a Bearer token for Authorization header",
   header: "Store custom HTTP headers (key:value)",

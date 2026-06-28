@@ -1,7 +1,7 @@
 """add file upload slots and audit
 
 Revision ID: 083_add_file_upload_slots
-Revises: 082_merge_notion_pgvector_heads
+Revises: 083_merge_linear_notion_heads
 Create Date: 2026-06-25 19:55:21.516061
 
 """
@@ -14,7 +14,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 revision: str = "083_add_file_upload_slots"
-down_revision: Union[str, None] = "082_merge_notion_pgvector_heads"
+down_revision: Union[str, None] = "083_merge_linear_notion_heads"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -1261,6 +1261,14 @@ export const credentialsApi = {
     );
     return response.data;
   },
+
+  linearOAuthAuthorize: async (credentialId: string): Promise<{ auth_url: string }> => {
+    const response = await api.post<{ auth_url: string }>(
+      "/credentials/linear/oauth/authorize",
+      { credential_id: credentialId },
+    );
+    return response.data;
+  },
 };
 
 export interface VoiceInfo {

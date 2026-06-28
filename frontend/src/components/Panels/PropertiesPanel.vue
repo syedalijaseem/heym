@@ -37,6 +37,7 @@ import {
   Globe,
   HardDrive,
   Inbox,
+  ListTodo,
   Loader2,
   Mail,
   Maximize2,
@@ -124,6 +125,10 @@ import {
   type GitHubExpressionFieldKey,
 } from "@/lib/githubExpressionFields";
 import {
+  getLinearExpressionFields,
+  type LinearExpressionFieldKey,
+} from "@/lib/linearExpressionFields";
+import {
   getNotionExpressionFields,
   type NotionExpressionFieldKey,
 } from "@/lib/notionExpressionFields";
@@ -179,6 +184,7 @@ const nodeIcons: Record<NodeType, ReturnType<typeof Type>> = {
   rag: Search,
   grist: Table2,
   github: Github,
+  linear: ListTodo,
   googleSheets: Sheet,
   bigquery: Database,
   supabase: Database,
@@ -230,6 +236,7 @@ const nodeColorMap: Record<NodeType, string> = {
   rag: "node-rag",
   grist: "node-grist",
   github: "node-github",
+  linear: "node-linear",
   googleSheets: "node-google-sheets",
   bigquery: "node-google-sheets",
   supabase: "node-datatable",
@@ -281,6 +288,7 @@ const nodeDocSlugMap: Record<NodeType, string> = {
   rag: "rag-node",
   grist: "grist-node",
   github: "github-node",
+  linear: "linear-node",
   googleSheets: "google-sheets-node",
   bigquery: "bigquery-node",
   supabase: "supabase-node",
@@ -489,6 +497,7 @@ const smtpCredentials = ref<CredentialListItem[]>([]);
 const redisCredentials = ref<CredentialListItem[]>([]);
 const gristCredentials = ref<CredentialListItem[]>([]);
 const githubCredentials = ref<CredentialListItem[]>([]);
+const linearCredentials = ref<CredentialListItem[]>([]);
 const googleSheetsCredentials = ref<CredentialListItem[]>([]);
 const bigqueryCredentials = ref<CredentialListItem[]>([]);
 const supabaseCredentials = ref<CredentialListItem[]>([]);
@@ -612,6 +621,21 @@ const githubReleaseIdExpressionInputRef = ref<InstanceType<typeof ExpressionInpu
 const githubWorkflowIdExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const githubWorkflowInputsExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
 const currentGitHubExpressionFieldIndex = ref(0);
+const linearLimitExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const linearAfterExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const linearTeamIdExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const linearProjectIdExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const linearIssueIdExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const linearTitleExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const linearDescriptionExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const linearStateIdExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const linearIssueLinkUrlExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const linearAssigneeIdExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const linearPriorityExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const linearCommentIdExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const linearCommentBodyExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const linearParentCommentIdExpressionInputRef = ref<InstanceType<typeof ExpressionInput> | null>(null);
+const currentLinearExpressionFieldIndex = ref(0);
 const googleSheetsSpreadsheetIdExpressionInputRef = ref<InstanceType<
   typeof ExpressionInput
 > | null>(null);
@@ -936,6 +960,14 @@ watch(
         githubCredentials.value = await credentialsApi.listByType("github");
       } catch {
         githubCredentials.value = [];
+      }
+    }
+
+    if (type === "linear") {
+      try {
+        linearCredentials.value = await credentialsApi.listByType("linear");
+      } catch {
+        linearCredentials.value = [];
       }
     }
 
@@ -2042,6 +2074,7 @@ function closeAllExpressionExpandDialogs(): void {
   closeMCPCallExpressionDialogs();
   closeChartOutputExpressionDialogs();
   closeGitHubExpressionDialogs();
+  closeLinearExpressionDialogs();
 }
 
 const notionExpressionFields = computed(() => {
@@ -2455,6 +2488,28 @@ function openPrimaryExpandDialogForSelectedNode(): void {
       }
     };
     nextTick(() => tryOpenDialog());
+  } else if (nodeType === "linear") {
+    const startIndex = resolveLinearExpressionStartIndex();
+    currentLinearExpressionFieldIndex.value = startIndex;
+    const tryOpenDialog = (attempts = 0): void => {
+      if (attempts > 20) {
+        return;
+      }
+      const n = workflowStore.selectedNode;
+      if (!n || n.type !== "linear") {
+        return;
+      }
+      if (linearExpressionFieldCount.value === 0) {
+        return;
+      }
+      const field = linearExpressionFields.value[startIndex];
+      if (field && linearExpressionInputRefForKey(field.key)) {
+        nextTick(() => openLinearExpressionFieldAtIndex(startIndex));
+      } else {
+        setTimeout(() => tryOpenDialog(attempts + 1), 100);
+      }
+    };
+    nextTick(() => tryOpenDialog());
   } else if (nodeType === "notion") {
     const startIndex = resolveNotionExpressionStartIndex();
     currentNotionExpressionFieldIndex.value = startIndex;
@@ -2761,6 +2816,7 @@ function selectedNodeHasPrimaryEvaluateExpandTarget(): boolean {
     case "redis":
     case "rag":
     case "github":
+    case "linear":
     case "throwError":
     case "crawler":
     case "consoleLog":
@@ -3092,6 +3148,7 @@ watch(
     currentPlaywrightExpressionFieldIndex.value = 0;
     currentMCPCallExpressionFieldIndex.value = 0;
     currentGitHubExpressionFieldIndex.value = 0;
+    currentLinearExpressionFieldIndex.value = 0;
     currentNotionExpressionFieldIndex.value = 0;
     playwrightExprRefsBySlotKey.value = {};
     currentOutputExpressionFieldIndex.value = 0;
@@ -3769,6 +3826,188 @@ const githubExpressionFields = computed(() => {
 });
 
 const githubExpressionFieldCount = computed((): number => githubExpressionFields.value.length);
+
+const linearExpressionFields = computed(() => {
+  const n = workflowStore.selectedNode;
+  if (!n || n.type !== "linear") {
+    return [];
+  }
+  const operation = (n.data.linearOperation as string | undefined) || "listIssues";
+  return getLinearExpressionFields(operation, {
+    returnAll: !!n.data.linearReturnAll,
+  });
+});
+
+const linearExpressionFieldCount = computed((): number => linearExpressionFields.value.length);
+
+const linearPaginatedOperations = new Set([
+  "listTeams",
+  "listProjects",
+  "listIssues",
+  "listTeamMembers",
+  "listComments",
+]);
+
+const linearIssueIdOperations = new Set([
+  "getIssue",
+  "updateIssue",
+  "deleteIssue",
+  "addIssueLink",
+  "createComment",
+  "listComments",
+]);
+
+const linearCommentIdOperations = new Set([
+  "updateComment",
+  "deleteComment",
+  "resolveComment",
+  "unresolveComment",
+]);
+
+function selectedLinearOperation(): string {
+  return (workflowStore.selectedNode?.data.linearOperation as string | undefined) || "listIssues";
+}
+
+function isLinearPaginatedOperation(): boolean {
+  return linearPaginatedOperations.has(selectedLinearOperation());
+}
+
+function isLinearIssueIdOperation(): boolean {
+  return linearIssueIdOperations.has(selectedLinearOperation());
+}
+
+function isLinearCommentIdOperation(): boolean {
+  return linearCommentIdOperations.has(selectedLinearOperation());
+}
+
+function linearExpressionFieldIndex(key: LinearExpressionFieldKey): number {
+  const index = linearExpressionFields.value.findIndex((field) => field.key === key);
+  return index >= 0 ? index : -1;
+}
+
+function linearExpressionFieldLabel(key: LinearExpressionFieldKey): string {
+  return linearExpressionFields.value.find((field) => field.key === key)?.label ?? "";
+}
+
+function linearExpressionNavBindings(key: LinearExpressionFieldKey): {
+  navigationEnabled: boolean;
+  navigationIndex: number;
+  navigationTotal: number;
+  dialogNodeLabel: string;
+  dialogKeyLabel: string;
+} {
+  const index = linearExpressionFieldIndex(key);
+  return {
+    navigationEnabled: linearExpressionFieldCount.value > 1 && index >= 0,
+    navigationIndex: index >= 0 ? index : 0,
+    navigationTotal: linearExpressionFieldCount.value,
+    dialogNodeLabel: selectedNodeEvaluateDialogLabel.value,
+    dialogKeyLabel: linearExpressionFieldLabel(key),
+  };
+}
+
+function linearExpressionInputRefForKey(
+  key: LinearExpressionFieldKey,
+): InstanceType<typeof ExpressionInput> | null {
+  switch (key) {
+    case "linearLimit":
+      return linearLimitExpressionInputRef.value;
+    case "linearAfter":
+      return linearAfterExpressionInputRef.value;
+    case "linearTeamId":
+      return linearTeamIdExpressionInputRef.value;
+    case "linearProjectId":
+      return linearProjectIdExpressionInputRef.value;
+    case "linearIssueId":
+      return linearIssueIdExpressionInputRef.value;
+    case "linearTitle":
+      return linearTitleExpressionInputRef.value;
+    case "linearDescription":
+      return linearDescriptionExpressionInputRef.value;
+    case "linearStateId":
+      return linearStateIdExpressionInputRef.value;
+    case "linearIssueLinkUrl":
+      return linearIssueLinkUrlExpressionInputRef.value;
+    case "linearAssigneeId":
+      return linearAssigneeIdExpressionInputRef.value;
+    case "linearPriority":
+      return linearPriorityExpressionInputRef.value;
+    case "linearCommentId":
+      return linearCommentIdExpressionInputRef.value;
+    case "linearCommentBody":
+      return linearCommentBodyExpressionInputRef.value;
+    case "linearParentCommentId":
+      return linearParentCommentIdExpressionInputRef.value;
+    default:
+      return null;
+  }
+}
+
+function resolveLinearExpressionStartIndex(): number {
+  const focusField = workflowStore.focusField;
+  if (focusField) {
+    const index = linearExpressionFieldIndex(focusField as LinearExpressionFieldKey);
+    if (index >= 0) {
+      return index;
+    }
+  }
+  return 0;
+}
+
+function openLinearExpressionFieldAtIndex(index: number): boolean {
+  const n = selectedNode.value;
+  if (!n || n.type !== "linear") {
+    return false;
+  }
+  const field = linearExpressionFields.value[index];
+  if (!field) {
+    return false;
+  }
+  currentLinearExpressionFieldIndex.value = index;
+  const input = linearExpressionInputRefForKey(field.key);
+  if (!input) {
+    return false;
+  }
+  input.openExpandDialog();
+  return true;
+}
+
+function closeLinearExpressionDialogs(): void {
+  linearLimitExpressionInputRef.value?.closeExpandDialog();
+  linearAfterExpressionInputRef.value?.closeExpandDialog();
+  linearTeamIdExpressionInputRef.value?.closeExpandDialog();
+  linearProjectIdExpressionInputRef.value?.closeExpandDialog();
+  linearIssueIdExpressionInputRef.value?.closeExpandDialog();
+  linearTitleExpressionInputRef.value?.closeExpandDialog();
+  linearDescriptionExpressionInputRef.value?.closeExpandDialog();
+  linearStateIdExpressionInputRef.value?.closeExpandDialog();
+  linearIssueLinkUrlExpressionInputRef.value?.closeExpandDialog();
+  linearAssigneeIdExpressionInputRef.value?.closeExpandDialog();
+  linearPriorityExpressionInputRef.value?.closeExpandDialog();
+  linearCommentIdExpressionInputRef.value?.closeExpandDialog();
+  linearCommentBodyExpressionInputRef.value?.closeExpandDialog();
+  linearParentCommentIdExpressionInputRef.value?.closeExpandDialog();
+}
+
+function handleLinearExpressionFieldNavigate(direction: "prev" | "next"): void {
+  const total = linearExpressionFieldCount.value;
+  const newIndex =
+    direction === "prev"
+      ? currentLinearExpressionFieldIndex.value - 1
+      : currentLinearExpressionFieldIndex.value + 1;
+  if (newIndex < 0 || newIndex >= total) {
+    return;
+  }
+  closeLinearExpressionDialogs();
+  currentLinearExpressionFieldIndex.value = newIndex;
+  nextTick(() => {
+    openLinearExpressionFieldAtIndex(newIndex);
+  });
+}
+
+function onLinearRegisterExpressionFieldIndex(index: number): void {
+  currentLinearExpressionFieldIndex.value = index;
+}
 
 function githubExpressionFieldIndex(key: GitHubExpressionFieldKey): number {
   const index = githubExpressionFields.value.findIndex((field) => field.key === key);
@@ -4815,6 +5054,41 @@ const githubCredentialOptions = computed(() => {
     "Shared GitHub credential (from owner)",
   );
 });
+
+const linearCredentialOptions = computed(() => {
+  const node = selectedNode.value;
+  const selectedCredentialId =
+    node && node.type === "linear"
+      ? (node.data.credentialId as string | undefined)
+      : undefined;
+
+  return buildCredentialOptions(
+    linearCredentials.value,
+    selectedCredentialId,
+    "Select Linear credential...",
+    "Shared Linear credential (from owner)",
+  );
+});
+
+const linearOperationOptions = [
+  { value: "getViewer", label: "Get Viewer" },
+  { value: "listTeams", label: "List Teams" },
+  { value: "listProjects", label: "List Projects" },
+  { value: "listIssues", label: "List Issues" },
+  { value: "listWorkflowStates", label: "List Workflow States" },
+  { value: "listTeamMembers", label: "List Team Members" },
+  { value: "getIssue", label: "Get Issue" },
+  { value: "createIssue", label: "Create Issue" },
+  { value: "updateIssue", label: "Update Issue" },
+  { value: "deleteIssue", label: "Delete Issue" },
+  { value: "addIssueLink", label: "Add Issue Link" },
+  { value: "createComment", label: "Create Comment" },
+  { value: "listComments", label: "List Comments" },
+  { value: "updateComment", label: "Update Comment" },
+  { value: "deleteComment", label: "Delete Comment" },
+  { value: "resolveComment", label: "Resolve Comment" },
+  { value: "unresolveComment", label: "Unresolve Comment" },
+];
 
 const githubOperationOptions = [
   { value: "getRepository", label: "Get Repository" },
@@ -11835,6 +12109,442 @@ onUnmounted(() => {
                 <template v-else>
                   <div>Select an operation to see output fields</div>
                 </template>
+              </div>
+            </div>
+          </template>
+
+          <template v-if="selectedNode.type === 'linear'">
+            <div
+              class="space-y-2"
+              data-testid="linear-credential-field"
+            >
+              <Label>Linear Credential</Label>
+              <Select
+                :model-value="selectedNode.data.credentialId || ''"
+                :options="linearCredentialOptions"
+                @update:model-value="updateNodeData('credentialId', $event)"
+              />
+              <p
+                v-if="!selectedNode.data.credentialId"
+                class="text-xs text-amber-500 flex items-center gap-1"
+              >
+                <AlertTriangle class="h-3 w-3" />
+                Credential is required.
+              </p>
+            </div>
+
+            <div
+              class="space-y-2"
+              data-testid="linear-operation-field"
+            >
+              <Label>Operation</Label>
+              <Select
+                :model-value="selectedNode.data.linearOperation || 'listIssues'"
+                :options="linearOperationOptions"
+                @update:model-value="updateNodeData('linearOperation', $event)"
+              />
+            </div>
+
+            <label
+              v-if="isLinearPaginatedOperation()"
+              class="flex items-center gap-2 text-sm"
+            >
+              <input
+                type="checkbox"
+                :checked="!!selectedNode.data.linearReturnAll"
+                @change="updateNodeData('linearReturnAll', ($event.target as HTMLInputElement).checked)"
+              >
+              <span>Return All</span>
+            </label>
+
+            <div
+              v-if="isLinearPaginatedOperation() && !selectedNode.data.linearReturnAll"
+              class="space-y-2"
+              data-testid="linear-limit-field"
+            >
+              <Label>Limit</Label>
+              <ExpressionInput
+                ref="linearLimitExpressionInputRef"
+                :model-value="selectedNode.data.linearLimit || '50'"
+                placeholder="50"
+                single-line
+                :nodes="workflowStore.nodes"
+                :node-results="workflowStore.nodeResults"
+                :edges="workflowStore.edges"
+                :current-node-id="selectedNode.id"
+                v-bind="linearExpressionNavBindings('linearLimit')"
+                @update:model-value="updateNodeData('linearLimit', $event)"
+                @navigate="handleLinearExpressionFieldNavigate"
+                @register-field-index="onLinearRegisterExpressionFieldIndex"
+              />
+            </div>
+
+            <div
+              v-if="isLinearPaginatedOperation() && !selectedNode.data.linearReturnAll"
+              class="space-y-2"
+              data-testid="linear-after-field"
+            >
+              <Label>After Cursor (Optional)</Label>
+              <ExpressionInput
+                ref="linearAfterExpressionInputRef"
+                :model-value="selectedNode.data.linearAfter || ''"
+                placeholder="pageInfo.endCursor from a previous list"
+                single-line
+                :nodes="workflowStore.nodes"
+                :node-results="workflowStore.nodeResults"
+                :edges="workflowStore.edges"
+                :current-node-id="selectedNode.id"
+                v-bind="linearExpressionNavBindings('linearAfter')"
+                @update:model-value="updateNodeData('linearAfter', $event)"
+                @navigate="handleLinearExpressionFieldNavigate"
+                @register-field-index="onLinearRegisterExpressionFieldIndex"
+              />
+            </div>
+
+            <div
+              v-if="selectedNode.data.linearOperation === 'listIssues' || selectedNode.data.linearOperation === 'createIssue' || selectedNode.data.linearOperation === 'updateIssue' || selectedNode.data.linearOperation === 'listWorkflowStates' || selectedNode.data.linearOperation === 'listTeamMembers'"
+              class="space-y-2"
+              data-testid="linear-team-id-field"
+            >
+              <Label>
+                Team ID
+                <span v-if="selectedNode.data.linearOperation === 'createIssue' || selectedNode.data.linearOperation === 'listWorkflowStates' || selectedNode.data.linearOperation === 'listTeamMembers'">*</span>
+              </Label>
+              <ExpressionInput
+                ref="linearTeamIdExpressionInputRef"
+                :model-value="selectedNode.data.linearTeamId || ''"
+                placeholder="team UUID"
+                single-line
+                :nodes="workflowStore.nodes"
+                :node-results="workflowStore.nodeResults"
+                :edges="workflowStore.edges"
+                :current-node-id="selectedNode.id"
+                v-bind="linearExpressionNavBindings('linearTeamId')"
+                @update:model-value="updateNodeData('linearTeamId', $event)"
+                @navigate="handleLinearExpressionFieldNavigate"
+                @register-field-index="onLinearRegisterExpressionFieldIndex"
+              />
+            </div>
+
+            <div
+              v-if="selectedNode.data.linearOperation === 'listIssues' || selectedNode.data.linearOperation === 'createIssue' || selectedNode.data.linearOperation === 'updateIssue'"
+              class="space-y-2"
+            >
+              <Label>Project ID (Optional)</Label>
+              <ExpressionInput
+                ref="linearProjectIdExpressionInputRef"
+                :model-value="selectedNode.data.linearProjectId || ''"
+                placeholder="project UUID"
+                single-line
+                :nodes="workflowStore.nodes"
+                :node-results="workflowStore.nodeResults"
+                :edges="workflowStore.edges"
+                :current-node-id="selectedNode.id"
+                v-bind="linearExpressionNavBindings('linearProjectId')"
+                @update:model-value="updateNodeData('linearProjectId', $event)"
+                @navigate="handleLinearExpressionFieldNavigate"
+                @register-field-index="onLinearRegisterExpressionFieldIndex"
+              />
+            </div>
+
+            <div
+              v-if="isLinearIssueIdOperation()"
+              class="space-y-2"
+              data-testid="linear-issue-id-field"
+            >
+              <Label>
+                Issue ID or Identifier
+                <span>*</span>
+              </Label>
+              <ExpressionInput
+                ref="linearIssueIdExpressionInputRef"
+                :model-value="selectedNode.data.linearIssueId || ''"
+                placeholder="ENG-123 or issue UUID"
+                single-line
+                :nodes="workflowStore.nodes"
+                :node-results="workflowStore.nodeResults"
+                :edges="workflowStore.edges"
+                :current-node-id="selectedNode.id"
+                v-bind="linearExpressionNavBindings('linearIssueId')"
+                @update:model-value="updateNodeData('linearIssueId', $event)"
+                @navigate="handleLinearExpressionFieldNavigate"
+                @register-field-index="onLinearRegisterExpressionFieldIndex"
+              />
+            </div>
+
+            <div
+              v-if="selectedNode.data.linearOperation === 'createIssue' || selectedNode.data.linearOperation === 'updateIssue'"
+              class="space-y-2"
+            >
+              <Label>
+                Title
+                <span v-if="selectedNode.data.linearOperation === 'createIssue'">*</span>
+              </Label>
+              <ExpressionInput
+                ref="linearTitleExpressionInputRef"
+                :model-value="selectedNode.data.linearTitle || ''"
+                placeholder="Issue title"
+                single-line
+                :nodes="workflowStore.nodes"
+                :node-results="workflowStore.nodeResults"
+                :edges="workflowStore.edges"
+                :current-node-id="selectedNode.id"
+                v-bind="linearExpressionNavBindings('linearTitle')"
+                @update:model-value="updateNodeData('linearTitle', $event)"
+                @navigate="handleLinearExpressionFieldNavigate"
+                @register-field-index="onLinearRegisterExpressionFieldIndex"
+              />
+            </div>
+
+            <div
+              v-if="selectedNode.data.linearOperation === 'createIssue' || selectedNode.data.linearOperation === 'updateIssue'"
+              class="space-y-2"
+            >
+              <Label>Description (Optional)</Label>
+              <ExpressionInput
+                ref="linearDescriptionExpressionInputRef"
+                :model-value="selectedNode.data.linearDescription || ''"
+                placeholder="$input.text"
+                :nodes="workflowStore.nodes"
+                :node-results="workflowStore.nodeResults"
+                :edges="workflowStore.edges"
+                :current-node-id="selectedNode.id"
+                v-bind="linearExpressionNavBindings('linearDescription')"
+                @update:model-value="updateNodeData('linearDescription', $event)"
+                @navigate="handleLinearExpressionFieldNavigate"
+                @register-field-index="onLinearRegisterExpressionFieldIndex"
+              />
+            </div>
+
+            <div
+              v-if="selectedNode.data.linearOperation === 'createIssue' || selectedNode.data.linearOperation === 'updateIssue'"
+              class="space-y-2"
+            >
+              <Label>State ID (Optional)</Label>
+              <ExpressionInput
+                ref="linearStateIdExpressionInputRef"
+                :model-value="selectedNode.data.linearStateId || ''"
+                placeholder="workflow state UUID"
+                single-line
+                :nodes="workflowStore.nodes"
+                :node-results="workflowStore.nodeResults"
+                :edges="workflowStore.edges"
+                :current-node-id="selectedNode.id"
+                v-bind="linearExpressionNavBindings('linearStateId')"
+                @update:model-value="updateNodeData('linearStateId', $event)"
+                @navigate="handleLinearExpressionFieldNavigate"
+                @register-field-index="onLinearRegisterExpressionFieldIndex"
+              />
+            </div>
+
+            <div
+              v-if="selectedNode.data.linearOperation === 'addIssueLink'"
+              class="space-y-2"
+            >
+              <Label>
+                Link URL
+                <span>*</span>
+              </Label>
+              <ExpressionInput
+                ref="linearIssueLinkUrlExpressionInputRef"
+                :model-value="selectedNode.data.linearIssueLinkUrl || ''"
+                placeholder="https://example.com"
+                single-line
+                :nodes="workflowStore.nodes"
+                :node-results="workflowStore.nodeResults"
+                :edges="workflowStore.edges"
+                :current-node-id="selectedNode.id"
+                v-bind="linearExpressionNavBindings('linearIssueLinkUrl')"
+                @update:model-value="updateNodeData('linearIssueLinkUrl', $event)"
+                @navigate="handleLinearExpressionFieldNavigate"
+                @register-field-index="onLinearRegisterExpressionFieldIndex"
+              />
+            </div>
+
+            <div
+              v-if="selectedNode.data.linearOperation === 'createIssue' || selectedNode.data.linearOperation === 'updateIssue'"
+              class="grid grid-cols-2 gap-3"
+            >
+              <div class="space-y-2">
+                <Label>Assignee ID</Label>
+                <ExpressionInput
+                  ref="linearAssigneeIdExpressionInputRef"
+                  :model-value="selectedNode.data.linearAssigneeId || ''"
+                  placeholder="user UUID"
+                  single-line
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  v-bind="linearExpressionNavBindings('linearAssigneeId')"
+                  @update:model-value="updateNodeData('linearAssigneeId', $event)"
+                  @navigate="handleLinearExpressionFieldNavigate"
+                  @register-field-index="onLinearRegisterExpressionFieldIndex"
+                />
+              </div>
+              <div class="space-y-2">
+                <Label>Priority (0–4)</Label>
+                <ExpressionInput
+                  ref="linearPriorityExpressionInputRef"
+                  :model-value="selectedNode.data.linearPriority || ''"
+                  placeholder="0"
+                  single-line
+                  :nodes="workflowStore.nodes"
+                  :node-results="workflowStore.nodeResults"
+                  :edges="workflowStore.edges"
+                  :current-node-id="selectedNode.id"
+                  v-bind="linearExpressionNavBindings('linearPriority')"
+                  @update:model-value="updateNodeData('linearPriority', $event)"
+                  @navigate="handleLinearExpressionFieldNavigate"
+                  @register-field-index="onLinearRegisterExpressionFieldIndex"
+                />
+              </div>
+            </div>
+
+            <div
+              v-if="selectedNode.data.linearOperation === 'updateIssue'"
+              class="text-xs text-muted-foreground"
+            >
+              Leave optional update fields empty to keep their current values. Set a field to
+              <code class="font-mono">null</code> to clear description, project, assignee, or state.
+            </div>
+
+            <div
+              v-if="isLinearCommentIdOperation()"
+              class="space-y-2"
+              data-testid="linear-comment-id-field"
+            >
+              <Label>
+                Comment ID
+                <span>*</span>
+              </Label>
+              <ExpressionInput
+                ref="linearCommentIdExpressionInputRef"
+                :model-value="selectedNode.data.linearCommentId || ''"
+                placeholder="comment UUID"
+                single-line
+                :nodes="workflowStore.nodes"
+                :node-results="workflowStore.nodeResults"
+                :edges="workflowStore.edges"
+                :current-node-id="selectedNode.id"
+                v-bind="linearExpressionNavBindings('linearCommentId')"
+                @update:model-value="updateNodeData('linearCommentId', $event)"
+                @navigate="handleLinearExpressionFieldNavigate"
+                @register-field-index="onLinearRegisterExpressionFieldIndex"
+              />
+            </div>
+
+            <div
+              v-if="selectedNode.data.linearOperation === 'createComment' || selectedNode.data.linearOperation === 'updateComment'"
+              class="space-y-2"
+              data-testid="linear-comment-body-field"
+            >
+              <Label>Comment Body</Label>
+              <ExpressionInput
+                ref="linearCommentBodyExpressionInputRef"
+                :model-value="selectedNode.data.linearCommentBody || '$input.text'"
+                placeholder="$input.text"
+                :nodes="workflowStore.nodes"
+                :node-results="workflowStore.nodeResults"
+                :edges="workflowStore.edges"
+                :current-node-id="selectedNode.id"
+                v-bind="linearExpressionNavBindings('linearCommentBody')"
+                @update:model-value="updateNodeData('linearCommentBody', $event)"
+                @navigate="handleLinearExpressionFieldNavigate"
+                @register-field-index="onLinearRegisterExpressionFieldIndex"
+              />
+            </div>
+
+            <div
+              v-if="selectedNode.data.linearOperation === 'createComment'"
+              class="space-y-2"
+              data-testid="linear-parent-comment-id-field"
+            >
+              <Label>Parent Comment ID (Optional)</Label>
+              <ExpressionInput
+                ref="linearParentCommentIdExpressionInputRef"
+                :model-value="selectedNode.data.linearParentCommentId || ''"
+                placeholder="comment UUID"
+                single-line
+                :nodes="workflowStore.nodes"
+                :node-results="workflowStore.nodeResults"
+                :edges="workflowStore.edges"
+                :current-node-id="selectedNode.id"
+                v-bind="linearExpressionNavBindings('linearParentCommentId')"
+                @update:model-value="updateNodeData('linearParentCommentId', $event)"
+                @navigate="handleLinearExpressionFieldNavigate"
+                @register-field-index="onLinearRegisterExpressionFieldIndex"
+              />
+            </div>
+
+            <div class="p-3 rounded-lg bg-muted/50 space-y-1">
+              <div class="text-xs font-medium">
+                Output
+              </div>
+              <div class="text-xs text-muted-foreground font-mono space-y-0.5">
+                <div>${{ selectedNode.data.label }}.success - Boolean</div>
+                <div>${{ selectedNode.data.label }}.operation - String</div>
+                <div v-if="selectedNode.data.linearOperation === 'getViewer'">
+                  ${{ selectedNode.data.label }}.viewer - User
+                </div>
+                <div v-else-if="selectedNode.data.linearOperation === 'listTeams'">
+                  ${{ selectedNode.data.label }}.teams - Team array
+                </div>
+                <div v-else-if="selectedNode.data.linearOperation === 'listProjects'">
+                  ${{ selectedNode.data.label }}.projects - Project array
+                </div>
+                <div v-else-if="selectedNode.data.linearOperation === 'listIssues'">
+                  ${{ selectedNode.data.label }}.issues - Issue array
+                </div>
+                <div v-else-if="selectedNode.data.linearOperation === 'listWorkflowStates'">
+                  ${{ selectedNode.data.label }}.states - Workflow state array
+                </div>
+                <div v-else-if="selectedNode.data.linearOperation === 'listTeamMembers'">
+                  ${{ selectedNode.data.label }}.members - Team member array
+                </div>
+                <div v-else-if="selectedNode.data.linearOperation === 'listComments'">
+                  ${{ selectedNode.data.label }}.comments - Comment array
+                </div>
+                <div v-else-if="selectedNode.data.linearOperation === 'createComment' || selectedNode.data.linearOperation === 'updateComment' || selectedNode.data.linearOperation === 'resolveComment' || selectedNode.data.linearOperation === 'unresolveComment'">
+                  ${{ selectedNode.data.label }}.comment - Comment
+                </div>
+                <div v-else-if="selectedNode.data.linearOperation === 'addIssueLink'">
+                  ${{ selectedNode.data.label }}.link - Link result
+                </div>
+                <div v-else-if="selectedNode.data.linearOperation === 'deleteIssue' || selectedNode.data.linearOperation === 'deleteComment'">
+                  ${{ selectedNode.data.label }}.deleted - Boolean
+                </div>
+                <div v-if="selectedNode.data.linearOperation === 'deleteComment'">
+                  ${{ selectedNode.data.label }}.entityId - Deleted comment ID
+                </div>
+                <div v-if="selectedNode.data.linearOperation === 'getIssue' || selectedNode.data.linearOperation === 'createIssue' || selectedNode.data.linearOperation === 'updateIssue'">
+                  ${{ selectedNode.data.label }}.issue - Issue
+                </div>
+                <div
+                  v-if="isLinearPaginatedOperation() || selectedNode.data.linearOperation === 'listWorkflowStates'"
+                >
+                  ${{ selectedNode.data.label }}.count - Number
+                </div>
+                <div
+                  v-if="isLinearPaginatedOperation()"
+                >
+                  ${{ selectedNode.data.label }}.pageInfo.hasNextPage - Boolean
+                </div>
+                <div
+                  v-if="isLinearPaginatedOperation()"
+                >
+                  ${{ selectedNode.data.label }}.pageInfo.endCursor - String
+                </div>
+                <div
+                  v-if="selectedNode.data.linearOperation === 'getIssue' || selectedNode.data.linearOperation === 'createIssue' || selectedNode.data.linearOperation === 'updateIssue'"
+                >
+                  ${{ selectedNode.data.label }}.identifier - String
+                </div>
+                <div
+                  v-if="selectedNode.data.linearOperation === 'getIssue' || selectedNode.data.linearOperation === 'createIssue' || selectedNode.data.linearOperation === 'updateIssue'"
+                >
+                  ${{ selectedNode.data.label }}.url - String
+                </div>
               </div>
             </div>
           </template>

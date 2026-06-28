@@ -154,6 +154,7 @@ export type NodeType =
   | "rag"
   | "grist"
   | "github"
+  | "linear"
   | "googleSheets"
   | "bigquery"
   | "supabase"
@@ -524,6 +525,39 @@ export interface NodeData {
   githubWorkflowInputs?: string;
   githubWaitTimeoutSeconds?: string;
   githubPollIntervalSeconds?: string;
+  linearOperation?:
+    | "getViewer"
+    | "listTeams"
+    | "listProjects"
+    | "listIssues"
+    | "listWorkflowStates"
+    | "listTeamMembers"
+    | "getIssue"
+    | "createIssue"
+    | "updateIssue"
+    | "deleteIssue"
+    | "addIssueLink"
+    | "createComment"
+    | "listComments"
+    | "updateComment"
+    | "deleteComment"
+    | "resolveComment"
+    | "unresolveComment";
+  linearTeamId?: string;
+  linearProjectId?: string;
+  linearIssueId?: string;
+  linearTitle?: string;
+  linearDescription?: string;
+  linearStateId?: string;
+  linearAssigneeId?: string;
+  linearPriority?: string;
+  linearIssueLinkUrl?: string;
+  linearCommentId?: string;
+  linearCommentBody?: string;
+  linearParentCommentId?: string;
+  linearLimit?: string;
+  linearAfter?: string;
+  linearReturnAll?: boolean;
   errorMessage?: string;
   httpStatusCode?: number;
   retryEnabled?: boolean;

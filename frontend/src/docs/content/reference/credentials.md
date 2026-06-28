@@ -14,6 +14,7 @@ Credentials store API keys and secrets used by workflow nodes. You add them in t
 |-----------|--------------------|---------|
 | [LLM](../nodes/llm-node.md), [Agent](../nodes/agent-node.md) | OpenAI, Google, Custom | API key for the model |
 | [Agent](../nodes/agent-node.md), [HTTP](../nodes/http-node.md), [GitHub](../nodes/github-node.md) | GitHub | GitHub personal access token (PAT) for GitHub API calls, GitHub node operations, and MCP integrations |
+| [Linear](../nodes/linear-node.md) | Linear | Personal API key or OAuth2 for teams, projects, issues, and comments |
 | [HTTP](../nodes/http-node.md) | Bearer, Header | Auth for requests |
 | [Telegram](../nodes/telegram-node.md), [Telegram Trigger](../nodes/telegram-trigger-node.md) | Telegram | Bot token and optional webhook secret |
 | [Discord](../nodes/discord-node.md) | Discord | Incoming webhook URL |
@@ -39,6 +40,13 @@ Enterprise Server instead of GitHub.com. When you edit a GitHub credential to ro
 leaving `base_url` empty preserves the existing Enterprise endpoint. Enter a new URL only when
 you want to change that endpoint.
 
+Linear, Supabase, and Notion credentials expose **Test Connection** in the credential dialog. For Linear,
+the check calls the Linear API with `getViewer` and confirms the API key or OAuth token is valid.
+When editing, you can test without re-entering the API key if the stored secret is still present. For Notion,
+choose **Internal token** or **OAuth** in the dialog; OAuth uses the Client ID and Client Secret
+from your Notion public integration. See [Third-Party Integrations](./integrations.md#notion) for
+Notion setup details.
+
 ## In Expressions
 
 Some nodes allow expressions for auth. Use [Expression DSL](./expression-dsl.md) with `$credentials.CredentialName` to reference a credential's resolved secret inside an expression.
@@ -63,6 +71,7 @@ Use the Notion **node** for native database, page, and block operations. Use `$c
 
 - [Credentials Tab](../tabs/credentials-tab.md) – Add, edit, delete credentials
 - [GitHub Node](../nodes/github-node.md) – Native GitHub REST operations
+- [Linear Node](../nodes/linear-node.md) – Linear GraphQL workspace and issue automation
 - [Notion Node](../nodes/notion-node.md) – Search and manage Notion content
 - [Credentials Sharing](./credentials-sharing.md) – Share with users and teams
 - [Third-Party Integrations](./integrations.md) – Setup guide per credential type

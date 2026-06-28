@@ -31,6 +31,7 @@ from app.api import (
     global_variables,
     google_sheets_oauth,
     hitl,
+    linear_oauth,
     llm_pricing,
     logs,
     mcp,
@@ -245,6 +246,11 @@ app.include_router(
     notion_oauth.router,
     prefix="/api/credentials/notion/oauth",
     tags=["Notion OAuth"],
+)
+app.include_router(
+    linear_oauth.router,
+    prefix="/api/credentials/linear/oauth",
+    tags=["Linear OAuth"],
 )
 app.include_router(
     global_variables.router, prefix="/api/global-variables", tags=["Global Variables"]
