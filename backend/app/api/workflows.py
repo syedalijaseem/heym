@@ -797,6 +797,7 @@ async def get_execution_history_entry(
             execution_time_ms=history.execution_time_ms,
             started_at=history.started_at,
             trigger_source=history.trigger_source,
+            recovered=history.recovered,
         )
     # Try RunHistory
     run_result = await db.execute(
@@ -848,6 +849,7 @@ async def list_all_execution_history(
             ExecutionHistory.status,
             ExecutionHistory.execution_time_ms,
             ExecutionHistory.trigger_source,
+            ExecutionHistory.recovered,
         )
         .join(Workflow, ExecutionHistory.workflow_id == Workflow.id)
         .where(
@@ -897,6 +899,7 @@ async def list_all_execution_history(
             RunHistory.status,
             RunHistory.execution_time_ms,
             RunHistory.trigger_source,
+            literal(False).label("recovered"),
         ).where(RunHistory.user_id == current_user.id)
         if trigger_source:
             run_subq = run_subq.where(RunHistory.trigger_source == trigger_source)
@@ -931,6 +934,7 @@ async def list_all_execution_history(
             status=row.status,
             execution_time_ms=row.execution_time_ms,
             trigger_source=row.trigger_source,
+            recovered=row.recovered,
         )
         for row in items_result.all()
     ]
@@ -1134,6 +1138,8 @@ async def update_workflow(
         workflow.sse_enabled = workflow_data.sse_enabled
     if workflow_data.sse_node_config is not None:
         workflow.sse_node_config = sanitized_sse_node_config
+    if workflow_data.auto_recover_runs is not None:
+        workflow.auto_recover_runs = workflow_data.auto_recover_runs
 
     # Keep the dashboard widget metadata/cache in sync when its hidden workflow
     # is edited on the canvas (canvas -> dashboard direction).
@@ -2346,7 +2352,13 @@ async def execute_workflow_endpoint(
     global_variables_context = await get_global_variables_context(db, credentials_owner_id)
 
     execution_id = uuid.uuid4()
-    cancel_event = register_execution(workflow_id=workflow.id, execution_id=execution_id)
+    cancel_event = register_execution(
+        workflow_id=workflow.id,
+        execution_id=execution_id,
+        inputs=enriched_inputs,
+        trigger_source=trigger_source,
+        actor_user_id=credentials_owner_id,
+    )
     try:
         execution_result = await asyncio.to_thread(
             execute_workflow,
@@ -2740,6 +2752,7 @@ async def get_execution_history(
             status=h.status,
             execution_time_ms=h.execution_time_ms,
             trigger_source=h.trigger_source,
+            recovered=h.recovered,
         )
         for h in history
     ]
@@ -2954,7 +2967,13 @@ async def execute_workflow_stream(
     from concurrent.futures import ThreadPoolExecutor
 
     execution_id = uuid.uuid4()
-    cancel_event = register_execution(workflow_id=workflow.id, execution_id=execution_id)
+    cancel_event = register_execution(
+        workflow_id=workflow.id,
+        execution_id=execution_id,
+        inputs=enriched_inputs,
+        trigger_source=trigger_source,
+        actor_user_id=credentials_owner_id,
+    )
     event_queue: queue.Queue = queue.Queue()
     final_result: dict = {}
     executor_holder: dict = {}

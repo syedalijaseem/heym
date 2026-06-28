@@ -9,6 +9,7 @@ import {
   Trash2,
   CheckCircle2,
   XCircle,
+  RotateCcw,
   SkipForward,
   Circle,
   Copy,
@@ -356,6 +357,7 @@ function getStatusIcon(status: string): typeof CheckCircle2 {
     case "success":
       return CheckCircle2;
     case "error":
+    case "failed":
       return XCircle;
     case "pending":
       return Clock;
@@ -371,11 +373,12 @@ function getStatusColor(status: string): string {
     case "success":
       return "text-emerald-500";
     case "error":
+    case "failed":
       return "text-red-500";
     case "pending":
       return "text-amber-500";
     case "skipped":
-      return "text-amber-500";
+      return "text-gray-400";
     default:
       return "text-muted-foreground";
   }
@@ -749,7 +752,7 @@ function bringToCanvas(): void {
               <component
                 :is="getStatusIcon(entry.status)"
                 class="w-3.5 h-3.5 shrink-0"
-                :class="entry.status === 'success' ? 'text-emerald-500' : entry.status === 'error' ? 'text-red-500' : 'text-amber-500'"
+                :class="getStatusColor(entry.status)"
               />
               <span class="text-xs font-medium truncate flex-1">{{ formatTime(entry.started_at) }}</span>
             </div>
@@ -759,10 +762,24 @@ function bringToCanvas(): void {
                 <template v-else>{{ entry.execution_time_ms.toFixed(2) }}ms</template>
               </span>
               <span
+                v-if="entry.status === 'skipped' || entry.status === 'failed'"
+                class="px-1 py-0 text-[9px] font-semibold rounded uppercase"
+                :class="entry.status === 'skipped' ? 'bg-gray-500/20 text-gray-400' : 'bg-red-500/20 text-red-400'"
+              >
+                {{ entry.status }}
+              </span>
+              <span
                 v-if="entry.trigger_source"
                 class="px-1 py-0 text-[9px] font-semibold rounded bg-violet-500/20 text-violet-400 uppercase"
               >
                 {{ entry.trigger_source }}
+              </span>
+              <span
+                v-if="entry.recovered"
+                class="px-1 py-0.5 rounded bg-amber-500/20 text-amber-400 inline-flex items-center"
+                title="This run was automatically re-run after a server restart"
+              >
+                <RotateCcw class="w-2.5 h-2.5" />
               </span>
             </div>
           </button>
@@ -795,6 +812,21 @@ function bringToCanvas(): void {
           class="space-y-3 pr-1"
           :class="{ 'opacity-50 pointer-events-none': isHistoryDetailLoading }"
         >
+          <div
+            v-if="selectedEntry?.recovered"
+            class="flex items-center gap-2 px-3 py-2 rounded-md bg-amber-500/10 text-amber-400 text-xs"
+          >
+            <RotateCcw class="w-3.5 h-3.5 shrink-0" />
+            <span v-if="selectedEntry?.status === 'skipped'">
+              Skipped after a server restart because auto-recover is off for this workflow.
+            </span>
+            <span v-else-if="selectedEntry?.status === 'failed'">
+              Recovery failed after a server restart.
+            </span>
+            <span v-else>
+              Recovered run, automatically re-run after a server restart.
+            </span>
+          </div>
           <!-- Inputs -->
           <div class="flex items-center justify-between">
             <div class="text-sm font-semibold">

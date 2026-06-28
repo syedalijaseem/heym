@@ -486,6 +486,7 @@ function stopExecution(): void {
 const statusColors = {
   success: "text-green-500",
   error: "text-red-500",
+  failed: "text-red-500",
   pending: "text-amber-500",
   awaiting_file_upload: "text-blue-500",
   running: "text-yellow-500",
@@ -495,6 +496,7 @@ const statusColors = {
 const statusIcons = {
   success: CheckCircle2,
   error: AlertCircle,
+  failed: AlertCircle,
   pending: Clock,
   awaiting_file_upload: Upload,
   running: Loader2,

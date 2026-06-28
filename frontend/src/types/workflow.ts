@@ -32,6 +32,7 @@ export interface Workflow {
   rate_limit_window_seconds: number | null;
   sse_enabled: boolean;
   sse_node_config: Record<string, SseNodeConfig>;
+  auto_recover_runs: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -799,9 +800,10 @@ export interface ExecutionHistoryEntry {
   id: string;
   started_at: string;
   inputs: Record<string, unknown>;
-  status: "running" | "success" | "error" | "pending";
+  status: "running" | "success" | "error" | "pending" | "skipped" | "failed";
   result: ExecutionResult | null;
   trigger_source?: string | null;
+  recovered?: boolean;
 }
 
 export interface AllExecutionHistoryEntry {
@@ -812,10 +814,11 @@ export interface AllExecutionHistoryEntry {
   inputs: Record<string, unknown>;
   outputs: Record<string, unknown>;
   node_results: NodeResult[];
-  status: "running" | "success" | "error" | "pending";
+  status: "running" | "success" | "error" | "pending" | "skipped" | "failed";
   execution_time_ms: number;
   started_at: string;
   trigger_source?: string | null;
+  recovered?: boolean;
 }
 
 /** Lightweight list item without inputs/outputs/node_results. */
@@ -828,6 +831,7 @@ export interface AllExecutionHistoryEntryLight {
   status: string;
   execution_time_ms: number;
   trigger_source?: string | null;
+  recovered?: boolean;
 }
 
 export interface HistoryListResponse<T = AllExecutionHistoryEntryLight> {
@@ -852,6 +856,7 @@ export interface ServerExecutionHistory {
   execution_time_ms: number;
   started_at: string;
   trigger_source?: string | null;
+  recovered?: boolean;
 }
 
 export interface NodeResult {
