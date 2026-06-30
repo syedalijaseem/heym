@@ -887,6 +887,21 @@ function handleDrop(event: DragEvent): void {
 
   let defaultData = getDefaultNodeData(nodeType);
 
+  if (nodeType === "plugin" || nodeType === "pluginTrigger") {
+    const pluginId = event.dataTransfer?.getData("application/heym-plugin-id");
+    const pluginNodeKey = event.dataTransfer?.getData("application/heym-plugin-node-key");
+    const pluginLabel = event.dataTransfer?.getData("application/heym-plugin-label");
+    if (pluginId) {
+      defaultData = {
+        ...defaultData,
+        pluginId,
+        pluginNodeKey: pluginNodeKey || undefined,
+        label: pluginLabel || pluginNodeKey || pluginId,
+        config: {},
+      };
+    }
+  }
+
   const pendingSource = workflowStore.pendingConnectionSource;
   if (pendingSource) {
     const sourceNode = workflowStore.nodes.find((n) => n.id === pendingSource.nodeId);
@@ -1072,6 +1087,16 @@ function getDefaultNodeData(type: NodeType): WorkflowNode["data"] {
       columns: [],
       unit: "",
       title: "",
+    },
+    plugin: {
+      label: "plugin",
+      pluginId: "",
+      config: {},
+    },
+    pluginTrigger: {
+      label: "pluginTrigger",
+      pluginId: "",
+      config: {},
     },
   };
   return defaults[type];
