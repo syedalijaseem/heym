@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Route } from "@playwright/test";
+import { expect, test, type Locator, type Page, type Route } from "@playwright/test";
 
 import { createWorkflow, deleteWorkflow, prepareAuthenticatedPage } from "./support";
 
@@ -84,6 +84,12 @@ async function mockPluginIcon(page: Page): Promise<void> {
   });
 }
 
+function pluginFieldLabel(page: Page, label: string, required = false): Locator {
+  return page.locator(".properties-panel").getByText(required ? `${label} *` : label, {
+    exact: true,
+  });
+}
+
 async function openPluginProperties(
   page: Page,
   nodeData: Record<string, unknown>,
@@ -133,7 +139,7 @@ test("shows a loading state while plugin definitions load", async ({ page }) => 
       "Loading plugin definition...",
     );
     releasePlugins();
-    await expect(page.getByText("Email")).toBeVisible();
+    await expect(pluginFieldLabel(page, "Email", true)).toBeVisible();
   } finally {
     releasePlugins();
     await deleteWorkflow(page, workflowId);
@@ -216,7 +222,7 @@ test("shows when a plugin node key is missing", async ({ page }) => {
     await expect(page.getByTestId("plugin-node-status")).toHaveText(
       'Plugin "Acme CRM" is missing a plugin node key.',
     );
-    await expect(page.getByText("Email")).toHaveCount(0);
+    await expect(pluginFieldLabel(page, "Email", true)).toHaveCount(0);
   } finally {
     await deleteWorkflow(page, workflowId);
   }
@@ -272,8 +278,8 @@ test("renders fields for a valid plugin node", async ({ page }) => {
   }, [pluginFixture]);
 
   try {
-    await expect(page.getByText("Email")).toBeVisible();
-    await expect(page.getByText("Priority")).toBeVisible();
+    await expect(pluginFieldLabel(page, "Email", true)).toBeVisible();
+    await expect(pluginFieldLabel(page, "Priority")).toBeVisible();
     await expect(page.getByTestId("plugin-node-status")).toHaveCount(0);
   } finally {
     await deleteWorkflow(page, workflowId);
