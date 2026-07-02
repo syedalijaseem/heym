@@ -213,22 +213,20 @@ test("shows when a plugin node is not bound to a package", async ({ page }) => {
   }
 });
 
-test("shows when a plugin node key is missing", async ({ page }) => {
+test("falls back to the first action node without a plugin node key", async ({ page }) => {
   const workflowId = await openWithPlugins(page, {
     pluginId: "acme-crm",
   }, [pluginFixture]);
 
   try {
-    await expect(page.getByTestId("plugin-node-status")).toHaveText(
-      'Plugin "Acme CRM" is missing a plugin node key.',
-    );
-    await expect(pluginFieldLabel(page, "Email", true)).toHaveCount(0);
+    await expect(pluginFieldLabel(page, "Email", true)).toBeVisible();
+    await expect(page.getByTestId("plugin-node-status")).toHaveCount(0);
   } finally {
     await deleteWorkflow(page, workflowId);
   }
 });
 
-test("shows missing, disabled, and missing-node plugin states", async ({ page }) => {
+test("shows missing and disabled plugin states", async ({ page }) => {
   let workflowId = await openWithPlugins(page, {
     pluginId: "missing-plugin",
     pluginNodeKey: "createContact",
@@ -255,16 +253,44 @@ test("shows missing, disabled, and missing-node plugin states", async ({ page })
   } finally {
     await deleteWorkflow(page, workflowId);
   }
+});
 
-  await page.unroute("**/api/plugins");
-  workflowId = await openWithPlugins(page, {
+test("falls back to the first action node when plugin node key is unavailable", async ({
+  page,
+}) => {
+  const workflowId = await openWithPlugins(page, {
     pluginId: "acme-crm",
     pluginNodeKey: "missingNode",
   }, [pluginFixture]);
 
   try {
+    await expect(pluginFieldLabel(page, "Email", true)).toBeVisible();
+    await expect(page.getByTestId("plugin-node-status")).toHaveCount(0);
+  } finally {
+    await deleteWorkflow(page, workflowId);
+  }
+});
+
+test("shows when fallback cannot find a matching plugin node kind", async ({ page }) => {
+  const triggerOnlyPlugin: PluginSummaryFixture = {
+    ...pluginFixture,
+    nodes: [
+      {
+        key: "pollInbox",
+        name: "Poll Inbox",
+        kind: "trigger",
+        description: "Poll an inbox",
+        fields: [{ key: "folder", label: "Folder", type: "string" }],
+      },
+    ],
+  };
+  const workflowId = await openWithPlugins(page, {
+    pluginId: "acme-crm",
+  }, [triggerOnlyPlugin]);
+
+  try {
     await expect(page.getByTestId("plugin-node-status")).toHaveText(
-      'Plugin node "missingNode" is not available in "Acme CRM".',
+      'Plugin "Acme CRM" does not expose any action nodes.',
     );
   } finally {
     await deleteWorkflow(page, workflowId);

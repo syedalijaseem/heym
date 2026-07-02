@@ -49,10 +49,17 @@ const pkg = computed<PluginSummary | undefined>(() =>
   plugins.value.find((plugin) => plugin.id === pluginId.value),
 );
 
+const fallbackNodeKind = computed<PluginNodeSummary["kind"]>(() =>
+  selectedNode.value?.type === "pluginTrigger" ? "trigger" : "action",
+);
+
 const nodeDef = computed<PluginNodeSummary | undefined>(() => {
   const nodes = pkg.value?.nodes ?? [];
   const key = pluginNodeKey.value;
-  return (key ? nodes.find((node) => node.key === key) : undefined) ?? nodes[0];
+  return (
+    (key ? nodes.find((node) => node.key === key) : undefined) ??
+    nodes.find((node) => node.kind === fallbackNodeKind.value)
+  );
 });
 
 const statusMessage = computed<string | null>(() => {
@@ -64,11 +71,9 @@ const statusMessage = computed<string | null>(() => {
   if (plugins.value.length === 0) return "No plugins are installed on this instance.";
   if (!pkg.value) return `Plugin "${pluginId.value}" is not installed on this instance.`;
   if (!pkg.value.enabled) return `Plugin "${pkg.value.name}" is installed but disabled.`;
-  if (!pluginNodeKey.value) return `Plugin "${pkg.value.name}" is missing a plugin node key.`;
-  if (pluginNodeKey.value && !pkg.value.nodes.some((node) => node.key === pluginNodeKey.value)) {
-    return `Plugin node "${pluginNodeKey.value}" is not available in "${pkg.value.name}".`;
+  if (!nodeDef.value) {
+    return `Plugin "${pkg.value.name}" does not expose any ${fallbackNodeKind.value} nodes.`;
   }
-  if (!nodeDef.value) return `Plugin "${pkg.value.name}" does not expose any nodes.`;
   return null;
 });
 
