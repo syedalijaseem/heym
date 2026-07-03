@@ -62,6 +62,7 @@ from app.models.schemas import (
 from app.services import file_intake_service
 from app.services.auth import create_workflow_execution_token, decode_token
 from app.services.cache_rate_limit import rate_limiter, response_cache
+from app.services.dashboard_widget_policy import dashboard_widget_blocked_nodes_error
 from app.services.encryption import decrypt_config
 from app.services.execution_cancellation import (
     cancel_execution as cancel_active_execution,
@@ -1097,6 +1098,14 @@ async def update_workflow(
     sanitized_edges = _sanitize_invalid_unicode(workflow_data.edges)
     sanitized_sse_node_config = _sanitize_invalid_unicode(workflow_data.sse_node_config)
 
+    if getattr(workflow, "kind", None) == "dashboard_widget" and (
+        sanitized_nodes is not None or sanitized_edges is not None
+    ):
+        candidate_nodes = sanitized_nodes if sanitized_nodes is not None else workflow.nodes
+        blocked_error = dashboard_widget_blocked_nodes_error(candidate_nodes)
+        if blocked_error is not None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=blocked_error)
+
     if workflow_data.name is not None:
         workflow.name = workflow_data.name
     if workflow_data.description is not None:
@@ -1583,10 +1592,17 @@ async def revert_workflow_to_version(
             detail="Revert confirmation required",
         )
 
+    reverted_nodes = _sanitize_invalid_unicode(version.nodes)
+    reverted_edges = _sanitize_invalid_unicode(version.edges)
+    if getattr(workflow, "kind", None) == "dashboard_widget":
+        blocked_error = dashboard_widget_blocked_nodes_error(reverted_nodes)
+        if blocked_error is not None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=blocked_error)
+
     workflow.name = version.name
     workflow.description = version.description
-    workflow.nodes = _sanitize_invalid_unicode(version.nodes)
-    workflow.edges = _sanitize_invalid_unicode(version.edges)
+    workflow.nodes = reverted_nodes
+    workflow.edges = reverted_edges
     workflow.auth_type = version.auth_type
     workflow.auth_header_key = version.auth_header_key
     workflow.auth_header_value = version.auth_header_value
