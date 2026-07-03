@@ -751,6 +751,7 @@ function bringToCanvas(): void {
     execution_time_ms: selectedEntry.value.execution_time_ms,
     node_results: selectedEntry.value.node_results || [],
     execution_history_id: selectedEntry.value.id,
+    highlight: selectedEntry.value.highlight ?? null,
   };
   router.push({ name: "editor", params: { id: selectedEntry.value.workflow_id } });
   emit("close");

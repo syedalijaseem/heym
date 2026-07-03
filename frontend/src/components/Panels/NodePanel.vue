@@ -283,6 +283,7 @@ const DASHBOARD_HIDDEN_NODE_TYPES = new Set<NodeType>([
   "websocketTrigger",
   "fileUploadTrigger",
   "rabbitmq",
+  "errorHandler",
   "output",
   "jsonOutputMapper",
   "plugin",
