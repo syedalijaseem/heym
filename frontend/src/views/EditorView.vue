@@ -576,6 +576,22 @@ function downloadWorkflow(): void {
   URL.revokeObjectURL(url);
 }
 
+async function bringExecutionFromRoute(): Promise<void> {
+  const execId = route.params.executionId as string | undefined;
+  if (!execId) return;
+  // Use the same store path as the Execution History dialog's "Bring to Canvas" so
+  // highlights and node/output mapping populate identically (pass the full execution
+  // result, not just node_results). fetchExecutionHistoryEntry returns null when the
+  // execution is missing/inaccessible -> fall back to the plain workflow.
+  const entry = await workflowStore.fetchExecutionHistoryEntry(execId);
+  if (!entry) return;
+  workflowStore.loadHistoryInputs(
+    entry.inputs,
+    entry.result?.node_results || [],
+    entry.result || undefined,
+  );
+}
+
 onMounted(async () => {
   window.addEventListener("keydown", handleKeyDown);
   window.addEventListener("storage", handleHitlResolutionStorage);
@@ -615,6 +631,7 @@ onMounted(async () => {
         workflowStore.pendingHistoryExecutionResult || undefined,
       );
     }
+    await bringExecutionFromRoute();
     // Handle node template injection via query param
     const nodeTemplateId = route.query.addNodeTemplate as string | undefined;
     if (nodeTemplateId) {
@@ -703,6 +720,15 @@ watch(
       if (loadedWorkflow) {
         await playRunbookFromQueryIfReady();
       }
+    }
+  },
+);
+
+watch(
+  () => route.params.executionId as string | undefined,
+  async (execId, prevExecId) => {
+    if (execId && execId !== prevExecId) {
+      await bringExecutionFromRoute();
     }
   },
 );
