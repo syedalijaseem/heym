@@ -268,7 +268,11 @@ test("shows a failed workflow execution", async ({ page }) => {
 
   await expect(page.getByText("Last Executed Node")).toBeVisible();
   await expect(page.getByText("error", { exact: true })).toBeVisible();
-  await expect(page.getByText(/"httpStatusCode":\s*400/)).toBeVisible();
+  // Scope to the output <pre> — the Execution Highlights popup also renders this
+  // node's output as a preview span, so an unscoped getByText is ambiguous.
+  await expect(
+    page.locator("pre").filter({ hasText: /"httpStatusCode":\s*400/ }),
+  ).toBeVisible();
 
   await deleteWorkflow(page, workflow.id);
 });
