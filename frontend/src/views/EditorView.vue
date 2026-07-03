@@ -579,12 +579,21 @@ function downloadWorkflow(): void {
 async function bringExecutionFromRoute(): Promise<void> {
   const execId = route.params.executionId as string | undefined;
   if (!execId) return;
+  const routeWorkflowId = route.params.id as string | undefined;
+  if (!routeWorkflowId || workflowStore.currentWorkflow?.id !== routeWorkflowId) return;
   // Use the same store path as the Execution History dialog's "Bring to Canvas" so
   // highlights and node/output mapping populate identically (pass the full execution
   // result, not just node_results). fetchExecutionHistoryEntry returns null when the
   // execution is missing/inaccessible -> fall back to the plain workflow.
   const entry = await workflowStore.fetchExecutionHistoryEntry(execId);
   if (!entry) return;
+  if (
+    route.params.executionId !== execId ||
+    route.params.id !== routeWorkflowId ||
+    workflowStore.currentWorkflow?.id !== routeWorkflowId
+  ) {
+    return;
+  }
   workflowStore.loadHistoryInputs(
     entry.inputs,
     entry.result?.node_results || [],
@@ -718,6 +727,7 @@ watch(
         loading.value = false;
       }
       if (loadedWorkflow) {
+        await bringExecutionFromRoute();
         await playRunbookFromQueryIfReady();
       }
     }

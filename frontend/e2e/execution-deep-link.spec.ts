@@ -62,6 +62,16 @@ async function latestHistoryEntryId(page: Page, workflowId: string): Promise<str
   return entryId as string;
 }
 
+async function expectExecutionPath(
+  page: Page,
+  workflowId: string,
+  entryId: string,
+): Promise<void> {
+  await expect
+    .poll(() => new URL(page.url()).pathname)
+    .toBe(`/workflows/${workflowId}/${entryId}`);
+}
+
 test.beforeEach(async ({ page }) => {
   await prepareAuthenticatedPage(page);
 });
@@ -90,6 +100,29 @@ test("brings a past execution onto the canvas via /workflows/:id/:executionId", 
     await runWorkflowFromCanvas(page, workflow.id, 2, { text: "deeplink payload" });
 
     const entryId = await latestHistoryEntryId(page, workflow.id);
+
+    await page.getByRole("button", { name: "History", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Execution History" })).toBeVisible();
+    await page.getByRole("button", { name: "Bring to Canvas" }).click();
+    await expectExecutionPath(page, workflow.id, entryId);
+
+    await page.goto("/evals");
+    await page.getByRole("button", { name: "History", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "All Execution History" })).toBeVisible();
+    await page.keyboard.press("s");
+    await page
+      .getByPlaceholder("Search by workflow name, trigger, status...")
+      .fill(workflow.name);
+    await expect(page.locator("button").filter({ hasText: workflow.name }).first()).toBeVisible();
+    await page.getByRole("button", { name: "Bring to Canvas" }).click();
+    await expectExecutionPath(page, workflow.id, entryId);
+    await expect(page.getByPlaceholder("Enter text...")).toHaveValue("deeplink payload");
+
+    await page.locator('header a[href="/"]').first().click();
+    await expect(page).toHaveURL(/\/$/);
+    await page.getByTestId(`workflow-card-${workflow.id}`).click();
+    await expect(page).toHaveURL(new RegExp(`/workflows/${workflow.id}$`));
+    await expect(page.getByPlaceholder("Enter text...")).toHaveValue("");
 
     // Fresh navigation to the deep link must reload the editor and bring the
     // referenced execution onto the canvas 1:1 with the dialog's "Bring to Canvas":
