@@ -12,6 +12,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.db.models import DashboardWidget, ExecutionHistory, User, Workflow
 from app.db.session import async_session_maker
 from app.models.dashboard_schemas import WidgetDataResponse
+from app.services.dashboard_widget_policy import dashboard_widget_blocked_nodes_error
 from app.services.workflow_executor import _to_json_compatible, execute_workflow
 
 logger = logging.getLogger(__name__)
@@ -196,6 +197,16 @@ async def compute_widget_data(
             cached=False,
             computed_at=None,
             error="Widget workflow not found",
+        )
+
+    blocked_error = dashboard_widget_blocked_nodes_error(workflow.nodes)
+    if blocked_error is not None:
+        return WidgetDataResponse(
+            widget_id=widget.id,
+            payload=None,
+            cached=False,
+            computed_at=None,
+            error=blocked_error,
         )
 
     version = _version_token(workflow)
