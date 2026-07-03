@@ -46,6 +46,7 @@ from app.services.expression_evaluator import (
     _is_single_dollar_expression,
     should_resolve_embedded_dollar_refs_arithmetically,
 )
+from app.services.highlight.highlight_builder import build_highlight_payload
 from app.services.llm_trace import LLMTraceContext
 from app.services.node_execution import NodeExecutionContext, execute_node_handler
 from app.services.timezone_utils import get_configured_timezone, normalize_datetime_to_timezone
@@ -9055,6 +9056,11 @@ def _execute_workflow_streaming_impl(
             "node_results": _serialized_graph_plus_delegated_node_results(
                 node_results, wf_executor
             ),
+            "highlight": build_highlight_payload(
+                _serialized_graph_plus_delegated_node_results(node_results, wf_executor),
+                nodes,
+                inputs,
+            ),
             "sub_workflow_executions": _serialize_sub_workflow_executions(
                 wf_executor.sub_workflow_executions
             ),
@@ -9094,15 +9100,17 @@ def _execute_workflow_streaming_impl(
                     yield event
 
         final_outputs = error_flow_final_output or {"error": error_result.error}
+        serialized_results = _serialized_graph_plus_delegated_node_results(
+            node_results, wf_executor
+        )
         yield {
             "type": "execution_complete",
             "workflow_id": str(workflow_id),
             "status": "error",
             "outputs": _to_json_compatible(final_outputs),
             "execution_time_ms": (time.time() - start_time) * 1000,
-            "node_results": _serialized_graph_plus_delegated_node_results(
-                node_results, wf_executor
-            ),
+            "node_results": serialized_results,
+            "highlight": build_highlight_payload(serialized_results, nodes, inputs),
             "sub_workflow_executions": _serialize_sub_workflow_executions(
                 wf_executor.sub_workflow_executions
             ),
@@ -9121,13 +9129,15 @@ def _execute_workflow_streaming_impl(
 
     final_outputs = unwrap_single_json_output_terminal_outputs(wf_executor, final_outputs)
 
+    serialized_results = _serialized_graph_plus_delegated_node_results(node_results, wf_executor)
     yield {
         "type": "execution_complete",
         "workflow_id": str(workflow_id),
         "status": "success",
         "outputs": _to_json_compatible(final_outputs),
         "execution_time_ms": (time.time() - start_time) * 1000,
-        "node_results": _serialized_graph_plus_delegated_node_results(node_results, wf_executor),
+        "node_results": serialized_results,
+        "highlight": build_highlight_payload(serialized_results, nodes, inputs),
         "sub_workflow_executions": _serialize_sub_workflow_executions(
             wf_executor.sub_workflow_executions
         ),

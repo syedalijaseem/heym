@@ -42,6 +42,7 @@ from app.models.schemas import (
     ExecutionHistoryWithWorkflowResponse,
     ExecutionTokenCreate,
     ExecutionTokenResponse,
+    HighlightPayloadSchema,
     HistoryListResponse,
     InputFieldSchema,
     OutputNodeSchema,
@@ -80,6 +81,7 @@ from app.services.global_variables_service import (
     get_global_variables_context,
     upsert_global_variable,
 )
+from app.services.highlight.highlight_builder import build_highlight_payload
 from app.services.hitl_service import (
     build_public_base_url,
     persist_pending_hitl_execution,
@@ -800,6 +802,9 @@ async def get_execution_history_entry(
             started_at=history.started_at,
             trigger_source=history.trigger_source,
             recovered=history.recovered,
+            highlight=build_highlight_payload(
+                history.node_results or [], workflow.nodes or [], history.inputs or {}
+            ),
         )
     # Try RunHistory
     run_result = await db.execute(
@@ -810,6 +815,7 @@ async def get_execution_history_entry(
     )
     run = run_result.scalar_one_or_none()
     if run:
+        run_node_results = _run_steps_to_node_results(getattr(run, "steps", None) or [])
         return ExecutionHistoryWithWorkflowResponse(
             id=run.id,
             workflow_id=run.workflow_id,
@@ -817,11 +823,12 @@ async def get_execution_history_entry(
             run_type=run.run_type,
             inputs=run.inputs,
             outputs=run.outputs,
-            node_results=_run_steps_to_node_results(getattr(run, "steps", None) or []),
+            node_results=run_node_results,
             status=run.status,
             execution_time_ms=run.execution_time_ms,
             started_at=run.started_at,
             trigger_source=run.trigger_source,
+            highlight=build_highlight_payload(run_node_results, [], run.inputs or {}),
         )
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
@@ -2479,6 +2486,9 @@ async def execute_workflow_endpoint(
             node_results=execution_result.node_results,
             execution_time_ms=execution_result.execution_time_ms,
             execution_history_id=history_entry.id,
+            highlight=build_highlight_payload(
+                execution_result.node_results, workflow.nodes or [], enriched_inputs
+            ),
         )
 
     if (
@@ -2555,6 +2565,9 @@ async def execute_workflow_endpoint(
                 node_results=execution_result.node_results,
                 execution_time_ms=execution_result.execution_time_ms,
                 execution_history_id=history_entry.id,
+                highlight=build_highlight_payload(
+                    execution_result.node_results, workflow.nodes or [], enriched_inputs
+                ),
             )
 
         for sub_exec in execution_result.sub_workflow_executions:
@@ -2626,6 +2639,9 @@ async def execute_workflow_endpoint(
         node_results=execution_result.node_results,
         execution_time_ms=execution_result.execution_time_ms,
         execution_history_id=history_entry.id if history_entry is not None else None,
+        highlight=build_highlight_payload(
+            execution_result.node_results, workflow.nodes or [], enriched_inputs
+        ),
     )
 
 
@@ -2658,7 +2674,13 @@ async def get_workflow_execution_history_entry(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Execution history entry not found",
         )
-    return ExecutionHistoryResponse.model_validate(history)
+    response = ExecutionHistoryResponse.model_validate(history)
+    response.highlight = HighlightPayloadSchema.model_validate(
+        build_highlight_payload(
+            history.node_results or [], workflow.nodes or [], history.inputs or {}
+        )
+    )
+    return response
 
 
 @router.get("/{workflow_id}/history/{entry_id}/stream")
@@ -2715,7 +2737,13 @@ async def stream_workflow_execution_history_entry(
                 yield f"data: {json.dumps(error_event)}\n\n"
                 break
 
-            entry_payload = ExecutionHistoryResponse.model_validate(history).model_dump(mode="json")
+            entry_response = ExecutionHistoryResponse.model_validate(history)
+            entry_response.highlight = HighlightPayloadSchema.model_validate(
+                build_highlight_payload(
+                    history.node_results or [], workflow.nodes or [], history.inputs or {}
+                )
+            )
+            entry_payload = entry_response.model_dump(mode="json")
             serialized_payload = json.dumps(entry_payload, sort_keys=True)
             if serialized_payload != last_payload:
                 update_event = {"type": "history_update", "entry": entry_payload}

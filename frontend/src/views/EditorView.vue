@@ -435,6 +435,7 @@ function ensurePendingExecutionStream(): void {
           execution_time_ms: serverHistory.execution_time_ms,
           node_results: serverHistory.node_results || [],
           execution_history_id: serverHistory.id,
+          highlight: serverHistory.highlight ?? null,
         },
         trigger_source: serverHistory.trigger_source ?? null,
       };
@@ -451,6 +452,7 @@ function ensurePendingExecutionStream(): void {
           execution_time_ms: serverHistory.execution_time_ms,
           node_results: serverHistory.node_results || [],
           execution_history_id: serverHistory.id,
+          highlight: serverHistory.highlight ?? null,
         },
         trigger_source: serverHistory.trigger_source ?? null,
       };

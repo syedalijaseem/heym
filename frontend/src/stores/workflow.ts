@@ -13,6 +13,7 @@ import type {
   ExecutionHistoryEntry,
   ExecutionResult,
   FileUploadSlotStatus,
+  HighlightPayload,
   LLMBatchProgressEntry,
   NodeResult,
   ServerExecutionHistory,
@@ -50,6 +51,9 @@ export const useWorkflowStore = defineStore("workflow", () => {
   const selectedNodeId = ref<string | null>(null);
   const selectedNodeIds = ref<Set<string>>(new Set());
   const executionResult = ref<ExecutionResult | null>(null);
+  const highlightPayload = computed<HighlightPayload | null>(
+    () => executionResult.value?.highlight ?? null,
+  );
   const nodeResults = shallowRef<NodeResult[]>([]);
   const executionHistoryList = ref<AllExecutionHistoryEntryLight[]>([]);
   const executionHistoryDetails = ref<Map<string, ExecutionHistoryEntry>>(
@@ -354,6 +358,7 @@ export const useWorkflowStore = defineStore("workflow", () => {
         execution_time_ms: h.execution_time_ms,
         node_results: h.node_results || [],
         execution_history_id: h.id,
+        highlight: h.highlight ?? null,
       },
     };
   }
@@ -2719,6 +2724,7 @@ export const useWorkflowStore = defineStore("workflow", () => {
     selectedNode,
     selectedNodes,
     executionResult,
+    highlightPayload,
     nodeResults,
     agentProgressLogs,
     llmBatchProgressLogs,

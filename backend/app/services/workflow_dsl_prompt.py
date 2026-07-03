@@ -1377,6 +1377,27 @@ You can enable both retry AND error branching. The node will first exhaust all r
 }
 ```
 
+### Highlight Node Output
+Surface a node's output in the Canvas "Execution Highlights" popup:
+- `highlight`: boolean (default: false) - When true, this node's output is added to the highlight list.
+
+Notes:
+- Not needed on `agent`/`llm` nodes — their outputs are highlighted automatically.
+- The input/trigger node and the output node are auto-highlighted too; setting `highlight` on them is redundant (no duplicate record is created).
+- Output-only: the node's output message is shown (previewed to 250 chars, expandable to full Markdown).
+
+**Example**:
+```json
+{
+  "type": "http",
+  "data": {
+    "label": "fetchApi",
+    "curl": "curl -X GET https://api.example.com/data",
+    "highlight": false
+  }
+}
+```
+
 ### 15. slack (Send Slack Message)
 - **Purpose**: Send a message to Slack channel via webhook
 - **Inputs**: 1 | **Outputs**: 1

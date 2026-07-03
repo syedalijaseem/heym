@@ -51,6 +51,34 @@ Click the **History** button (clock icon) to open the dialog.
 - Debug a failed run by inspecting inputs and node outputs
 - Compare outputs across runs
 
+## Execution Highlights
+
+After a live run — or after **Bring to Canvas** — a dismissible **Execution Highlights** popup appears in the **top-right of the Canvas**. It's a quick way to see *what each node produced*, listed top-to-bottom in execution order. Close it with the **✕**; it reopens on the next run.
+
+### What's shown
+
+| Record | Source | Auto? |
+|--------|--------|-------|
+| **Input** | The run's input parameters (input/trigger node) | Yes |
+| **Output** | The output node's result — or, if there is none, the last node's message | Yes |
+| **Agent / LLM** | Each agent or LLM node's output | Yes |
+| **Output** | Any other node with **Highlight Node Output** enabled | Opt-in |
+
+Nodes that are already auto-highlighted (input / output / last / agent / llm) never appear twice, even if you also enable the toggle.
+
+### Each record
+
+- Shows `Node — message…` with the first **250 characters**; click a row to expand it and render the **full message as Markdown**, with a **Copy** button.
+- A node that ran multiple times (e.g. inside a loop) shows `Node (N)` with a `‹ i / N ›` selector — pick which run to view; each node's selector is independent.
+
+### Highlight Node Output
+
+Every node **except Agent and LLM** has a **Highlight Node Output** checkbox in its properties panel (default off). Enable it to add that node's output to the popup. A small ✦ badge appears on highlighted nodes on the canvas. In the [workflow DSL](./expression-dsl.md) this is the node-data field `"highlight": true` (defaults to `false`).
+
+### On dashboards
+
+Dashboard widget cards that ran a workflow show a ✦ **Execution highlights** button in the card header; click it to open the same popup for that widget's run, with the widget's drawn output as the prominent record.
+
 ## Running Executions
 
 Both history dialogs show **currently running executions** at the top of the list, before past runs.

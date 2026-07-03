@@ -13,6 +13,7 @@ from app.db.models import DashboardWidget, ExecutionHistory, User, Workflow
 from app.db.session import async_session_maker
 from app.models.dashboard_schemas import WidgetDataResponse
 from app.services.dashboard_widget_policy import dashboard_widget_blocked_nodes_error
+from app.services.highlight.highlight_builder import build_highlight_payload
 from app.services.workflow_executor import _to_json_compatible, execute_workflow
 
 logger = logging.getLogger(__name__)
@@ -78,6 +79,26 @@ def _field(value: Any, name: str) -> Any:
     if isinstance(value, dict):
         return value.get(name)
     return getattr(value, name, None)
+
+
+def _highlight_rows(result: Any) -> list[dict]:
+    """Normalize a run's node_results to plain dicts for the highlight builder."""
+    rows = getattr(result, "node_results", []) or []
+    normalized: list[dict] = []
+    for row in rows:
+        if isinstance(row, dict):
+            normalized.append(row)
+        else:
+            normalized.append(
+                {
+                    "node_id": _field(row, "node_id"),
+                    "node_label": _field(row, "node_label"),
+                    "node_type": _field(row, "node_type"),
+                    "output": _field(row, "output"),
+                    "metadata": _field(row, "metadata"),
+                }
+            )
+    return normalized
 
 
 def _is_chart_payload(value: Any) -> bool:
@@ -285,4 +306,5 @@ async def compute_widget_data(
         cached=False,
         computed_at=now,
         error=None if payload is not None else "Workflow produced no chartOutput",
+        highlight=build_highlight_payload(_highlight_rows(result), nodes, None),
     )

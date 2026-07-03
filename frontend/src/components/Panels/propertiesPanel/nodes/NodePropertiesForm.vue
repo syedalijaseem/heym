@@ -47,6 +47,7 @@ import CrawlerNodeProperties from "./CrawlerNodeProperties.vue";
 import PlaywrightNodeProperties from "./PlaywrightNodeProperties.vue";
 import McpCallNodeProperties from "./McpCallNodeProperties.vue";
 import PluginNodeProperties from "./PluginNodeProperties.vue";
+import HighlightNodeOutputToggle from "./HighlightNodeOutputToggle.vue";
 import { usePropertiesPanelContext } from "../usePropertiesPanelController";
 
 const { selectedNode } = usePropertiesPanelContext();
@@ -102,5 +103,8 @@ const { selectedNode } = usePropertiesPanelContext();
   <McpCallNodeProperties v-else-if="selectedNode?.type === 'mcpCall'" />
   <PluginNodeProperties
     v-else-if="selectedNode?.type === 'plugin' || selectedNode?.type === 'pluginTrigger'"
+  />
+  <HighlightNodeOutputToggle
+    v-if="selectedNode && !['agent', 'llm', 'sticky'].includes(selectedNode.type)"
   />
 </template>
