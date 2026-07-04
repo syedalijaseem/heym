@@ -178,6 +178,14 @@ export const useWorkflowStore = defineStore("workflow", () => {
     runInputJson.value = stringifyWebhookJson(buildLegacyExecutionBody());
   }
 
+  function clearRunInputs(): void {
+    for (const key of Object.keys(runInputValues.value)) {
+      delete runInputValues.value[key];
+    }
+    runInputText.value = "";
+    resetRunInputJsonFromMode();
+  }
+
   function buildExecutionRequestBody(): unknown {
     if (webhookBodyMode.value === "generic") {
       return parseWebhookJson(runInputJson.value).value;
@@ -541,7 +549,7 @@ export const useWorkflowStore = defineStore("workflow", () => {
     nodes.value = loadedNodes;
     edges.value = loadedEdges;
     void refreshAnalysisNoteEmpty();
-    resetRunInputJsonFromMode();
+    clearRunInputs();
     hasUnsavedChanges.value = false;
     executionResult.value = null;
     timelinePickedNodeResultIndex.value = null;
@@ -1440,7 +1448,7 @@ export const useWorkflowStore = defineStore("workflow", () => {
     nodes.value = [];
     edges.value = [];
     selectedNodeId.value = null;
-    runInputJson.value = "{}";
+    clearRunInputs();
     executionResult.value = null;
     clearEvaluateLoopSelection();
     executionHistoryList.value = [];
