@@ -5,6 +5,7 @@ import {
   Bot,
   Brain,
   Braces,
+  Puzzle,
   Bug,
   CalendarClock,
   Clock,
@@ -17,6 +18,7 @@ import {
   Github,
   HardDrive,
   Inbox,
+  ListTodo,
   Mail,
   MessageSquare,
   MonitorPlay,
@@ -76,6 +78,7 @@ export const nodeIcons: Record<NodeType, ReturnType<typeof Type>> = {
   rag: Search,
   grist: Table2,
   github: Github,
+  linear: ListTodo,
   googleSheets: Sheet,
   bigquery: Database,
   supabase: Database,
@@ -91,6 +94,8 @@ export const nodeIcons: Record<NodeType, ReturnType<typeof Type>> = {
   drive: HardDrive,
   s3: Server,
   mcpCall: Plug,
+  plugin: Puzzle,
+  pluginTrigger: Puzzle,
 };
 
 /** Tailwind text-* classes aligned with canvas node header tints (BaseNode). */
@@ -128,6 +133,7 @@ export const nodeIconColorClass: Record<NodeType, string> = {
   rag: "text-node-rag",
   grist: "text-node-grist",
   github: "text-node-github",
+  linear: "text-node-linear",
   googleSheets: "text-node-google-sheets",
   bigquery: "text-node-google-sheets",
   supabase: "text-node-datatable",
@@ -143,4 +149,6 @@ export const nodeIconColorClass: Record<NodeType, string> = {
   drive: "text-node-drive",
   s3: "text-node-drive",
   mcpCall: "text-node-agent",
+  plugin: "text-node-action",
+  pluginTrigger: "text-node-trigger",
 };

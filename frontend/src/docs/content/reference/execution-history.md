@@ -11,7 +11,7 @@ Each execution stores:
 | **Inputs** | Request body or run inputs (e.g. `text` for Input node) |
 | **Outputs** | Workflow-level outputs |
 | **Node results** | Per-node outputs, status, and execution time |
-| **Status** | `success`, `error`, or `pending` |
+| **Status** | `success`, `error`, `pending`, `skipped`, or `failed` (see [Crash Recovery](#crash-recovery)) |
 | **trigger_source** | How the run was triggered (see [Triggers](./triggers.md)) |
 
 ## Accessing History
@@ -45,11 +45,43 @@ Click the **History** button (clock icon) to open the dialog.
 - **In Editor** (per-workflow history): Applies immediately to the open workflow and closes the dialog.
 - **From All History** (Dashboard/Evals): Navigates to the workflow editor, then applies the data when the editor loads. Only available for workflow runs—not for chat/assistant runs.
 
+### Execution deep link
+
+Opening a workflow at `/workflows/{workflowId}/{executionId}` automatically brings that execution onto the canvas — the same as selecting the run and choosing **Bring to Canvas**. This makes a specific past run shareable as a URL. If the execution can't be found (wrong or deleted id), the editor falls back to loading the plain workflow.
+
 ### Use cases
 
 - Re-run a workflow with the same inputs
 - Debug a failed run by inspecting inputs and node outputs
 - Compare outputs across runs
+
+## Execution Highlights
+
+After a live run — or after **Bring to Canvas** — a dismissible **Execution Highlights** popup appears in the **top-right of the Canvas**. It's a quick way to see *what each node produced*, listed top-to-bottom in execution order. Close it with the **✕**; it reopens on the next run.
+
+### What's shown
+
+| Record | Source | Auto? |
+|--------|--------|-------|
+| **Input** | The run's input parameters (input/trigger node) | Yes |
+| **Output** | The output node's result — or, if there is none, the last node's message | Yes |
+| **Agent / LLM** | Each agent or LLM node's output | Yes |
+| **Output** | Any other node with **Highlight Node Output** enabled | Opt-in |
+
+Nodes that are already auto-highlighted (input / output / last / agent / llm) never appear twice, even if you also enable the toggle.
+
+### Each record
+
+- Shows `Node — message…` with the first **250 characters**; click a row to expand it and render the **full message as Markdown**, with a **Copy** button.
+- A node that ran multiple times (e.g. inside a loop) shows `Node (N)` with a `‹ i / N ›` selector — pick which run to view; each node's selector is independent.
+
+### Highlight Node Output
+
+Every node **except Agent and LLM** has a **Highlight Node Output** checkbox in its properties panel (default off). Enable it to add that node's output to the popup. A small ✦ badge appears on highlighted nodes on the canvas. In the [workflow DSL](./expression-dsl.md) this is the node-data field `"highlight": true` (defaults to `false`).
+
+### On dashboards
+
+Dashboard widget cards that ran a workflow show a ✦ **Execution highlights** button in the card header; click it to open the same popup for that widget's run, with the widget's drawn output as the prominent record.
 
 ## Running Executions
 
@@ -60,6 +92,24 @@ Both history dialogs show **currently running executions** at the top of the lis
 - Cancelling from any dialog (Editor or Dashboard) also closes the active SSE stream in any open canvas tab for that workflow, so the editor state resets cleanly
 - After cancellation, the running entry disappears on the next refresh; press **Refresh** to update the list manually
 - If you cancel a run that has already finished, the request is a no-op
+
+## Crash Recovery
+
+If the server restarts (deploy, container restart, or crash) while a workflow is running, that run's worker stops mid-execution. Heym automatically recovers these interrupted runs instead of leaving them stuck as **Running**.
+
+- On the next startup, the elected leader process detects orphaned runs — instantly for a graceful restart, or within ~60 seconds for a hard crash (once heartbeats clearly stop).
+- Recovered runs are **re-run from scratch with the same inputs** (not resumed from where they stopped), using the current workflow definition. On completion they record a normal terminal entry (e.g. `success`), so history shows the run as completed.
+- A run is retried **once**. If the recovery attempt is also interrupted — or the workflow has since been deleted — the entry is recorded as `failed`.
+- This works the same across a single container and multi-worker deployments; only the leader performs recovery, so a run is never recovered twice by different workers.
+
+### Auto-recover toggle
+
+The editor **Execution Log** (run) panel has an **Auto-recover** checkbox, **on by default** per workflow.
+
+- **On**: interrupted runs of this workflow are re-run as described above.
+- **Off**: interrupted runs are not re-run and are recorded with status `skipped`.
+
+> Sub-workflow runs are not recovered independently — they are re-driven by their recovered parent run. Triggers with their own redelivery (RabbitMQ, scheduled/cron, IMAP) may also redeliver on restart, so a recovered run can occasionally execute twice.
 
 ## Pending Human Review
 

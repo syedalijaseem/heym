@@ -98,6 +98,15 @@ const supabaseSchema = ref("public");
 const supabaseTesting = ref(false);
 const supabaseTestSuccess = ref<boolean | null>(null);
 const supabaseTestMessage = ref("");
+const linearTesting = ref(false);
+const linearTestSuccess = ref<boolean | null>(null);
+const linearTestMessage = ref("");
+const linearAuthMode = ref<"api_key" | "oauth">("api_key");
+const linearClientId = ref("");
+const linearClientSecret = ref("");
+const linearOAuthConnected = ref(false);
+const linearOAuthConnecting = ref(false);
+const linearConnectedCredential = ref<Credential | null>(null);
 const notionToken = ref("");
 const notionAuthMode = ref<"token" | "oauth">("token");
 const notionClientId = ref("");
@@ -166,6 +175,7 @@ const typeOptions = [
   { value: "openai", label: CREDENTIAL_TYPE_LABELS.openai },
   { value: "google", label: CREDENTIAL_TYPE_LABELS.google },
   { value: "github", label: CREDENTIAL_TYPE_LABELS.github },
+  { value: "linear", label: CREDENTIAL_TYPE_LABELS.linear },
   { value: "elevenlabs", label: CREDENTIAL_TYPE_LABELS.elevenlabs },
   { value: "custom", label: CREDENTIAL_TYPE_LABELS.custom },
   { value: "bearer", label: CREDENTIAL_TYPE_LABELS.bearer },
@@ -265,6 +275,18 @@ watch(
           props.credential.type === "supabase"
             ? props.credential.public_fields?.supabase_schema ?? "public"
             : "public";
+        linearAuthMode.value =
+          props.credential.type === "linear" &&
+          (props.credential.masked_value === "connected" ||
+            props.credential.public_fields?.auth_mode === "oauth")
+            ? "oauth"
+            : "api_key";
+        linearClientId.value = "";
+        linearClientSecret.value = "";
+        linearOAuthConnected.value =
+          props.credential.type === "linear" && props.credential.masked_value === "connected";
+        linearOAuthConnecting.value = false;
+        linearConnectedCredential.value = null;
         notionToken.value = "";
         notionAuthMode.value =
           props.credential.type === "notion" &&
@@ -347,6 +369,12 @@ watch(
         supabaseUrl.value = "";
         supabaseKey.value = "";
         supabaseSchema.value = "public";
+        linearAuthMode.value = "api_key";
+        linearClientId.value = "";
+        linearClientSecret.value = "";
+        linearOAuthConnected.value = false;
+        linearOAuthConnecting.value = false;
+        linearConnectedCredential.value = null;
         notionToken.value = "";
         notionAuthMode.value = "token";
         notionClientId.value = "";
@@ -364,6 +392,9 @@ watch(
       supabaseTesting.value = false;
       supabaseTestSuccess.value = null;
       supabaseTestMessage.value = "";
+      linearTesting.value = false;
+      linearTestSuccess.value = null;
+      linearTestMessage.value = "";
       notionTesting.value = false;
       notionTestSuccess.value = null;
       notionTestMessage.value = "";
@@ -373,6 +404,20 @@ watch(
 
 const isValid = computed(() => {
   if (!name.value.trim()) return false;
+
+  if (type.value === "linear") {
+    if (linearAuthMode.value === "oauth") {
+      if (!isEditing.value) {
+        return linearOAuthConnected.value;
+      }
+      return (
+        linearOAuthConnected.value ||
+        props.credential?.masked_value === "connected" ||
+        props.credential?.masked_value === "Not connected"
+      );
+    }
+    return !!apiKey.value.trim() || isEditing.value;
+  }
 
   if (
     type.value === "openai" ||
@@ -491,6 +536,23 @@ const canTestSupabaseConnection = computed((): boolean => {
   return isEditing.value && !!props.credential?.id;
 });
 
+const canTestLinearConnection = computed((): boolean => {
+  if (type.value !== "linear") {
+    return false;
+  }
+  if (linearAuthMode.value === "oauth") {
+    return (
+      linearOAuthConnected.value ||
+      props.credential?.masked_value === "connected" ||
+      !!linearConnectedCredential.value
+    );
+  }
+  if (apiKey.value.trim()) {
+    return true;
+  }
+  return isEditing.value && !!props.credential?.id;
+});
+
 function buildConfig(): CredentialConfig {
   if (type.value === "openai") {
     return { api_key: apiKey.value };
@@ -502,6 +564,14 @@ function buildConfig(): CredentialConfig {
       api_key: apiKey.value,
       ...(trimmedBaseUrl ? { base_url: trimmedBaseUrl } : {}),
     };
+  } else if (type.value === "linear") {
+    return linearAuthMode.value === "oauth"
+      ? {
+          auth_mode: "oauth",
+          client_id: linearClientId.value.trim(),
+          client_secret: linearClientSecret.value.trim(),
+        }
+      : { api_key: apiKey.value.trim(), auth_mode: "api_key" };
   } else if (type.value === "elevenlabs") {
     return { api_key: apiKey.value };
   } else if (type.value === "custom") {
@@ -808,6 +878,51 @@ async function testSupabaseConnection(): Promise<void> {
   }
 }
 
+async function testLinearConnection(): Promise<void> {
+  const connectedCredentialId =
+    props.credential?.id || linearConnectedCredential.value?.id;
+  if (!canTestLinearConnection.value) {
+    error.value =
+      linearAuthMode.value === "oauth"
+        ? "Connect Linear OAuth before testing the connection."
+        : "Enter an API key to test the connection.";
+    return;
+  }
+
+  linearTesting.value = true;
+  linearTestSuccess.value = null;
+  linearTestMessage.value = "";
+  error.value = "";
+
+  try {
+    const result = await credentialsApi.testConnection({
+      type: "linear",
+      config:
+        linearAuthMode.value === "oauth"
+          ? { auth_mode: "oauth" }
+          : { api_key: apiKey.value.trim(), auth_mode: "api_key" },
+      credential_id:
+        linearAuthMode.value === "oauth"
+          ? connectedCredentialId
+          : isEditing.value
+            ? props.credential?.id
+            : undefined,
+    });
+    linearTestSuccess.value = result.success;
+    linearTestMessage.value = result.message;
+    if (!result.success) {
+      error.value = result.message;
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Connection test failed";
+    linearTestSuccess.value = false;
+    linearTestMessage.value = message;
+    error.value = message;
+  } finally {
+    linearTesting.value = false;
+  }
+}
+
 async function testNotionConnection(): Promise<void> {
   const connectedCredentialId =
     props.credential?.id || notionConnectedCredential.value?.id;
@@ -870,6 +985,88 @@ const notionOAuthStatusLabel = computed((): string => {
   }
   return "";
 });
+
+const linearOAuthStatusLabel = computed((): string => {
+  if (linearOAuthConnected.value) {
+    return "Connected";
+  }
+  if (isEditing.value && props.credential?.masked_value === "Not connected") {
+    return "Not connected";
+  }
+  return "";
+});
+
+async function startLinearOAuth(): Promise<void> {
+  if (!linearClientId.value.trim() || !linearClientSecret.value.trim()) {
+    error.value = "Enter Client ID and Client Secret before connecting.";
+    return;
+  }
+  if (!name.value.trim()) {
+    error.value = "Enter a name for this credential before connecting.";
+    return;
+  }
+  linearOAuthConnecting.value = true;
+  error.value = "";
+  try {
+    let credentialId: string;
+    if (isEditing.value && props.credential) {
+      await credentialsApi.update(props.credential.id, {
+        name: name.value,
+        config: buildConfig(),
+      });
+      credentialId = props.credential.id;
+    } else {
+      const saved = await credentialsApi.create({
+        name: name.value,
+        type: "linear",
+        config: buildConfig(),
+      });
+      credentialId = saved.id;
+    }
+    const { auth_url } = await credentialsApi.linearOAuthAuthorize(credentialId);
+    const popup = window.open(auth_url, "linear-oauth", "width=520,height=680");
+    if (!popup) {
+      throw new Error("OAuth popup was blocked. Allow popups for Heym and try again.");
+    }
+    const onMessage = (event: MessageEvent): void => {
+      if (!isTrustedOAuthMessage(event, popup)) {
+        return;
+      }
+      if (
+        event.data?.type === "linear-oauth-success" &&
+        event.data.credentialId === credentialId
+      ) {
+        window.removeEventListener("message", onMessage);
+        clearInterval(pollClosed);
+        popup.close();
+        credentialsApi.get(credentialId).then((credential) => {
+          linearConnectedCredential.value = credential;
+          linearOAuthConnected.value = true;
+          linearOAuthConnecting.value = false;
+        }).catch(() => {
+          linearOAuthConnected.value = true;
+          linearOAuthConnecting.value = false;
+        });
+      } else if (event.data?.type === "linear-oauth-error") {
+        window.removeEventListener("message", onMessage);
+        clearInterval(pollClosed);
+        linearOAuthConnecting.value = false;
+        error.value = event.data.message || "Linear OAuth authorization failed";
+      }
+    };
+    const pollClosed = setInterval(() => {
+      if (popup.closed) {
+        clearInterval(pollClosed);
+        window.removeEventListener("message", onMessage);
+        linearOAuthConnecting.value = false;
+      }
+    }, 500);
+    window.addEventListener("message", onMessage);
+  } catch (err) {
+    linearOAuthConnecting.value = false;
+    error.value = err instanceof Error ? err.message : "Linear OAuth authorization failed";
+  }
+}
 
 async function startNotionOAuth(): Promise<void> {
   if (!notionClientId.value.trim() || !notionClientSecret.value.trim()) {
@@ -964,6 +1161,7 @@ async function handleSave(): Promise<void> {
       const hasConfigChange =
         type.value !== "google_sheets" &&
         type.value !== "bigquery" &&
+        !(type.value === "linear" && linearAuthMode.value === "oauth") &&
         !(type.value === "notion" && notionAuthMode.value === "oauth") &&
         (apiKey.value.trim() ||
           baseUrl.value.trim() ||
@@ -1023,6 +1221,12 @@ async function handleSave(): Promise<void> {
       saved = bqConnectedCredential.value;
     } else if (type.value === "notion" && notionConnectedCredential.value) {
       saved = notionConnectedCredential.value;
+    } else if (
+      type.value === "linear" &&
+      linearAuthMode.value === "oauth" &&
+      linearConnectedCredential.value
+    ) {
+      saved = linearConnectedCredential.value;
     } else {
       saved = await credentialsApi.create({
         name: name.value,
@@ -1128,6 +1332,124 @@ async function handleSave(): Promise<void> {
           Use a GitHub personal access token. Fine-grained PATs are recommended. This credential currently targets PAT-based auth, not GitHub App installation flows.
         </p>
       </div>
+
+      <template v-if="type === 'linear'">
+        <div class="space-y-2">
+          <Label>Authentication</Label>
+          <Select
+            v-model="linearAuthMode"
+            :options="[
+              { value: 'api_key', label: 'Personal API Key' },
+              { value: 'oauth', label: 'OAuth2' },
+            ]"
+            :disabled="saving || linearOAuthConnecting"
+          />
+        </div>
+
+        <div
+          v-if="linearAuthMode === 'api_key'"
+          class="space-y-2"
+        >
+          <Label for="cred-linear-api-key">API Key</Label>
+          <div class="relative">
+            <Input
+              id="cred-linear-api-key"
+              v-model="apiKey"
+              :type="showApiKey ? 'text' : 'password'"
+              :placeholder="isEditing ? '••••••• (re-enter to update)' : 'lin_api_...'"
+              :disabled="saving"
+              class="pr-10"
+            />
+            <button
+              type="button"
+              class="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              @click="showApiKey = !showApiKey"
+            >
+              <EyeOff
+                v-if="showApiKey"
+                class="w-4 h-4"
+              />
+              <Eye
+                v-else
+                class="w-4 h-4"
+              />
+            </button>
+          </div>
+          <p class="text-xs text-muted-foreground">
+            Create a personal API key in Linear under Settings → Security & Access → Personal API keys.
+          </p>
+        </div>
+
+        <template v-if="linearAuthMode === 'oauth'">
+          <div class="space-y-2">
+            <Label for="cred-linear-client-id">OAuth Client ID</Label>
+            <Input
+              id="cred-linear-client-id"
+              v-model="linearClientId"
+              placeholder="Linear OAuth client ID"
+              :disabled="saving || linearOAuthConnecting"
+            />
+          </div>
+          <div class="space-y-2">
+            <Label for="cred-linear-client-secret">OAuth Client Secret</Label>
+            <Input
+              id="cred-linear-client-secret"
+              v-model="linearClientSecret"
+              type="password"
+              placeholder="Linear OAuth client secret"
+              :disabled="saving || linearOAuthConnecting"
+            />
+          </div>
+          <div class="flex items-center gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              :loading="linearOAuthConnecting"
+              :disabled="saving || linearOAuthConnecting || !linearClientId.trim() || !linearClientSecret.trim()"
+              @click="startLinearOAuth"
+            >
+              {{ linearOAuthConnected ? "Reconnect" : "Connect" }}
+            </Button>
+            <span
+              v-if="linearOAuthStatusLabel"
+              class="text-xs"
+              :class="linearOAuthConnected ? 'text-emerald-600' : 'text-muted-foreground'"
+            >
+              {{ linearOAuthStatusLabel }}
+            </span>
+          </div>
+          <p class="text-xs text-muted-foreground">
+            Register
+            <code>/api/credentials/linear/oauth/callback</code>
+            in your Linear OAuth application.
+          </p>
+        </template>
+
+        <div
+          v-if="linearAuthMode === 'api_key' || linearOAuthConnected"
+          class="flex items-center gap-3"
+        >
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            data-testid="linear-test-connection-button"
+            :loading="linearTesting"
+            :disabled="saving || linearTesting || !canTestLinearConnection"
+            @click="testLinearConnection"
+          >
+            Test Connection
+          </Button>
+          <p
+            v-if="linearTestMessage"
+            class="text-xs"
+            :class="linearTestSuccess ? 'text-emerald-600' : 'text-destructive'"
+          >
+            {{ linearTestMessage }}
+          </p>
+        </div>
+      </template>
 
       <div
         v-if="type === 'github'"

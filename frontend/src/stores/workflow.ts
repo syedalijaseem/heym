@@ -13,6 +13,7 @@ import type {
   ExecutionHistoryEntry,
   ExecutionResult,
   FileUploadSlotStatus,
+  HighlightPayload,
   LLMBatchProgressEntry,
   NodeResult,
   ServerExecutionHistory,
@@ -50,6 +51,9 @@ export const useWorkflowStore = defineStore("workflow", () => {
   const selectedNodeId = ref<string | null>(null);
   const selectedNodeIds = ref<Set<string>>(new Set());
   const executionResult = ref<ExecutionResult | null>(null);
+  const highlightPayload = computed<HighlightPayload | null>(
+    () => executionResult.value?.highlight ?? null,
+  );
   const nodeResults = shallowRef<NodeResult[]>([]);
   const executionHistoryList = ref<AllExecutionHistoryEntryLight[]>([]);
   const executionHistoryDetails = ref<Map<string, ExecutionHistoryEntry>>(
@@ -67,6 +71,21 @@ export const useWorkflowStore = defineStore("workflow", () => {
   const propertiesPanelOpen = ref(false);
   const propertiesPanelVisible = ref(false);
   const analysisPanelOpen = ref(false);
+  const analysisNoteEmpty = ref(true);
+
+  async function refreshAnalysisNoteEmpty(): Promise<void> {
+    const id = currentWorkflow.value?.id;
+    if (!id) {
+      analysisNoteEmpty.value = true;
+      return;
+    }
+    try {
+      const note = await workflowApi.getAnalysisNote(id);
+      analysisNoteEmpty.value = note.content.trim() === "";
+    } catch {
+      analysisNoteEmpty.value = true;
+    }
+  }
   /** When true, workflow canvas global key handlers and editor undo should stay inactive (agent memory graph modal). */
   const agentMemoryGraphDialogOpen = ref(false);
   const propertiesPanelTab = ref<"properties" | "config">("config");
@@ -157,6 +176,14 @@ export const useWorkflowStore = defineStore("workflow", () => {
     }
 
     runInputJson.value = stringifyWebhookJson(buildLegacyExecutionBody());
+  }
+
+  function clearRunInputs(): void {
+    for (const key of Object.keys(runInputValues.value)) {
+      delete runInputValues.value[key];
+    }
+    runInputText.value = "";
+    resetRunInputJsonFromMode();
   }
 
   function buildExecutionRequestBody(): unknown {
@@ -330,7 +357,8 @@ export const useWorkflowStore = defineStore("workflow", () => {
       id: h.id,
       started_at: h.started_at,
       inputs: h.inputs,
-      status: h.status as "running" | "success" | "error" | "pending",
+      status: h.status as "running" | "success" | "error" | "pending" | "skipped" | "failed",
+      recovered: h.recovered,
       result: {
         workflow_id: h.workflow_id,
         status: h.status as "success" | "error" | "pending",
@@ -338,6 +366,7 @@ export const useWorkflowStore = defineStore("workflow", () => {
         execution_time_ms: h.execution_time_ms,
         node_results: h.node_results || [],
         execution_history_id: h.id,
+        highlight: h.highlight ?? null,
       },
     };
   }
@@ -519,7 +548,8 @@ export const useWorkflowStore = defineStore("workflow", () => {
     currentWorkflow.value = { ...workflow, nodes: loadedNodes, edges: loadedEdges };
     nodes.value = loadedNodes;
     edges.value = loadedEdges;
-    resetRunInputJsonFromMode();
+    void refreshAnalysisNoteEmpty();
+    clearRunInputs();
     hasUnsavedChanges.value = false;
     executionResult.value = null;
     timelinePickedNodeResultIndex.value = null;
@@ -1235,7 +1265,13 @@ export const useWorkflowStore = defineStore("workflow", () => {
               return;
             }
 
-            const finalRows = (result.node_results || []) as NodeResult[];
+            // A run that fails without per-node results (e.g. a workflow timeout)
+            // sends an empty node_results; keep the rows we already streamed so the
+            // prior node history stays visible instead of being wiped.
+            const finalRows =
+              result.node_results && result.node_results.length > 0
+                ? (result.node_results as NodeResult[])
+                : nodeResults.value;
             timelinePickedNodeResultIndex.value = null;
             nodeResults.value = finalRows;
 
@@ -1412,7 +1448,7 @@ export const useWorkflowStore = defineStore("workflow", () => {
     nodes.value = [];
     edges.value = [];
     selectedNodeId.value = null;
-    runInputJson.value = "{}";
+    clearRunInputs();
     executionResult.value = null;
     clearEvaluateLoopSelection();
     executionHistoryList.value = [];
@@ -2302,6 +2338,91 @@ export const useWorkflowStore = defineStore("workflow", () => {
           });
         }
       }
+
+      if (node.type === "linear") {
+        const operation = node.data.linearOperation;
+        if (!node.data.credentialId || !isValidUUID(node.data.credentialId)) {
+          errors.push({
+            nodeId: node.id,
+            nodeLabel: node.data.label,
+            nodeType: "Linear",
+            message: "Credential is not selected",
+          });
+        }
+        if (!operation) {
+          errors.push({
+            nodeId: node.id,
+            nodeLabel: node.data.label,
+            nodeType: "Linear",
+            message: "Operation is not selected",
+          });
+        }
+        if (
+          operation === "createIssue" &&
+          (!node.data.linearTeamId?.trim() || !node.data.linearTitle?.trim())
+        ) {
+          errors.push({
+            nodeId: node.id,
+            nodeLabel: node.data.label,
+            nodeType: "Linear",
+            message: "Team ID and title are required to create an issue",
+          });
+        }
+        if (
+          (operation === "getIssue" ||
+            operation === "updateIssue" ||
+            operation === "deleteIssue" ||
+            operation === "addIssueLink" ||
+            operation === "createComment" ||
+            operation === "listComments") &&
+          !node.data.linearIssueId?.trim()
+        ) {
+          errors.push({
+            nodeId: node.id,
+            nodeLabel: node.data.label,
+            nodeType: "Linear",
+            message: "Issue ID or identifier is required for this operation",
+          });
+        }
+        if (operation === "createComment" && !node.data.linearCommentBody?.trim()) {
+          errors.push({
+            nodeId: node.id,
+            nodeLabel: node.data.label,
+            nodeType: "Linear",
+            message: "Comment body is required",
+          });
+        }
+        if (
+          (operation === "updateComment" ||
+            operation === "deleteComment" ||
+            operation === "resolveComment" ||
+            operation === "unresolveComment") &&
+          !node.data.linearCommentId?.trim()
+        ) {
+          errors.push({
+            nodeId: node.id,
+            nodeLabel: node.data.label,
+            nodeType: "Linear",
+            message: "Comment ID is required for this operation",
+          });
+        }
+        if (operation === "updateComment" && !node.data.linearCommentBody?.trim()) {
+          errors.push({
+            nodeId: node.id,
+            nodeLabel: node.data.label,
+            nodeType: "Linear",
+            message: "Comment body is required",
+          });
+        }
+        if (operation === "addIssueLink" && !node.data.linearIssueLinkUrl?.trim()) {
+          errors.push({
+            nodeId: node.id,
+            nodeLabel: node.data.label,
+            nodeType: "Linear",
+            message: "Link URL is required",
+          });
+        }
+      }
     }
 
     return {
@@ -2611,6 +2732,7 @@ export const useWorkflowStore = defineStore("workflow", () => {
     selectedNode,
     selectedNodes,
     executionResult,
+    highlightPayload,
     nodeResults,
     agentProgressLogs,
     llmBatchProgressLogs,
@@ -2679,6 +2801,8 @@ export const useWorkflowStore = defineStore("workflow", () => {
     propertiesPanelVisible,
     setPropertiesPanelVisible,
     analysisPanelOpen,
+    analysisNoteEmpty,
+    refreshAnalysisNoteEmpty,
     agentMemoryGraphDialogOpen,
     setAgentMemoryGraphDialogOpen,
     propertiesPanelTab,

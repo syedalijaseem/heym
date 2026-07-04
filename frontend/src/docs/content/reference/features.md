@@ -100,6 +100,8 @@ Pairs with [Condition](../nodes/condition-node.md), [Error Handler](../nodes/err
 
 The Error Handler node runs automatically when any node in the workflow fails. No incoming edges are needed; it is triggered by the engine. Output includes error message, failed node label, node type, and timestamp. Use it to send notifications through [Slack](../nodes/slack-node.md), [Telegram](../nodes/telegram-node.md), or [Send Email](../nodes/send-email-node.md), log errors, or return custom error responses.
 
+As an alternative to handling errors on the canvas, a workflow can also delegate failures to a separate workflow — see [Error Workflow](#error-workflow). If the canvas already contains an Error Handler node, the error workflow is **not** called (the local handler takes precedence).
+
 Common notification targets are [Slack](../nodes/slack-node.md), [Telegram](../nodes/telegram-node.md), and [Send Email](../nodes/send-email-node.md); run details are easier to inspect in [Execution History](./execution-history.md).
 
 ### AI
@@ -254,6 +256,12 @@ The GitHub node provides 40 native GitHub REST actions covering repositories, or
 
 Pairs with [Agent Node](../nodes/agent-node.md), [HTTP](../nodes/http-node.md), [Set](../nodes/set-node.md), and [Third-Party Integrations](./integrations.md).
 
+#### [Linear](../nodes/linear-node.md)
+
+The Linear node connects workflows to Linear's GraphQL API for workspace and issue automation. It can list teams, projects, issues, workflow states, team members, and comments; create, update, delete, and link issues; and create, update, resolve, unresolve, or delete comments. Use a Linear personal API key or OAuth2 credential, then discover team, project, state, and assignee UUIDs from list operations before creating or updating issues.
+
+Pairs with [LLM](../nodes/llm-node.md), [Agent Node](../nodes/agent-node.md), [Slack](../nodes/slack-node.md), and [Third-Party Integrations](./integrations.md) for intake, triage, and engineering backlog workflows.
+
 #### [Supabase](../nodes/supabase-node.md)
 
 The Supabase node reads and mutates tables exposed through Supabase PostgREST. It works well for product backends, user/profile data, workflow state, and CRUD-style automations that want database access without custom HTTP request wiring.
@@ -360,13 +368,13 @@ Pairs with [Condition](../nodes/condition-node.md), [Error Handler](../nodes/err
 
 ### [Node Types](./node-types.md)
 
-Heym provides a variety of node types: triggers such as [Input](../nodes/input-node.md), [Cron](../nodes/cron-node.md), [Telegram Trigger](../nodes/telegram-trigger-node.md), [Discord Trigger](../nodes/discord-trigger-node.md), [IMAP Trigger](../nodes/imap-trigger-node.md), [Slack Trigger](../nodes/slack-trigger-node.md), [RabbitMQ](../nodes/rabbitmq-node.md), and [Error Handler](../nodes/error-handler-node.md); AI nodes such as [LLM](../nodes/llm-node.md), [Agent Node](../nodes/agent-node.md), [Qdrant RAG](../nodes/rag-node.md), and [MCP Call](../nodes/mcp-call-node.md); logic nodes like [Condition](../nodes/condition-node.md), [Switch](../nodes/switch-node.md), [Merge](../nodes/merge-node.md), and [Loop](../nodes/loop-node.md); data nodes like [Set](../nodes/set-node.md), [Variable](../nodes/variable-node.md), and [Execute](../nodes/execute-node.md); integrations such as [HTTP](../nodes/http-node.md), [GitHub](../nodes/github-node.md), [Notion](../nodes/notion-node.md), [Telegram](../nodes/telegram-node.md), [Slack](../nodes/slack-node.md), [Discord](../nodes/discord-node.md), [Send Email](../nodes/send-email-node.md), [Redis](../nodes/redis-node.md), [Grist](../nodes/grist-node.md), [Google Sheets](../nodes/google-sheets-node.md), [BigQuery](../nodes/bigquery-node.md), [Supabase](../nodes/supabase-node.md), [ClickHouse](../nodes/clickhouse-node.md), [DataTable](../nodes/datatable-node.md), and [Drive](../nodes/drive-node.md); automation nodes like [Crawler](../nodes/crawler-node.md) and [Playwright](../nodes/playwright-node.md); and utilities such as [Wait](../nodes/wait-node.md), [Output](../nodes/output-node.md), [JSON output mapper](../nodes/json-output-mapper-node.md), [Console Log](../nodes/console-log-node.md), [Throw Error](../nodes/throw-error-node.md), [Disable Node](../nodes/disable-node.md), and [Sticky Note](../nodes/sticky-note-node.md). Use expressions like `$input.text` and `$nodeLabel.field` in node configuration.
+Heym provides a variety of node types: triggers such as [Input](../nodes/input-node.md), [Cron](../nodes/cron-node.md), [Telegram Trigger](../nodes/telegram-trigger-node.md), [Discord Trigger](../nodes/discord-trigger-node.md), [IMAP Trigger](../nodes/imap-trigger-node.md), [Slack Trigger](../nodes/slack-trigger-node.md), [RabbitMQ](../nodes/rabbitmq-node.md), and [Error Handler](../nodes/error-handler-node.md); AI nodes such as [LLM](../nodes/llm-node.md), [Agent Node](../nodes/agent-node.md), [Qdrant RAG](../nodes/rag-node.md), and [MCP Call](../nodes/mcp-call-node.md); logic nodes like [Condition](../nodes/condition-node.md), [Switch](../nodes/switch-node.md), [Merge](../nodes/merge-node.md), and [Loop](../nodes/loop-node.md); data nodes like [Set](../nodes/set-node.md), [Variable](../nodes/variable-node.md), and [Execute](../nodes/execute-node.md); integrations such as [HTTP](../nodes/http-node.md), [GitHub](../nodes/github-node.md), [Linear](../nodes/linear-node.md), [Notion](../nodes/notion-node.md), [Telegram](../nodes/telegram-node.md), [Slack](../nodes/slack-node.md), [Discord](../nodes/discord-node.md), [Send Email](../nodes/send-email-node.md), [Redis](../nodes/redis-node.md), [Grist](../nodes/grist-node.md), [Google Sheets](../nodes/google-sheets-node.md), [BigQuery](../nodes/bigquery-node.md), [Supabase](../nodes/supabase-node.md), [ClickHouse](../nodes/clickhouse-node.md), [DataTable](../nodes/datatable-node.md), and [Drive](../nodes/drive-node.md); automation nodes like [Crawler](../nodes/crawler-node.md) and [Playwright](../nodes/playwright-node.md); and utilities such as [Wait](../nodes/wait-node.md), [Output](../nodes/output-node.md), [JSON output mapper](../nodes/json-output-mapper-node.md), [Console Log](../nodes/console-log-node.md), [Throw Error](../nodes/throw-error-node.md), [Disable Node](../nodes/disable-node.md), and [Sticky Note](../nodes/sticky-note-node.md). Use expressions like `$input.text` and `$nodeLabel.field` in node configuration.
 
 See also [Triggers](./triggers.md), [Third-Party Integrations](./integrations.md), and [Parallel Execution](./parallel-execution.md).
 
 ### [Expression DSL](./expression-dsl.md)
 
-Heym uses a simple expression language to reference data from upstream nodes. Use `$input` for the [Input](../nodes/input-node.md) node, `$nodeLabel.field` for any upstream node, `$credentials.CredentialName` for [credentials](./credentials.md), and `$global.variableName` for [global variables](./global-variables.md). Support includes literals, arithmetic, comparisons, [Loop](../nodes/loop-node.md) context, nested fields, and string/array helpers. When the full value is a single `$expr`, the backend preserves arrays, objects, booleans, and numbers as native types.
+Heym uses a simple expression language to reference data from upstream nodes. Use `$input` for the [Input](../nodes/input-node.md) node, `$nodeLabel.field` for any upstream node, `$credentials.CredentialName` for [credentials](./credentials.md), and `$global.variableName` for [global variables](./global-variables.md). Built-in special variables include `$now`, `$UUID`, and workflow metadata: `$workflowName`, `$workflowDescription`, `$workflowPath`, `$workflowUrl`, and `$executionId` (the run's [Execution History](./execution-history.md) id — `/workflows/{id}/{executionId}` opens that run on the canvas; runtime-only, empty in the expression preview dialog). Support includes literals, arithmetic, comparisons, [Loop](../nodes/loop-node.md) context, nested fields, and string/array helpers. When the full value is a single `$expr`, the backend preserves arrays, objects, booleans, and numbers as native types.
 
 See also [Expression Evaluation Dialog](./expression-evaluation-dialog.md), [Global Variables](./global-variables.md), and [Workflow Structure](./workflow-structure.md).
 
@@ -505,15 +513,31 @@ See also [Node Types](./node-types.md), [Webhooks](./webhooks.md), and [Parallel
 
 ### [Execution History](./execution-history.md)
 
-Execution history records past workflow runs: inputs, outputs, node results, status, and trigger source. Access it from the Editor toolbar, Docs view, Dashboard header, or [Evals](../tabs/evals-tab.md) view. Per-workflow history shows runs for the open workflow; all-history view shows runs across workflows and chat. Currently running executions appear at the top of both dialogs with a **Cancel** button; cancelling from any dialog also closes the active [SSE](./sse-streaming.md) stream in open canvas tabs for that workflow. Bring to Canvas loads a selected run's inputs and node outputs for re-run or debugging. [Human-in-the-Loop](./human-in-the-loop.md)-paused runs are stored immediately as `pending`, including the public review URL and any notification nodes executed from the agent's `review` branch.
+Execution history records past workflow runs: inputs, outputs, node results, status, and trigger source. Access it from the Editor toolbar, Docs view, Dashboard header, or [Evals](../tabs/evals-tab.md) view. Per-workflow history shows runs for the open workflow; all-history view shows runs across workflows and chat. Currently running executions appear at the top of both dialogs with a **Cancel** button; cancelling from any dialog also closes the active [SSE](./sse-streaming.md) stream in open canvas tabs for that workflow. Bring to Canvas loads a selected run's inputs and node outputs for re-run or debugging; opening a workflow at the deep link `/workflows/{workflowId}/{executionId}` brings that execution onto the canvas automatically (a shareable URL for a specific past run, with graceful fallback to the plain workflow when the id is missing). [Human-in-the-Loop](./human-in-the-loop.md)-paused runs are stored immediately as `pending`, including the public review URL and any notification nodes executed from the agent's `review` branch. If the server restarts mid-run, interrupted runs are recovered automatically: they are re-run from scratch with the same inputs and shown as completed (marked **Recovered**), controlled by a per-workflow **Auto-recover runs** toggle that can instead record them as `skipped`.
 
 See also [SSE Streaming](./sse-streaming.md), [Human-in-the-Loop](./human-in-the-loop.md), and [Traces](../tabs/traces-tab.md).
+
+### Execution Highlights
+
+After a live run — or after **Bring to Canvas** — a dismissible **Execution Highlights** popup appears in the top-right of the Canvas, listing what each node produced in execution order. It's a quick way to inspect per-node output without opening each node; close it with the **✕**, and it reopens on the next run. Highlights are also shown on dashboard runs. See [Execution History](./execution-history.md) for details.
 
 ### [Edit History](./edit-history.md)
 
 Edit History tracks saved versions of a workflow (each Save creates a version). View the list, open a version to see a diff against the current workflow ([nodes](./workflow-structure.md), edges, config), and Revert to restore a past version. Unlike [Execution History](./execution-history.md), Edit History tracks structure changes, not runs.
 
 See also [Execution History](./execution-history.md), [Workflow Structure](./workflow-structure.md), and [Canvas Features](./canvas-features.md).
+
+### Error Workflow
+
+A workflow can designate another workflow to run when it fails. Configure it in the workflow-level **Properties** panel (shown when no node is selected) under **On error, run workflow**. When a top-level run ends with an unhandled failure, the selected error workflow runs and receives the failure context (failed workflow id and name, run id, error message, failed node label and type, and a timestamp). If the canvas already contains an [Error Handler](../nodes/error-handler-node.md) node, the local handler takes precedence and the error workflow is **not** called. The error workflow itself runs directly, so it never triggers its own error workflow. It is **not** triggered by manual canvas test runs — only by API and triggered runs.
+
+### Workflow Timeout
+
+Each workflow can set a **workflow timeout** in seconds in the workflow-level **Properties** panel. `0` (the default) disables it. When set, a run that exceeds the limit is stopped at the next node boundary and recorded as a failed run with a "timed out" error. The timeout applies to manual, API, and triggered runs. Long [Wait](../nodes/wait-node.md) nodes are interrupted promptly rather than blocking for their full duration.
+
+### Time Saved
+
+Each workflow can record an **estimated time saved per run** (in minutes), set in the workflow-level **Properties** panel. The [Analytics](../tabs/analytics-tab.md) tab aggregates this across the selected range as a total **Time Saved** stat (sum of each workflow's estimate × its successful runs). The [Workflow Analysis](./workflow-analysis.md) report recommends setting an estimate when none is configured.
 
 ### [Settings](./user-settings.md)
 
@@ -608,7 +632,11 @@ See also [Global Variables](./global-variables.md), [Variable](../nodes/variable
 
 ### [Chat](../tabs/chat-tab.md)
 
-The Chat tab provides a direct [LLM](../nodes/llm-node.md) chat interface. Select a [credential](./credentials.md) and model, then send messages to test models, prototype prompts, or ask questions without building a workflow. It supports streaming, markdown, inline images, copy, clear, and voice input. User Rules from [Settings](./user-settings.md) apply automatically; [global variables](./global-variables.md) are available to the LLM as context.
+The Chat tab is Heym's long-running agent surface for operating the workspace from conversation. Select a [credential](./credentials.md) and model, then ask Chat to answer questions, inspect workflow definitions, run existing workflows, summarize executions and schedules, resolve pending human reviews, or create and revise workflows with the same AI Builder engine used in the editor.
+
+Chat keeps running on the backend after the browser closes. While an answer is streaming, you can send more messages; Heym stores them in a database-backed queue, lets you edit or delete queued messages before they start, and runs them in order when the current response finishes. If the assistant needs planning details and returns clarification questions, the queue pauses until you answer those questions, then resumes after the planning response.
+
+Responses stream with markdown, inline images, workflow preview cards, collapsible tool-call cards, context usage, and automatic context compression. Chat supports attachments, voice input, read-aloud playback, copy actions, quick prompts, User Rules from [Settings](./user-settings.md), and [global variables](./global-variables.md) as context.
 
 See also [AI Assistant](./ai-assistant.md), [Credentials](./credentials.md), and [Settings](./user-settings.md).
 
@@ -657,7 +685,7 @@ See also [Execution History](./execution-history.md), [Agent Node](../nodes/agen
 
 ### [Analytics](../tabs/analytics-tab.md)
 
-The Analytics tab shows execution metrics and trends. Summary stats include total executions, success rate, error rate, and latency breakdowns. Select a base time range (24h, 7d, 30d, or all), optionally filter by workflow, then drag across any chart to drill into a selected date range. Charts and workflow tables refresh to the selection, and auto refresh keeps metrics updated. It complements [Execution History](./execution-history.md) and the [Scheduled](../tabs/scheduled-tab.md) view when you need both past results and upcoming runs.
+The Analytics tab shows execution metrics and trends. Summary stats include total executions, success rate, error rate, latency breakdowns, and total **Time Saved** (from each workflow's estimated minutes saved per run × its successful runs). Select a base time range (24h, 7d, 30d, or all), optionally filter by workflow, then drag across any chart to drill into a selected date range. Charts and workflow tables refresh to the selection, and auto refresh keeps metrics updated. It complements [Execution History](./execution-history.md) and the [Scheduled](../tabs/scheduled-tab.md) view when you need both past results and upcoming runs.
 
 See also [Execution History](./execution-history.md), [Scheduled](../tabs/scheduled-tab.md), and [Evals](../tabs/evals-tab.md).
 

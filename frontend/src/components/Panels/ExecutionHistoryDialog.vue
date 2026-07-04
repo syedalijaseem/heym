@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onUnmounted, ref, watch } from "vue";
+import { useRouter } from "vue-router";
 import {
   ArrowDownToLine,
   ChevronDown,
@@ -9,6 +10,7 @@ import {
   Trash2,
   CheckCircle2,
   XCircle,
+  RotateCcw,
   SkipForward,
   Circle,
   Copy,
@@ -22,6 +24,11 @@ import {
 import Button from "@/components/ui/Button.vue";
 import Dialog from "@/components/ui/Dialog.vue";
 import Select from "@/components/ui/Select.vue";
+import AutoRefreshControl from "@/components/ui/AutoRefreshControl.vue";
+import {
+  AUTO_REFRESH_MAX_SECONDS,
+  HISTORY_AUTO_REFRESH_MIN_SECONDS,
+} from "@/composables/useAutoRefresh";
 import {
   buildDisplayNodeResults,
   formatExecutionLogToolCallTitle,
@@ -42,6 +49,7 @@ const emit = defineEmits<{
 }>();
 
 const workflowStore = useWorkflowStore();
+const router = useRouter();
 const selectedId = ref<string | null>(null);
 const expandedNodes = ref<Set<string>>(new Set());
 const activeExecutions = ref<ActiveExecutionItem[]>([]);
@@ -53,6 +61,13 @@ const searchInputRef = ref<HTMLInputElement | null>(null);
 const listRef = ref<HTMLDivElement | null>(null);
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 const SEARCH_DEBOUNCE_MS = 500;
+
+const HISTORY_AUTO_REFRESH_PRESETS = [
+  { value: "off", label: "Off" },
+  { value: "1", label: "1s" },
+  { value: "5", label: "5s" },
+  { value: "custom", label: "Custom" },
+] as const;
 
 const executionHistoryList = computed(
   () => workflowStore.executionHistoryList,
@@ -356,6 +371,7 @@ function getStatusIcon(status: string): typeof CheckCircle2 {
     case "success":
       return CheckCircle2;
     case "error":
+    case "failed":
       return XCircle;
     case "pending":
       return Clock;
@@ -371,11 +387,12 @@ function getStatusColor(status: string): string {
     case "success":
       return "text-emerald-500";
     case "error":
+    case "failed":
       return "text-red-500";
     case "pending":
       return "text-amber-500";
     case "skipped":
-      return "text-amber-500";
+      return "text-gray-400";
     default:
       return "text-muted-foreground";
   }
@@ -571,10 +588,17 @@ function openExternal(url: string): void {
 }
 
 function bringToCanvas(): void {
-  if (!selectedEntry.value) return;
+  if (!selectedEntry.value || !workflowStore.currentWorkflow?.id) return;
   const nodeResultsFromHistory = selectedEntry.value.result?.node_results || [];
   const executionResultFromHistory = selectedEntry.value.result || undefined;
   workflowStore.loadHistoryInputs(selectedEntry.value.inputs, nodeResultsFromHistory, executionResultFromHistory);
+  void router.push({
+    name: "editor",
+    params: {
+      id: workflowStore.currentWorkflow.id,
+      executionId: selectedEntry.value.id,
+    },
+  });
   emit("close");
 }
 </script>
@@ -610,7 +634,17 @@ function bringToCanvas(): void {
           clear-aria-label="Clear tag filter"
         />
       </div>
-      <div class="flex items-center gap-1 shrink-0">
+      <div class="flex items-center gap-1 shrink-0 flex-wrap justify-end">
+        <AutoRefreshControl
+          :active="open"
+          :preset-options="[...HISTORY_AUTO_REFRESH_PRESETS]"
+          :bounds="{
+            minSeconds: HISTORY_AUTO_REFRESH_MIN_SECONDS,
+            maxSeconds: AUTO_REFRESH_MAX_SECONDS,
+          }"
+          default-custom-seconds="10"
+          @refresh="refreshHistory"
+        />
         <Button
           variant="ghost"
           size="sm"
@@ -749,7 +783,7 @@ function bringToCanvas(): void {
               <component
                 :is="getStatusIcon(entry.status)"
                 class="w-3.5 h-3.5 shrink-0"
-                :class="entry.status === 'success' ? 'text-emerald-500' : entry.status === 'error' ? 'text-red-500' : 'text-amber-500'"
+                :class="getStatusColor(entry.status)"
               />
               <span class="text-xs font-medium truncate flex-1">{{ formatTime(entry.started_at) }}</span>
             </div>
@@ -759,10 +793,24 @@ function bringToCanvas(): void {
                 <template v-else>{{ entry.execution_time_ms.toFixed(2) }}ms</template>
               </span>
               <span
+                v-if="entry.status === 'skipped' || entry.status === 'failed'"
+                class="px-1 py-0 text-[9px] font-semibold rounded uppercase"
+                :class="entry.status === 'skipped' ? 'bg-gray-500/20 text-gray-400' : 'bg-red-500/20 text-red-400'"
+              >
+                {{ entry.status }}
+              </span>
+              <span
                 v-if="entry.trigger_source"
                 class="px-1 py-0 text-[9px] font-semibold rounded bg-violet-500/20 text-violet-400 uppercase"
               >
                 {{ entry.trigger_source }}
+              </span>
+              <span
+                v-if="entry.recovered"
+                class="px-1 py-0.5 rounded bg-amber-500/20 text-amber-400 inline-flex items-center"
+                title="This run was automatically re-run after a server restart"
+              >
+                <RotateCcw class="w-2.5 h-2.5" />
               </span>
             </div>
           </button>
@@ -795,6 +843,21 @@ function bringToCanvas(): void {
           class="space-y-3 pr-1"
           :class="{ 'opacity-50 pointer-events-none': isHistoryDetailLoading }"
         >
+          <div
+            v-if="selectedEntry?.recovered"
+            class="flex items-center gap-2 px-3 py-2 rounded-md bg-amber-500/10 text-amber-400 text-xs"
+          >
+            <RotateCcw class="w-3.5 h-3.5 shrink-0" />
+            <span v-if="selectedEntry?.status === 'skipped'">
+              Skipped after a server restart because auto-recover is off for this workflow.
+            </span>
+            <span v-else-if="selectedEntry?.status === 'failed'">
+              Recovery failed after a server restart.
+            </span>
+            <span v-else>
+              Recovered run, automatically re-run after a server restart.
+            </span>
+          </div>
           <!-- Inputs -->
           <div class="flex items-center justify-between">
             <div class="text-sm font-semibold">

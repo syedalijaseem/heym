@@ -29,6 +29,7 @@ class CredentialType(str, PyEnum):
     openai = "openai"
     google = "google"
     github = "github"
+    linear = "linear"
     custom = "custom"
     bearer = "bearer"
     header = "header"
@@ -277,6 +278,15 @@ class Workflow(Base):
     sse_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     sse_node_config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     mcp_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    auto_recover_runs: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    error_workflow_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("workflows.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    minutes_saved_per_run: Mapped[float | None] = mapped_column(Float, nullable=True)
+    workflow_timeout_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     scheduled_for_deletion: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, index=True
     )
@@ -510,6 +520,7 @@ class ExecutionHistory(Base):
     trigger_source: Mapped[str | None] = mapped_column(
         String(50), nullable=True, default=None, index=True
     )
+    recovered: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     workflow: Mapped["Workflow"] = relationship("Workflow", back_populates="executions")
     hitl_requests: Mapped[list["HITLRequest"]] = relationship(
@@ -537,6 +548,11 @@ class ActiveWorkflowExecution(Base):
     cancel_requested_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, index=True
     )
+    inputs: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    trigger_source: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    actor_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    recoverable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -1619,13 +1635,24 @@ class DashboardConversation(Base):
         UUID(as_uuid=True), ForeignKey("credentials.id", ondelete="SET NULL"), nullable=True
     )
     last_model: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    queue_paused_by_message_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("dashboard_messages.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     messages: Mapped[list["DashboardMessage"]] = relationship(
-        "DashboardMessage", back_populates="conversation", cascade="all, delete-orphan"
+        "DashboardMessage",
+        back_populates="conversation",
+        cascade="all, delete-orphan",
+        foreign_keys="DashboardMessage.conversation_id",
+    )
+    queue_items: Mapped[list["DashboardChatQueueItem"]] = relationship(
+        "DashboardChatQueueItem", back_populates="conversation", cascade="all, delete-orphan"
     )
 
 
@@ -1645,7 +1672,42 @@ class DashboardMessage(Base):
     tool_calls: Mapped[list | None] = mapped_column(JSONB, nullable=True, default=None)
 
     conversation: Mapped["DashboardConversation"] = relationship(
-        "DashboardConversation", back_populates="messages"
+        "DashboardConversation",
+        back_populates="messages",
+        foreign_keys=[conversation_id],
+    )
+
+
+class DashboardChatQueueItem(Base):
+    __tablename__ = "dashboard_chat_queue_items"
+    __table_args__ = (
+        Index(
+            "ix_dashboard_chat_queue_items_conv_created_id", "conversation_id", "created_at", "id"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    conversation_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("dashboard_conversations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    credential_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("credentials.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    model: Mapped[str] = mapped_column(String(255), nullable=False)
+    attachment: Mapped[dict | None] = mapped_column(JSONB, nullable=True, default=None)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    conversation: Mapped["DashboardConversation"] = relationship(
+        "DashboardConversation", back_populates="queue_items"
     )
 
 
@@ -1658,4 +1720,22 @@ class DashboardChatQuickPrompts(Base):
     prompts: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class Plugin(Base):
+    __tablename__ = "plugins"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    plugin_id: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    version: Mapped[str] = mapped_column(String(50), nullable=False)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    manifest: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    installed_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

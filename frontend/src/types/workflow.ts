@@ -32,6 +32,10 @@ export interface Workflow {
   rate_limit_window_seconds: number | null;
   sse_enabled: boolean;
   sse_node_config: Record<string, SseNodeConfig>;
+  auto_recover_runs: boolean;
+  error_workflow_id: string | null;
+  minutes_saved_per_run: number | null;
+  workflow_timeout_seconds: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -154,6 +158,7 @@ export type NodeType =
   | "rag"
   | "grist"
   | "github"
+  | "linear"
   | "googleSheets"
   | "bigquery"
   | "supabase"
@@ -171,7 +176,43 @@ export type NodeType =
   | "slackTrigger"
   | "discordTrigger"
   | "mcpCall"
-  | "chartOutput";
+  | "chartOutput"
+  | "plugin"
+  | "pluginTrigger";
+
+export interface PluginFieldDef {
+  key: string;
+  label: string;
+  type: "string" | "number" | "boolean" | "select";
+  required?: boolean;
+  secret?: boolean;
+  default?: string | number | boolean | null;
+  options?: { label: string; value: string }[];
+  dynamic?: boolean;
+  expression?: boolean;
+}
+
+export interface PluginNodeSummary {
+  key: string;
+  name: string;
+  kind: "action" | "trigger";
+  description: string;
+  fields: PluginFieldDef[];
+  dsl_hint?: string;
+  doc_slug?: string;
+  has_icon?: boolean;
+}
+
+export interface PluginSummary {
+  id: string;
+  name: string;
+  version: string;
+  kind: string;
+  description: string;
+  enabled: boolean;
+  nodes: PluginNodeSummary[];
+  has_icon?: boolean;
+}
 
 export type VariableType =
   | "string"
@@ -324,6 +365,12 @@ export interface NodeData {
   label: string;
   value?: string;
   inputFields?: InputField[];
+  /** Plugin node: id of the installed plugin package this node maps to. */
+  pluginId?: string;
+  /** Plugin node: key of the node within the plugin package. */
+  pluginNodeKey?: string;
+  /** Plugin node: per-field configuration values keyed by manifest field key. */
+  config?: Record<string, unknown>;
   model?: string;
   temperature?: number;
   maxTokens?: number;
@@ -524,6 +571,39 @@ export interface NodeData {
   githubWorkflowInputs?: string;
   githubWaitTimeoutSeconds?: string;
   githubPollIntervalSeconds?: string;
+  linearOperation?:
+    | "getViewer"
+    | "listTeams"
+    | "listProjects"
+    | "listIssues"
+    | "listWorkflowStates"
+    | "listTeamMembers"
+    | "getIssue"
+    | "createIssue"
+    | "updateIssue"
+    | "deleteIssue"
+    | "addIssueLink"
+    | "createComment"
+    | "listComments"
+    | "updateComment"
+    | "deleteComment"
+    | "resolveComment"
+    | "unresolveComment";
+  linearTeamId?: string;
+  linearProjectId?: string;
+  linearIssueId?: string;
+  linearTitle?: string;
+  linearDescription?: string;
+  linearStateId?: string;
+  linearAssigneeId?: string;
+  linearPriority?: string;
+  linearIssueLinkUrl?: string;
+  linearCommentId?: string;
+  linearCommentBody?: string;
+  linearParentCommentId?: string;
+  linearLimit?: string;
+  linearAfter?: string;
+  linearReturnAll?: boolean;
   errorMessage?: string;
   httpStatusCode?: number;
   retryEnabled?: boolean;
@@ -531,6 +611,8 @@ export interface NodeData {
   retryWaitSeconds?: number;
   onErrorEnabled?: boolean;
   retryAttempt?: number;
+  /** When true, this node's output is surfaced in the Canvas Execution Highlights popup. */
+  highlight?: boolean;
   /** Transient UI flag: triggers the Runbook slide-in entrance animation in BaseNode. */
   __runbookEntrance?: boolean;
   rabbitmqOperation?: string;
@@ -740,6 +822,20 @@ export interface ExecutionToken {
   revoked: boolean;
 }
 
+export type HighlightRecordKind = "input" | "output" | "agent" | "llm" | "final";
+
+export interface HighlightRecord {
+  node_id: string;
+  node_label: string;
+  node_type: string;
+  kind: HighlightRecordKind;
+  runs: string[];
+}
+
+export interface HighlightPayload {
+  records: HighlightRecord[];
+}
+
 export interface ExecutionResult {
   workflow_id: string;
   status: "success" | "error" | "pending" | "awaiting_file_upload";
@@ -747,6 +843,7 @@ export interface ExecutionResult {
   execution_time_ms: number;
   node_results: NodeResult[];
   execution_history_id?: string | null;
+  highlight?: HighlightPayload | null;
 }
 
 export interface FileUploadSlotStatus {
@@ -765,9 +862,10 @@ export interface ExecutionHistoryEntry {
   id: string;
   started_at: string;
   inputs: Record<string, unknown>;
-  status: "running" | "success" | "error" | "pending";
+  status: "running" | "success" | "error" | "pending" | "skipped" | "failed";
   result: ExecutionResult | null;
   trigger_source?: string | null;
+  recovered?: boolean;
 }
 
 export interface AllExecutionHistoryEntry {
@@ -778,10 +876,12 @@ export interface AllExecutionHistoryEntry {
   inputs: Record<string, unknown>;
   outputs: Record<string, unknown>;
   node_results: NodeResult[];
-  status: "running" | "success" | "error" | "pending";
+  status: "running" | "success" | "error" | "pending" | "skipped" | "failed";
   execution_time_ms: number;
   started_at: string;
   trigger_source?: string | null;
+  recovered?: boolean;
+  highlight?: HighlightPayload | null;
 }
 
 /** Lightweight list item without inputs/outputs/node_results. */
@@ -794,6 +894,7 @@ export interface AllExecutionHistoryEntryLight {
   status: string;
   execution_time_ms: number;
   trigger_source?: string | null;
+  recovered?: boolean;
 }
 
 export interface HistoryListResponse<T = AllExecutionHistoryEntryLight> {
@@ -818,6 +919,8 @@ export interface ServerExecutionHistory {
   execution_time_ms: number;
   started_at: string;
   trigger_source?: string | null;
+  recovered?: boolean;
+  highlight?: HighlightPayload | null;
 }
 
 export interface NodeResult {

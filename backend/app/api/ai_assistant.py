@@ -155,7 +155,12 @@ WORKFLOW_ANALYZE_SYSTEM_PROMPT = """You analyze an automation workflow and produ
 Given the workflow's nodes and edges, write Markdown with these sections, in this exact order:
 
 ## Improvement areas
-A bulleted list of concrete, actionable suggestions (reliability, error handling, missing validation, cost, clarity). Whenever the workflow handles credentials, user input, external requests, data exposure, injection-prone steps, or anything else security-relevant, include a clear **security** angle here (risks and how to mitigate them). If the workflow already looks solid, say so and suggest small refinements.
+A bulleted list of concrete, actionable suggestions (reliability, error handling, missing validation, cost, clarity). Whenever the workflow handles credentials, user input, external requests, data exposure, injection-prone steps, or anything else security-relevant, include a clear **security** angle here (risks and how to mitigate them). Always cover these three checks explicitly:
+1. **Error handling** — Inspect the provided `analysisContext`. ONLY when BOTH `hasErrorHandler` is false AND `errorWorkflowConfigured` is false (the workflow has no error handling at all), call this out and recommend adding an errorHandler node and/or configuring an error workflow ("on error, run workflow"). If at least one is present (`hasErrorHandler` true OR `errorWorkflowConfigured` true), the workflow already catches errors — do NOT mention error handling at all: no suggestion to add more, and no acknowledgement.
+2. **Time saved** — ONLY when `minutesSavedPerRun` is null or zero, recommend setting an estimated "time saved per run" so the analytics time saved metric can populate. If it is already set, do NOT mention time saved at all (no acknowledgement).
+3. **Network nodes** — For any node that performs network I/O (e.g. `httpRequest` and integration/API nodes such as slack, drive, notion, etc.), recommend node-specific error handling (enable retry and/or onError "continue on error") on those specific nodes by label.
+
+If the workflow already looks solid, say so and suggest small refinements.
 
 ## Purpose
 One or two sentences on what this workflow is for.
@@ -983,6 +988,33 @@ async def _get_owned_credential_ids(db: AsyncSession, user_id: uuid.UUID) -> set
     return {str(credential_id) for credential_id in result.scalars().all()}
 
 
+async def _load_installed_plugins(db: AsyncSession) -> list[dict]:
+    """Return enabled plugins for assistant-prompt injection (empty when off)."""
+    from app.config import settings
+    from app.db.models import Plugin
+    from app.models.plugin_schemas import PluginManifest
+
+    if not settings.plugins_enabled:
+        return []
+    rows = (await db.execute(select(Plugin).where(Plugin.enabled.is_(True)))).scalars().all()
+    result: list[dict] = []
+    for plugin in rows:
+        manifest = PluginManifest.model_validate(plugin.manifest)
+        for node in manifest.resolved_nodes():
+            result.append(
+                {
+                    "id": plugin.plugin_id,
+                    "node_key": node.key,
+                    "name": node.name,
+                    "kind": node.kind,
+                    "description": node.description,
+                    "dsl_hint": node.dsl_hint,
+                    "fields": [field.model_dump() for field in node.fields],
+                }
+            )
+    return result
+
+
 def _build_workflow_builder_user_message(
     goal: str,
     inputs: dict[str, Any],
@@ -1119,6 +1151,7 @@ async def create_and_run_generated_workflow_tool(
             available_workflows,
             user.user_rules,
             available_node_templates=node_template_payload,
+            installed_plugins=await _load_installed_plugins(db),
         )
         builder_messages = [
             {"role": "system", "content": system_prompt},
@@ -1241,6 +1274,7 @@ async def edit_and_run_generated_workflow_tool(
             available_workflows,
             user.user_rules,
             available_node_templates=node_template_payload,
+            installed_plugins=await _load_installed_plugins(db),
         )
         builder_messages = [
             {"role": "system", "content": system_prompt},
@@ -3528,6 +3562,20 @@ async def analyze_workflow_stream(
     if request.current_workflow:
         wf_summary = json.dumps(request.current_workflow, ensure_ascii=False)
         system_prompt += f"\n\nWorkflow:\n```json\n{wf_summary}\n```"
+        nodes = request.current_workflow.get("nodes") or []
+        has_error_handler = any(
+            isinstance(n, dict) and n.get("type") == "errorHandler" for n in nodes
+        )
+        analysis_context = {
+            "hasErrorHandler": has_error_handler,
+            "errorWorkflowConfigured": bool(request.current_workflow.get("error_workflow_id")),
+            "minutesSavedPerRun": request.current_workflow.get("minutes_saved_per_run"),
+        }
+        system_prompt += (
+            "\n\nanalysisContext:\n```json\n"
+            + json.dumps(analysis_context, ensure_ascii=False)
+            + "\n```"
+        )
     system_prompt = _append_execution_log_to_prompt(system_prompt, request.execution_log)
 
     workflow_id = None
@@ -3625,6 +3673,7 @@ async def workflow_assistant_stream(
             request.available_workflows,
             current_user.user_rules,
             available_node_templates=node_template_payload,
+            installed_plugins=await _load_installed_plugins(db),
         )
 
     if is_dashboard_widget_workflow(request.current_workflow):

@@ -10,6 +10,7 @@ import {
   Trash2,
   CheckCircle2,
   XCircle,
+  RotateCcw,
   SkipForward,
   Circle,
   Copy,
@@ -30,6 +31,11 @@ import type {
 import Button from "@/components/ui/Button.vue";
 import Dialog from "@/components/ui/Dialog.vue";
 import Select from "@/components/ui/Select.vue";
+import AutoRefreshControl from "@/components/ui/AutoRefreshControl.vue";
+import {
+  AUTO_REFRESH_MAX_SECONDS,
+  HISTORY_AUTO_REFRESH_MIN_SECONDS,
+} from "@/composables/useAutoRefresh";
 import { buildDisplayNodeResults, type DisplayNodeResult } from "@/lib/executionLog";
 import { cn } from "@/lib/utils";
 import { workflowApi } from "@/services/api";
@@ -67,6 +73,13 @@ const selectedTriggerSource = ref<string | undefined>(undefined);
 const searchInputRef = ref<HTMLInputElement | null>(null);
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 const SEARCH_DEBOUNCE_MS = 500;
+
+const HISTORY_AUTO_REFRESH_PRESETS = [
+  { value: "off", label: "Off" },
+  { value: "1", label: "1s" },
+  { value: "5", label: "5s" },
+  { value: "custom", label: "Custom" },
+] as const;
 const activeExecutions = ref<ActiveExecutionItem[]>([]);
 const isCancellingId = ref<string | null>(null);
 const loadingMore = ref(false);
@@ -500,6 +513,7 @@ function getStatusIcon(status: string): typeof CheckCircle2 {
     case "success":
       return CheckCircle2;
     case "error":
+    case "failed":
       return XCircle;
     case "pending":
       return Clock;
@@ -515,11 +529,12 @@ function getStatusColor(status: string): string {
     case "success":
       return "text-emerald-500";
     case "error":
+    case "failed":
       return "text-red-500";
     case "pending":
       return "text-amber-500";
     case "skipped":
-      return "text-amber-500";
+      return "text-gray-400";
     default:
       return "text-muted-foreground";
   }
@@ -722,22 +737,13 @@ function openExternal(url: string): void {
 
 function bringToCanvas(): void {
   if (!selectedEntry.value?.workflow_id) return;
-  workflowStore.pendingHistoryInputs = selectedEntry.value.inputs;
-  workflowStore.pendingHistoryNodeResults = selectedEntry.value.node_results || [];
-  workflowStore.pendingHistoryExecutionResult = {
-    workflow_id: selectedEntry.value.workflow_id,
-    status:
-      selectedEntry.value.status === "error"
-        ? "error"
-        : selectedEntry.value.status === "pending"
-          ? "pending"
-        : "success",
-    outputs: selectedEntry.value.outputs,
-    execution_time_ms: selectedEntry.value.execution_time_ms,
-    node_results: selectedEntry.value.node_results || [],
-    execution_history_id: selectedEntry.value.id,
-  };
-  router.push({ name: "editor", params: { id: selectedEntry.value.workflow_id } });
+  void router.push({
+    name: "editor",
+    params: {
+      id: selectedEntry.value.workflow_id,
+      executionId: selectedEntry.value.id,
+    },
+  });
   emit("close");
 }
 </script>
@@ -767,7 +773,17 @@ function bringToCanvas(): void {
             clear-aria-label="Clear tag filter"
           />
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 flex-wrap justify-end">
+          <AutoRefreshControl
+            :active="open"
+            :preset-options="[...HISTORY_AUTO_REFRESH_PRESETS]"
+            :bounds="{
+              minSeconds: HISTORY_AUTO_REFRESH_MIN_SECONDS,
+              maxSeconds: AUTO_REFRESH_MAX_SECONDS,
+            }"
+            default-custom-seconds="10"
+            @refresh="refreshHistory"
+          />
           <Button
             variant="ghost"
             size="sm"
@@ -920,10 +936,24 @@ function bringToCanvas(): void {
                 <Clock class="w-4 h-4 text-muted-foreground shrink-0" />
                 <span class="text-sm font-medium truncate">{{ formatTime(entry.started_at) }}</span>
                 <span
+                  v-if="entry.status === 'skipped' || entry.status === 'failed'"
+                  class="px-1.5 py-0.5 text-[10px] font-semibold rounded uppercase shrink-0 hidden sm:inline"
+                  :class="entry.status === 'skipped' ? 'bg-gray-500/20 text-gray-400' : 'bg-red-500/20 text-red-400'"
+                >
+                  {{ entry.status }}
+                </span>
+                <span
                   v-if="entry.trigger_source"
                   class="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-violet-500/20 text-violet-400 uppercase shrink-0 hidden sm:inline"
                 >
                   {{ entry.trigger_source }}
+                </span>
+                <span
+                  v-if="entry.recovered"
+                  class="px-1 py-0.5 rounded bg-amber-500/20 text-amber-400 shrink-0 hidden sm:inline-flex items-center"
+                  title="This run was automatically re-run after a server restart"
+                >
+                  <RotateCcw class="w-3 h-3" />
                 </span>
               </div>
               <component
@@ -964,6 +994,21 @@ function bringToCanvas(): void {
             v-else-if="selectedEntry"
             class="space-y-3"
           >
+            <div
+              v-if="selectedEntry?.recovered"
+              class="flex items-center gap-2 px-3 py-2 rounded-md bg-amber-500/10 text-amber-400 text-xs"
+            >
+              <RotateCcw class="w-3.5 h-3.5 shrink-0" />
+              <span v-if="selectedEntry?.status === 'skipped'">
+                Skipped after a server restart because auto-recover is off for this workflow.
+              </span>
+              <span v-else-if="selectedEntry?.status === 'failed'">
+                Recovery failed after a server restart.
+              </span>
+              <span v-else>
+                Recovered run, automatically re-run after a server restart.
+              </span>
+            </div>
             <div class="text-sm font-semibold">
               Workflow
             </div>

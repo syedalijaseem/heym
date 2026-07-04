@@ -63,6 +63,32 @@ def merge_credential_config_for_update(
             merged_config["auth_mode"] = incoming_auth_mode
         return merged_config
 
+    if credential_type == CredentialType.linear:
+        merged_config = dict(existing_config)
+        incoming_auth_mode = str(incoming_config.get("auth_mode", "") or "").strip()
+        if incoming_auth_mode == "oauth":
+            merged_config.pop("api_key", None)
+        elif str(incoming_config.get("api_key", "") or "").strip():
+            merged_config.pop("access_token", None)
+            merged_config.pop("refresh_token", None)
+            merged_config.pop("token_expiry", None)
+            incoming_auth_mode = "api_key"
+        for key in (
+            "api_key",
+            "client_id",
+            "client_secret",
+            "access_token",
+            "refresh_token",
+            "token_expiry",
+            "auth_mode",
+        ):
+            incoming_value = str(incoming_config.get(key, "") or "").strip()
+            if incoming_value:
+                merged_config[key] = incoming_value
+        if incoming_auth_mode:
+            merged_config["auth_mode"] = incoming_auth_mode
+        return merged_config
+
     if credential_type != CredentialType.github:
         return incoming_config
 
@@ -157,6 +183,14 @@ def get_masked_value(credential_type: CredentialType, config: dict) -> str | Non
         if auth_mode == "oauth":
             return "Not connected"
         return mask_api_key(api_token)
+    elif credential_type == CredentialType.linear:
+        auth_mode = str(config.get("auth_mode", "")).strip()
+        access_token = str(config.get("access_token", "")).strip()
+        if access_token:
+            return "connected"
+        if auth_mode == "oauth":
+            return "Not connected"
+        return mask_api_key(str(config.get("api_key", "") or ""))
     elif credential_type == CredentialType.s3:
         access_key = str(config.get("aws_access_key_id", "")).strip()
         region = str(config.get("aws_region", "")).strip()
@@ -196,6 +230,9 @@ def get_public_credential_fields(
             workspace_name = str(config.get("workspace_name", "")).strip()
             fields["workspace_name"] = workspace_name or None
         return fields
+    if credential_type == CredentialType.linear:
+        auth_mode = str(config.get("auth_mode", "api_key")).strip() or "api_key"
+        return {"auth_mode": auth_mode}
     return {}
 
 
@@ -280,6 +317,22 @@ def _merge_supabase_update_config(
     inline_key = str(inline_config.get("supabase_key", "")).strip()
     if inline_key:
         merged["supabase_key"] = inline_key
+    return merged
+
+
+def _merge_linear_test_config(
+    inline_config: dict,
+    stored_config: dict,
+) -> dict:
+    """Merge inline form values with stored secrets for Linear connection tests."""
+    merged = dict(stored_config)
+    incoming_auth_mode = str(inline_config.get("auth_mode", "") or "").strip()
+    if incoming_auth_mode:
+        merged["auth_mode"] = incoming_auth_mode
+    for key in ("api_key", "client_id", "client_secret", "access_token", "refresh_token"):
+        inline_value = str(inline_config.get(key, "") or "").strip()
+        if inline_value:
+            merged[key] = inline_value
     return merged
 
 
@@ -698,6 +751,7 @@ async def run_credential_connection_test(
     """Test whether a credential configuration can reach the external service."""
     if test_data.type not in {
         CredentialType.supabase,
+        CredentialType.linear,
         CredentialType.notion,
         CredentialType.clickhouse,
     }:
@@ -722,6 +776,8 @@ async def run_credential_connection_test(
         stored_config = decrypt_config(credential.encrypted_config)
         if test_data.type == CredentialType.supabase:
             config = _merge_supabase_test_config(config, stored_config)
+        elif test_data.type == CredentialType.linear:
+            config = _merge_linear_test_config(config, stored_config)
         elif test_data.type == CredentialType.clickhouse:
             config = _merge_clickhouse_test_config(config, stored_config)
         else:
@@ -734,19 +790,39 @@ async def run_credential_connection_test(
             from app.services.supabase_service import SupabaseService
 
             SupabaseService(config).test_connection()
-        elif test_data.type == CredentialType.clickhouse:
+            return CredentialTestResponse(success=True, message="Connection successful")
+
+        if test_data.type == CredentialType.linear:
+            from app.services.linear_service import LinearService
+
+            service = LinearService(config)
+            try:
+                viewer = service.test_connection()
+            finally:
+                service.close()
+            viewer_name = str(
+                viewer.get("displayName") or viewer.get("name") or viewer.get("email") or ""
+            )
+            if viewer_name:
+                return CredentialTestResponse(
+                    success=True,
+                    message=f"Connected as {viewer_name}",
+                )
+            return CredentialTestResponse(success=True, message="Connection successful")
+
+        if test_data.type == CredentialType.clickhouse:
             from app.services.clickhouse_service import ClickHouseService
 
             await run_in_threadpool(ClickHouseService(config).test_connection)
-        else:
-            from app.services.notion_service import NotionService
+            return CredentialTestResponse(success=True, message="Connection successful")
 
-            with NotionService(config) as service:
-                await run_in_threadpool(service.test_connection)
+        from app.services.notion_service import NotionService
+
+        with NotionService(config) as service:
+            await run_in_threadpool(service.test_connection)
+        return CredentialTestResponse(success=True, message="Connection successful")
     except ValueError as exc:
         return CredentialTestResponse(success=False, message=str(exc))
-
-    return CredentialTestResponse(success=True, message="Connection successful")
 
 
 @router.get(
@@ -1027,7 +1103,11 @@ async def update_credential(
                 credential_data.config,
             )
         )
-        validate_credential_config(credential.type, config)
+        validate_credential_config(
+            credential.type,
+            config,
+            allow_pending_oauth=credential.type in {CredentialType.linear, CredentialType.notion},
+        )
         credential.encrypted_config = encrypt_config(config)
 
     await db.flush()
@@ -1162,6 +1242,28 @@ def validate_credential_config(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="GitHub credential base_url must be a valid http(s) URL",
                 )
+    elif credential_type == CredentialType.linear:
+        has_token = bool(str(config.get("api_key") or config.get("access_token") or "").strip())
+        uses_oauth = str(config.get("auth_mode", "")).strip() == "oauth"
+        has_oauth_client = bool(
+            str(config.get("client_id", "")).strip()
+            and str(config.get("client_secret", "")).strip()
+        )
+        if uses_oauth and not has_oauth_client:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Linear OAuth requires client_id and client_secret",
+            )
+        if not has_token and not uses_oauth:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Linear credential requires api_key or OAuth client credentials",
+            )
+        if uses_oauth and not has_token and not allow_pending_oauth:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Linear OAuth credential requires a completed authorization",
+            )
     elif credential_type == CredentialType.custom:
         if "api_key" not in config or not config["api_key"]:
             raise HTTPException(

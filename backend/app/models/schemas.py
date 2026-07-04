@@ -186,6 +186,10 @@ class WorkflowUpdate(BaseModel):
     rate_limit_window_seconds: int | None = None
     sse_enabled: bool | None = None
     sse_node_config: dict | None = None
+    auto_recover_runs: bool | None = None
+    error_workflow_id: uuid.UUID | None = None
+    minutes_saved_per_run: float | None = None
+    workflow_timeout_seconds: int | None = None
 
 
 class WorkflowShareRequest(BaseModel):
@@ -221,6 +225,10 @@ class WorkflowResponse(BaseModel):
     rate_limit_window_seconds: int | None = None
     sse_enabled: bool = False
     sse_node_config: dict | None = None
+    auto_recover_runs: bool = True
+    error_workflow_id: uuid.UUID | None = None
+    minutes_saved_per_run: float | None = None
+    workflow_timeout_seconds: int | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -341,6 +349,18 @@ class NodeResultSchema(BaseModel):
     metadata: dict = Field(default_factory=dict)
 
 
+class HighlightRecordSchema(BaseModel):
+    node_id: str
+    node_label: str
+    node_type: str
+    kind: str  # "input" | "output" | "agent" | "llm" | "final"
+    runs: list[str] = Field(default_factory=list)
+
+
+class HighlightPayloadSchema(BaseModel):
+    records: list[HighlightRecordSchema] = Field(default_factory=list)
+
+
 class WorkflowExecuteResponse(BaseModel):
     workflow_id: uuid.UUID
     status: str
@@ -348,6 +368,7 @@ class WorkflowExecuteResponse(BaseModel):
     node_results: list[NodeResultSchema] = []
     execution_time_ms: float
     execution_history_id: uuid.UUID | None = None
+    highlight: HighlightPayloadSchema | None = None
 
 
 class ExecutionHistoryResponse(BaseModel):
@@ -360,6 +381,8 @@ class ExecutionHistoryResponse(BaseModel):
     execution_time_ms: float
     started_at: datetime
     trigger_source: str | None = None
+    recovered: bool = False
+    highlight: HighlightPayloadSchema | None = None
 
     class Config:
         from_attributes = True
@@ -377,6 +400,8 @@ class ExecutionHistoryWithWorkflowResponse(BaseModel):
     execution_time_ms: float
     started_at: datetime
     trigger_source: str | None = None
+    recovered: bool = False
+    highlight: HighlightPayloadSchema | None = None
 
 
 class ExecutionHistoryListResponse(BaseModel):
@@ -390,6 +415,7 @@ class ExecutionHistoryListResponse(BaseModel):
     status: str
     execution_time_ms: float
     trigger_source: str | None = None
+    recovered: bool = False
 
 
 class HistoryListResponse(BaseModel):
@@ -445,6 +471,7 @@ class CredentialType(str, Enum):
     openai = "openai"
     google = "google"
     github = "github"
+    linear = "linear"
     custom = "custom"
     bearer = "bearer"
     header = "header"
@@ -482,6 +509,16 @@ class CredentialConfigGoogle(BaseModel):
 class CredentialConfigGitHub(BaseModel):
     api_key: str
     base_url: str | None = None
+
+
+class CredentialConfigLinear(BaseModel):
+    api_key: str | None = None
+    auth_mode: str | None = None
+    client_id: str | None = None
+    client_secret: str | None = None
+    access_token: str | None = None
+    refresh_token: str | None = None
+    token_expiry: str | None = None
 
 
 class CredentialConfigElevenLabs(BaseModel):
@@ -1145,6 +1182,7 @@ class AnalyticsStatsResponse(BaseModel):
     success_count_24h: int
     error_count_24h: int
     avg_latency_24h_ms: float
+    time_saved_minutes: float = 0.0
 
 
 class TimeSeriesMetricsResponse(BaseModel):

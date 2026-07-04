@@ -9,6 +9,7 @@ Heym provides a variety of node types for building workflows. Use [expressions](
 | [Input](../nodes/input-node.md) | Text entry point for the workflow (HTTP/[webhook](./webhooks.md)) | 1 |
 | [Cron](../nodes/cron-node.md) | Trigger on a schedule (cron expression) | 1 |
 | [Telegram Trigger](../nodes/telegram-trigger-node.md) | Trigger when a Telegram bot webhook update arrives | 1 |
+| [Slack Trigger](../nodes/slack-trigger-node.md) | Trigger when Slack sends an Events API webhook | 1 |
 | [Discord Trigger](../nodes/discord-trigger-node.md) | Trigger when Discord sends an application interaction webhook | 1 |
 | [IMAP Trigger](../nodes/imap-trigger-node.md) | Trigger when a new email arrives in an IMAP mailbox | 1 |
 | [WebSocket Trigger](../nodes/websocket-trigger-node.md) | Trigger from an outbound connection to an external WebSocket server | 1 |
@@ -56,6 +57,7 @@ See [Triggers](./triggers.md) for all entry points.
 | [Redis](../nodes/redis-node.md) | Redis operations (set, get, hasKey, deleteKey) | 1 | 1 |
 | [Grist](../nodes/grist-node.md) | Read/write Grist spreadsheets | 1 | 1 |
 | [GitHub](../nodes/github-node.md) | Manage repositories, users, issues, pull requests, reviews, releases, Actions workflows, and files through the GitHub REST API | 1 | 1 |
+| [Linear](../nodes/linear-node.md) | Manage Linear teams, projects, issues, workflow states, and comments through GraphQL | 1 | 1 |
 | [Google Sheets](../nodes/google-sheets-node.md) | Read/write Google Sheets via OAuth2 | 1 | 1 |
 | [BigQuery](../nodes/bigquery-node.md) | Run SQL queries and insert rows in BigQuery | 1 | 1 |
 | [Supabase](../nodes/supabase-node.md) | Query and mutate Supabase tables through PostgREST | 1 | 1 |
@@ -83,6 +85,17 @@ See [Triggers](./triggers.md) for all entry points.
 | [Console Log](../nodes/console-log-node.md) | Log to backend console | 1 | 1 |
 | [Disable Node](../nodes/disable-node.md) | Disable another node in the workflow | 1 | 1 |
 | [Throw Error](../nodes/throw-error-node.md) | Stop workflow with error response | 1 | 0 |
+
+## Plugin Nodes
+
+Plugin nodes are provided by plugins installed on the instance. Each installed
+plugin appears in the palette under **Plugins** with its own name; under the hood
+it maps to one of these two node types.
+
+| Node | Description | Inputs | Outputs |
+|------|-------------|--------|---------|
+| [Plugin](../nodes/plugin-node.md) | Custom action provided by an installed plugin | 1 | 1 |
+| [Plugin Trigger](../nodes/plugin-trigger-node.md) | Custom trigger provided by an installed plugin | 0 | 1 |
 
 ## Related
 

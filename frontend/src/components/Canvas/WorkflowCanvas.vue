@@ -17,6 +17,7 @@ import type { NodeType, WorkflowEdge, WorkflowNode } from "@/types/workflow";
 import BaseNode from "@/components/Nodes/BaseNode.vue";
 import InsertableEdge from "@/components/Canvas/InsertableEdge.vue";
 import NodeContextMenu from "@/components/Canvas/NodeContextMenu.vue";
+import HighlightPopup from "@/components/Canvas/HighlightPopup.vue";
 import StickyNoteNode from "@/components/Nodes/StickyNoteNode.vue";
 import AgentMemoryGraphDialog from "@/components/Dialogs/AgentMemoryGraphDialog.vue";
 import ExtractSubWorkflowDialog from "@/components/Dialogs/ExtractSubWorkflowDialog.vue";
@@ -667,6 +668,7 @@ function handleNodeDoubleClick(event: {
       nodeType?: NodeType;
       ragOperation?: string;
       githubOperation?: string;
+      linearOperation?: string;
       notionOperation?: string;
     };
   };
@@ -712,6 +714,23 @@ function handleNodeDoubleClick(event: {
       fieldToFocus = "githubWorkflowInputs";
     } else {
       fieldToFocus = "githubOwner";
+    }
+  } else if (nodeType === "linear") {
+    const linearOperation = event.node.data?.linearOperation;
+    if (linearOperation === "createComment" || linearOperation === "updateComment") {
+      fieldToFocus = "linearCommentBody";
+    } else if (linearOperation === "createIssue" || linearOperation === "updateIssue") {
+      fieldToFocus = "linearDescription";
+    } else if (linearOperation === "addIssueLink") {
+      fieldToFocus = "linearIssueLinkUrl";
+    } else if (
+      linearOperation === "getIssue" ||
+      linearOperation === "deleteIssue" ||
+      linearOperation === "listComments"
+    ) {
+      fieldToFocus = "linearIssueId";
+    } else {
+      fieldToFocus = "linearTeamId";
     }
   } else if (nodeType === "notion") {
     const notionOperation = event.node.data?.notionOperation;
@@ -869,6 +888,21 @@ function handleDrop(event: DragEvent): void {
 
   let defaultData = getDefaultNodeData(nodeType);
 
+  if (nodeType === "plugin" || nodeType === "pluginTrigger") {
+    const pluginId = event.dataTransfer?.getData("application/heym-plugin-id");
+    const pluginNodeKey = event.dataTransfer?.getData("application/heym-plugin-node-key");
+    const pluginLabel = event.dataTransfer?.getData("application/heym-plugin-label");
+    if (pluginId) {
+      defaultData = {
+        ...defaultData,
+        pluginId,
+        pluginNodeKey: pluginNodeKey || undefined,
+        label: pluginLabel || pluginNodeKey || pluginId,
+        config: {},
+      };
+    }
+  }
+
   const pendingSource = workflowStore.pendingConnectionSource;
   if (pendingSource) {
     const sourceNode = workflowStore.nodes.find((n) => n.id === pendingSource.nodeId);
@@ -1007,6 +1041,7 @@ function getDefaultNodeData(type: NodeType): WorkflowNode["data"] {
     rag: { label: "rag", vectorStoreId: "", ragOperation: undefined, documentContent: "$input.text", documentMetadata: "{}", queryText: "$input.text", searchLimit: 5, metadataFilters: "{}" },
     grist: { label: "grist", credentialId: "", gristOperation: undefined, gristDocId: "", gristTableId: "", gristRecordId: "", gristRecordData: "{}", gristRecordsData: "[]", gristFilter: "{}", gristSort: "", gristLimit: 100, gristRecordIds: "[]" },
     github: { label: "github", credentialId: "", githubOperation: "getRepository", githubOwner: "", githubRepo: "", githubOrganization: "", githubInviteEmail: "", githubIssueNumber: "", githubTitle: undefined, githubBody: undefined, githubCommentBody: "$input.text", githubState: undefined, githubStateReason: undefined, githubAssignee: "", githubCreator: "", githubMentioned: "", githubLabelsFilter: "", githubSince: "", githubSort: "", githubDirection: "", githubLabels: undefined, githubAssignees: undefined, githubLockReason: "", githubHead: "", githubBase: "main", githubPullRequestNumber: "", githubReviewId: "", githubReviewEvent: "APPROVE", githubReviewBody: "", githubCommitId: "", githubDraft: undefined, githubPrerelease: undefined, githubFilePath: "", githubFileContent: "$input.text", githubCommitMessage: "", githubBranch: "", githubPerPage: "30", githubTagName: "", githubReleaseId: "", githubWorkflowId: "", githubWorkflowInputs: undefined, githubWaitTimeoutSeconds: "600", githubPollIntervalSeconds: "5" },
+    linear: { label: "linear", credentialId: "", linearOperation: "listIssues", linearTeamId: "", linearProjectId: "", linearIssueId: "", linearIssueLinkUrl: "", linearTitle: "", linearDescription: "$input.text", linearStateId: "", linearAssigneeId: "", linearPriority: "", linearCommentId: "", linearCommentBody: "$input.text", linearParentCommentId: "", linearLimit: "50", linearReturnAll: false },
     googleSheets: { label: "googleSheets", credentialId: "", gsOperation: undefined, gsSpreadsheetId: "", gsSheetName: "Sheet1", gsStartRow: "1", gsUpdateRow: "1", gsMaxRows: "0", gsHasHeader: true, gsRowCount: "1", gsKeepHeader: false, gsAppendPlacement: "append", gsValuesInputMode: "raw", gsValuesSelectiveRows: "1", gsValuesSelectiveCols: "3", gsValues: "[]" },
     bigquery: { label: "bigquery", credentialId: "", bqOperation: undefined, bqProjectId: "", bqQuery: "", bqMaxResults: "1000", bqDatasetId: "", bqTableId: "", bqRowsInputMode: "raw", bqRows: "[]", bqMappings: [{ key: "field", value: "$input.text" }] },
     supabase: { label: "supabase", credentialId: "", supabaseOperation: undefined, supabaseSchema: "public", supabaseTable: "", supabaseSelectColumns: "*", supabaseFilter: "{}", supabaseLimit: "100", supabaseOrderBy: "", supabaseAscending: true, supabaseRows: "[]", supabaseOnConflict: "", supabaseData: "{}" },
@@ -1053,6 +1088,16 @@ function getDefaultNodeData(type: NodeType): WorkflowNode["data"] {
       columns: [],
       unit: "",
       title: "",
+    },
+    plugin: {
+      label: "plugin",
+      pluginId: "",
+      config: {},
+    },
+    pluginTrigger: {
+      label: "pluginTrigger",
+      pluginId: "",
+      config: {},
     },
   };
   return defaults[type];
@@ -1814,6 +1859,8 @@ watch(
         />
       </Transition>
     </VueFlow>
+
+    <HighlightPopup :payload="workflowStore.highlightPayload" />
 
     <NodeContextMenu
       :visible="contextMenuVisible"

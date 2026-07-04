@@ -278,6 +278,8 @@ const analysisWorkflowPayload = computed(() => ({
   description: workflowStore.currentWorkflow?.description ?? null,
   nodes: workflowStore.nodes,
   edges: workflowStore.edges,
+  error_workflow_id: workflowStore.currentWorkflow?.error_workflow_id ?? null,
+  minutes_saved_per_run: workflowStore.currentWorkflow?.minutes_saved_per_run ?? null,
 }));
 
 function toggleAnalysisPanel(): void {
@@ -300,8 +302,11 @@ async function runWorkflowForAnalysis(): Promise<
   if (!targets.isValid) return undefined;
   try {
     await workflowStore.executeWorkflow(workflowStore.buildExecutionRequestBody());
-  } catch {
-    // Errors surface via execution state; analysis still proceeds.
+  } catch (err) {
+    if (err instanceof Error && err.message === "Execution cancelled") {
+      throw err;
+    }
+    // Other errors surface via execution state; analysis still proceeds.
   }
   const log = buildExecutionLogForAssistant(
     workflowStore.nodeResults,
@@ -430,6 +435,7 @@ function ensurePendingExecutionStream(): void {
           execution_time_ms: serverHistory.execution_time_ms,
           node_results: serverHistory.node_results || [],
           execution_history_id: serverHistory.id,
+          highlight: serverHistory.highlight ?? null,
         },
         trigger_source: serverHistory.trigger_source ?? null,
       };
@@ -446,6 +452,7 @@ function ensurePendingExecutionStream(): void {
           execution_time_ms: serverHistory.execution_time_ms,
           node_results: serverHistory.node_results || [],
           execution_history_id: serverHistory.id,
+          highlight: serverHistory.highlight ?? null,
         },
         trigger_source: serverHistory.trigger_source ?? null,
       };
@@ -569,6 +576,31 @@ function downloadWorkflow(): void {
   URL.revokeObjectURL(url);
 }
 
+async function bringExecutionFromRoute(): Promise<void> {
+  const execId = route.params.executionId as string | undefined;
+  if (!execId) return;
+  const routeWorkflowId = route.params.id as string | undefined;
+  if (!routeWorkflowId || workflowStore.currentWorkflow?.id !== routeWorkflowId) return;
+  // Use the same store path as the Execution History dialog's "Bring to Canvas" so
+  // highlights and node/output mapping populate identically (pass the full execution
+  // result, not just node_results). fetchExecutionHistoryEntry returns null when the
+  // execution is missing/inaccessible -> fall back to the plain workflow.
+  const entry = await workflowStore.fetchExecutionHistoryEntry(execId);
+  if (!entry) return;
+  if (
+    route.params.executionId !== execId ||
+    route.params.id !== routeWorkflowId ||
+    workflowStore.currentWorkflow?.id !== routeWorkflowId
+  ) {
+    return;
+  }
+  workflowStore.loadHistoryInputs(
+    entry.inputs,
+    entry.result?.node_results || [],
+    entry.result || undefined,
+  );
+}
+
 onMounted(async () => {
   window.addEventListener("keydown", handleKeyDown);
   window.addEventListener("storage", handleHitlResolutionStorage);
@@ -608,6 +640,7 @@ onMounted(async () => {
         workflowStore.pendingHistoryExecutionResult || undefined,
       );
     }
+    await bringExecutionFromRoute();
     // Handle node template injection via query param
     const nodeTemplateId = route.query.addNodeTemplate as string | undefined;
     if (nodeTemplateId) {
@@ -694,8 +727,18 @@ watch(
         loading.value = false;
       }
       if (loadedWorkflow) {
+        await bringExecutionFromRoute();
         await playRunbookFromQueryIfReady();
       }
+    }
+  },
+);
+
+watch(
+  () => route.params.executionId as string | undefined,
+  async (execId, prevExecId) => {
+    if (execId && execId !== prevExecId) {
+      await bringExecutionFromRoute();
     }
   },
 );
@@ -1563,6 +1606,11 @@ function onDocSelectFromPalette(categoryId: string, slug: string, event?: MouseE
       @close="shareOpen = false"
     >
       <div class="space-y-6">
+        <p class="text-sm text-muted-foreground">
+          Sharing this workflow lets collaborators view, edit, and run it. Credentials and
+          sub-workflows used by this workflow are not shared automatically. Share each credential
+          and sub-workflow with the same users or teams so recipients can run the workflow.
+        </p>
         <div class="space-y-3">
           <div class="space-y-2">
             <Label>Invite by email</Label>

@@ -121,7 +121,7 @@ A workflow consists of nodes (operations) and edges (connections between nodes).
 
 - **⛔ ABSOLUTE BAN:** The following names (and all their case variations, including uppercase/lowercase/mixed-case) are STRICTLY FORBIDDEN as either node names or parameter names:
   - **"result" and "results"** (e.g., `result`, `results`, `Result`, `Results`, `RESULT`, `RESULTS`). These cause critical system conflicts and must never be used anywhere.
-  - System fields: `headers`, `query`, `value`, `list`, `array`, `vars`, `items`, `name`, `type`, `input`, `now`, `date`
+  - System fields: `headers`, `query`, `value`, `list`, `array`, `vars`, `items`, `name`, `type`, `input`, `now`, `date`, `workflowName`, `workflowDescription`, `workflowUrl`, `workflowPath`, `executionId`
   - String methods: `length`, `orEmpty`, `toString`, `toUpperCase`, `toLowerCase`, `substring`, `indexOf`, `contains`, `startsWith`, `endsWith`, `replace`, `replaceAll`, `regexReplace`, `hash`
   - Array methods: `first`, `last`, `random`, `reverse`, `distinct`, `notNull`, `filter`, `map`, `sort`, `join`
   - HTTP fields: `status`, `body`
@@ -1377,6 +1377,27 @@ You can enable both retry AND error branching. The node will first exhaust all r
 }
 ```
 
+### Highlight Node Output
+Surface a node's output in the Canvas "Execution Highlights" popup:
+- `highlight`: boolean (default: false) - When true, this node's output is added to the highlight list.
+
+Notes:
+- Not needed on `agent`/`llm` nodes — their outputs are highlighted automatically.
+- The input/trigger node and the output node are auto-highlighted too; setting `highlight` on them is redundant (no duplicate record is created).
+- Output-only: the node's output message is shown (previewed to 250 chars, expandable to full Markdown).
+
+**Example**:
+```json
+{
+  "type": "http",
+  "data": {
+    "label": "fetchApi",
+    "curl": "curl -X GET https://api.example.com/data",
+    "highlight": false
+  }
+}
+```
+
 ### 15. slack (Send Slack Message)
 - **Purpose**: Send a message to Slack channel via webhook
 - **Inputs**: 1 | **Outputs**: 1
@@ -1507,7 +1528,7 @@ You can enable both retry AND error branching. The node will first exhaust all r
 
 **⚠️ RESERVED VARIABLE NAMES**: The following names are RESERVED and CANNOT be used as `variableName`:
 - **⛔ ABSOLUTE BAN**: `result` and `results` are reserved and CANNOT be used as variable names!
-- System fields: `headers`, `query`, `value`, `list`, `array`, `vars`, `items`, `name`, `type`, `length`, `input`, `now`, `date`
+- System fields: `headers`, `query`, `value`, `list`, `array`, `vars`, `items`, `name`, `type`, `length`, `input`, `now`, `date`, `workflowName`, `workflowDescription`, `workflowUrl`, `workflowPath`, `executionId`
 - String methods: `orEmpty`, `toString`, `toUpperCase`, `toLowerCase`, `substring`, `indexOf`, `contains`, `startswith`, `endswith`, `replace`, `replaceAll`, `regexReplace`, `hash`
 - Array methods: `first`, `last`, `random`, `reverse`, `distinct`, `notNull`, `join`
 - HTTP response fields: `status`, `body`
@@ -3544,6 +3565,11 @@ When a merge node (e.g., labeled "mergeResults") combines inputs:
 - `$now` - Current datetime with formatting methods
 - `$Date()` - Create/parse date
 - `$UUID` - Generate 32-character unique identifier (NOT a function - no parentheses!)
+- `$workflowName` - Current workflow's name
+- `$workflowDescription` - Current workflow's description
+- `$workflowPath` - Relative path of the workflow, e.g. `/workflows/<id>`
+- `$workflowUrl` - Absolute URL of the workflow, e.g. `https://<host>/workflows/<id>`
+- `$executionId` - Current execution's id (equals the Execution History entry id, so `/workflows/<id>/<executionId>` opens this run on the canvas). **Runtime-only**: empty in the expression preview dialog; populated only while a workflow is executing.
 - `$vars` - Workflow-local variables (access via `$vars.variableName`; in-memory for current execution)
 - `$global` - Global Variable Store (access via `$global.variableName`; persistent, user-scoped, managed in Variables tab)
 
@@ -3871,7 +3897,66 @@ Use ONLY: `str()`, `int()`, `float()`, `bool()`, `list()`, `dict(key=value)`, `l
 }
 ```
 
-### 33. github (GitHub REST Operations)
+### 33. linear (Linear Workspace and Issue Operations)
+- **Type**: `linear`
+- **Inputs**: 1, **Outputs**: 1
+- **Credential required**: `linear` credential type containing a Linear personal API key or
+  Linear OAuth access token
+- **Operations**:
+  - `getViewer`: authenticated user
+  - `listTeams`: teams visible to the user
+  - `listProjects`: projects visible to the user
+  - `listIssues`: issues, optionally filtered by `linearTeamId` and `linearProjectId`
+  - `listWorkflowStates`: workflow states for `linearTeamId`
+  - `listTeamMembers`: members for `linearTeamId`
+  - `getIssue`: fetch by UUID or identifier such as `ENG-123`
+  - `createIssue`: requires `linearTeamId` and `linearTitle`; optional `linearStateId`
+  - `updateIssue`: requires `linearIssueId` and at least one changed field
+  - `deleteIssue`: requires `linearIssueId`
+  - `addIssueLink`: requires `linearIssueId` and `linearIssueLinkUrl`
+  - `createComment`: requires `linearIssueId` and `linearCommentBody`; optional `linearParentCommentId`
+  - `listComments`: comments for `linearIssueId`
+  - `updateComment`: requires `linearCommentId` and `linearCommentBody`
+  - `deleteComment`: requires `linearCommentId`
+  - `resolveComment`: requires `linearCommentId`
+  - `unresolveComment`: requires `linearCommentId`
+- **Fields**: `linearOperation`, `linearTeamId`, `linearProjectId`, `linearIssueId`,
+  `linearTitle`, `linearDescription`, `linearStateId`, `linearAssigneeId`,
+  `linearPriority` (0-4), `linearIssueLinkUrl`, `linearCommentId`,
+  `linearCommentBody`, `linearParentCommentId`, `linearLimit` (1-250),
+  `linearAfter`, `linearReturnAll`
+- Text fields support expressions.
+- List outputs contain `{success, operation, count, teams|projects|issues|members, pageInfo}`.
+- Set `linearReturnAll: true` on list operations to automatically follow cursors up to 10000
+  results; otherwise use `linearLimit` and `linearAfter` manually.
+- `listWorkflowStates` outputs `{success, operation, count, states}`.
+- Issue outputs contain `{success, operation, issue, identifier, url}`.
+- `deleteIssue` outputs `{success, operation, deleted}`.
+- `addIssueLink` outputs `{success, operation, link}`.
+- `listComments` outputs `{success, operation, count, comments, pageInfo}`.
+- Comment mutations output `{success, operation, comment}` except `deleteComment`, which outputs
+  `{success, operation, deleted, entityId}`.
+- Set an update field to `null` to clear description, project, assignee, or state.
+
+**Example — create an issue:**
+```json
+{
+  "id": "linear-1",
+  "type": "linear",
+  "position": {"x": 500, "y": 100},
+  "data": {
+    "label": "createLinearIssue",
+    "credentialId": "YOUR_CREDENTIAL_ID",
+    "linearOperation": "createIssue",
+    "linearTeamId": "team-uuid",
+    "linearTitle": "$input.title",
+    "linearDescription": "$input.description",
+    "linearPriority": "2"
+  }
+}
+```
+
+### 34. github (GitHub REST Operations)
 - **Type**: `github`
 - **Purpose**: Manage repositories, users, issues, pull requests, reviews, releases, Actions
   workflows, traffic insights, and repository files
@@ -4075,7 +4160,7 @@ Always include:
 21. **MULTIPLE INPUT FIELDS** - textInput nodes support multiple input fields via `inputFields` array. Define fields like `[{"key": "text"}, {"key": "base64"}]`. Access via `$nodeLabel.body.fieldKey`. Input values are sent in the `body` object.
 22. **⚠️ NO UNNECESSARY textInput!** - NEVER add textInput unless user explicitly needs to provide input data. For static URLs, scheduled tasks, or fixed operations, START DIRECTLY with http, cron, or other nodes. textInput is ONLY for workflows that receive dynamic data from users/API callers.
 23. **⚠️ PRESERVE CREDENTIALS & MODEL** - When modifying an existing workflow, ALWAYS preserve existing `credentialId` and `model` values in nodes. NEVER replace, remove, or change credential IDs or model names unless the user explicitly asks to use a different credential or model. If a node already has a `credentialId` or `model`, keep them exactly as is.
-23a. **⚠️ CREDENTIALS & INTEGRATIONS - OWNED ONLY (NO SHARED)** - For **every** node field that references a credential or secret (`credentialId`, `fallbackCredentialId`, `guardrailCredentialId`, Playwright `aiStep` credential, etc.), use ONLY credentials **owned** by the workflow owner. **NEVER** put shared credentials (shared with you by another user or via team share) in generated JSON—the UI labels these as shared; they must not appear in AI output. Use placeholders such as `YOUR_CREDENTIAL_ID`, `slack-credential-uuid`, `telegram-credential-uuid`, or `imap-credential-uuid` and let the user pick an owned credential in the editor. Applies to: `llm`, `agent`, `slack`, `telegram`, `slackTrigger`, `telegramTrigger`, `imapTrigger`, `sendEmail`, `redis`, `grist`, `googleSheets`, `bigquery`, `supabase`, `notion`, `rabbitmq`, `crawler`, `playwright` (including `aiStep`), and any other integration that stores a credential id. When modifying an existing workflow (rule 23), still preserve existing ids if they are already non-shared; when **adding** new nodes, never insert shared credential UUIDs.
+23a. **⚠️ CREDENTIALS & INTEGRATIONS - OWNED ONLY (NO SHARED)** - For **every** node field that references a credential or secret (`credentialId`, `fallbackCredentialId`, `guardrailCredentialId`, Playwright `aiStep` credential, etc.), use ONLY credentials **owned** by the workflow owner. **NEVER** put shared credentials (shared with you by another user or via team share) in generated JSON—the UI labels these as shared; they must not appear in AI output. Use placeholders such as `YOUR_CREDENTIAL_ID`, `slack-credential-uuid`, `telegram-credential-uuid`, or `imap-credential-uuid` and let the user pick an owned credential in the editor. Applies to: `llm`, `agent`, `slack`, `telegram`, `slackTrigger`, `telegramTrigger`, `imapTrigger`, `sendEmail`, `redis`, `grist`, `github`, `linear`, `googleSheets`, `bigquery`, `supabase`, `notion`, `rabbitmq`, `crawler`, `playwright` (including `aiStep`), and any other integration that stores a credential id. When modifying an existing workflow (rule 23), still preserve existing ids if they are already non-shared; when **adding** new nodes, never insert shared credential UUIDs.
 24. **EXECUTE NODE OUTPUT** - Execute node returns `{status, outputs, workflow_id, execution_time_ms}`. Access the called workflow's result via `$executeNodeLabel.outputs.output.result`. The `outputs.output` object contains the result from the executed workflow's output node.
 25. **EXECUTE NODE MULTIPLE INPUTS** - When calling a workflow that expects multiple input fields: (1) Add matching `inputFields` to your textInput node to collect all required data, (2) Use `executeInputMappings` array to map each field. Example: If target needs `text` and `imageUrl`, your textInput should have `inputFields: [{"key": "prompt"}, {"key": "image"}]`, then execute node uses `"executeInputMappings": [{"key": "text", "value": "$userInput.body.prompt"}, {"key": "imageUrl", "value": "$userInput.body.image"}]`
 26. **REQUEST BODY, HEADERS & QUERY** - When workflow is executed via API, textInput nodes receive `body`, `headers` and `query` objects. Access via `$textInputLabel.body.fieldName`, `$textInputLabel.headers.headerName` and `$textInputLabel.query.paramName`. Useful for accessing raw request data, authentication, and dynamic behavior.
@@ -4100,7 +4185,7 @@ Always include:
 36b. **AGENT TOOLS - code MUST NOT contain backticks** - The `code` field in tool definitions must be plain Python only. NEVER wrap code in ``` or use backticks inside the code string (e.g. no ```python). Backticks break the workflow JSON extraction. Example: `"code": "def celsius_to_fahrenheit(celsius: float) -> float:\\n    return (celsius * 9/5) + 32"`
 36c. **SINGLE COMPLETE JSON BLOCK** - Output exactly ONE ```json block containing the FULL workflow. When adding tools to an agent, the tools array MUST be inside that block. Do NOT output partial JSON or multiple blocks where the first lacks the tools.
 37. **CONSOLE LOG – ONLY IF REQUESTED** - Add a consoleLog node ONLY when the user explicitly requests backend console logging. If this intent is not present, do NOT generate any consoleLog nodes in the workflow.
-38. **⛔ RESERVED NODE LABEL NAMES** - NEVER use these names as node labels: `length`, `orEmpty`, `toString`, `toUpperCase`, `toLowerCase`, `substring`, `indexOf`, `contains`, `startsWith`, `endsWith`, `replace`, `replaceAll`, `regexReplace`, `hash`, `first`, `last`, `random`, `reverse`, `distinct`, `notNull`, `filter`, `map`, `sort`, `join`, `headers`, `query`, `value`, `list`, `result`, `array`, `vars`, `items`, `name`, `type`, `status`, `body`, `outputs`, `result`, `item`, `index`, `total`, `isFirst`, `isLast`, `branch`, `results`, `merged`, `error`, `errorNode`, `errorNodeType`, `timestamp`, `input`, `now`, `date`. **CASE VARIATIONS ARE ALSO FORBIDDEN** (e.g., `toUppercase`, `Touppercase`, `TOUPPERCASE` are ALL invalid). These conflict with built-in methods/properties and will cause expression evaluation errors!
+38. **⛔ RESERVED NODE LABEL NAMES** - NEVER use these names as node labels: `length`, `orEmpty`, `toString`, `toUpperCase`, `toLowerCase`, `substring`, `indexOf`, `contains`, `startsWith`, `endsWith`, `replace`, `replaceAll`, `regexReplace`, `hash`, `first`, `last`, `random`, `reverse`, `distinct`, `notNull`, `filter`, `map`, `sort`, `join`, `headers`, `query`, `value`, `list`, `result`, `array`, `vars`, `items`, `name`, `type`, `status`, `body`, `outputs`, `result`, `item`, `index`, `total`, `isFirst`, `isLast`, `branch`, `results`, `merged`, `error`, `errorNode`, `errorNodeType`, `timestamp`, `input`, `now`, `date`, `workflowName`, `workflowDescription`, `workflowUrl`, `workflowPath`, `executionId`. **CASE VARIATIONS ARE ALSO FORBIDDEN** (e.g., `toUppercase`, `Touppercase`, `TOUPPERCASE` are ALL invalid). These conflict with built-in methods/properties and will cause expression evaluation errors!
 39. **⛔ PREFER SINGLE AGENT OVER MULTIPLE SEQUENTIAL AGENTS** - When a goal can be fully handled by one AI agent (even if the processing involves many internal reasoning steps or phases), use ONE agent node with a comprehensive system prompt. Do NOT create multiple sequential agent nodes (e.g., agent1 → agent2 → agent3 → …) just because the user's spec lists multiple processing phases. A single powerful agent with MCP tools or Python tools handles multi-step reasoning internally without needing separate nodes per step.
     - ✅ CORRECT: `textInput → singleAgent (comprehensive systemInstruction) → output` — agent handles all internal phases
     - ❌ WRONG: `textInput → extractParamsAgent → generateQueriesAgent → fetchResultsAgent → rankAgent → readAgent → analyzeAgent → compareAgent → finalAgent → output`
@@ -4408,6 +4493,7 @@ def build_assistant_prompt(
     available_workflows: list[dict] | None = None,
     user_rules: str | None = None,
     available_node_templates: list[dict] | None = None,
+    installed_plugins: list[dict] | None = None,
 ) -> str:
     import json
 
@@ -4523,6 +4609,44 @@ def build_assistant_prompt(
         prompt += "- Add new nodes with unique IDs\n"
         prompt += "- For new nodes that need credentials, use placeholder 'YOUR_CREDENTIAL_ID' or ask the user"
         prompt += "\n- **Credential fields** (`credentialId`, `fallbackCredentialId`, `guardrailCredentialId`, Slack/SMTP/Redis/etc.): use ONLY owned credentials in generated output; never shared credentials."
+
+    if installed_plugins:
+        prompt += "\n\n## Installed Plugins\n\n"
+        prompt += (
+            "These plugin nodes are installed on this instance and behave like custom nodes. "
+            "Use node type `plugin` for actions and `pluginTrigger` for triggers. A single "
+            "plugin **package** (one `pluginId`) can expose **multiple nodes**, so you MUST set "
+            "BOTH `pluginId` (the package id) AND `pluginNodeKey` (the specific node key) to "
+            "select the exact node. Put field values under `config`. Example action node:\n\n"
+            "```json\n"
+            '{ "id": "...", "type": "plugin", "data": { "label": "Uppercase",\n'
+            '  "pluginId": "acme", "pluginNodeKey": "acmeUppercase",\n'
+            '  "config": { "text": "$prevNode.text" } } }\n'
+            "```\n\n"
+            "Available plugin nodes (grouped by package):\n"
+        )
+        # Group flattened plugin nodes by their package id so the model sees that a
+        # package can contain several nodes.
+        by_package: dict[str, list[dict]] = {}
+        for plugin in installed_plugins:
+            by_package.setdefault(plugin.get("id", ""), []).append(plugin)
+        for package_id, nodes in by_package.items():
+            prompt += f"\n- Package `{package_id}` ({len(nodes)} node(s)):\n"
+            for node in nodes:
+                node_key = node.get("node_key", "")
+                prompt += (
+                    f"  - pluginNodeKey `{node_key}` ({node.get('kind', 'action')}): "
+                    f"{node.get('description', '')}\n"
+                )
+                hint = node.get("dsl_hint")
+                if hint:
+                    prompt += f"    Usage: {hint}\n"
+                fields = node.get("fields", [])
+                if fields:
+                    field_list = ", ".join(
+                        f"`{f.get('key')}` ({f.get('type', 'string')})" for f in fields
+                    )
+                    prompt += f"    config fields: {field_list}\n"
 
     prompt += CLARIFY_PROTOCOL_PROMPT
 

@@ -4,8 +4,10 @@ import {
   acceptNextDialog,
   createWorkflow,
   deleteWorkflow,
+  deleteCredential,
   expectOk,
   prepareAuthenticatedPage,
+  selectSearchableOption,
 } from "./support";
 
 test.beforeEach(async ({ page }) => {
@@ -266,7 +268,295 @@ test("shows a failed workflow execution", async ({ page }) => {
 
   await expect(page.getByText("Last Executed Node")).toBeVisible();
   await expect(page.getByText("error", { exact: true })).toBeVisible();
-  await expect(page.getByText(/"httpStatusCode":\s*400/)).toBeVisible();
+  // Scope to the output <pre> — the Execution Highlights popup also renders this
+  // node's output as a preview span, so an unscoped getByText is ambiguous.
+  await expect(
+    page.locator("pre").filter({ hasText: /"httpStatusCode":\s*400/ }),
+  ).toBeVisible();
 
   await deleteWorkflow(page, workflow.id);
+});
+
+test("shows execution highlights after a workflow run", async ({ page }) => {
+  const workflow = await createWorkflow(
+    page,
+    `Highlights Workflow ${Date.now()}`,
+    [
+      {
+        id: "set-highlight",
+        type: "set",
+        position: { x: 120, y: 120 },
+        data: {
+          label: "Build Highlight",
+          mappings: [{ key: "message", value: "Canvas highlight smoke" }],
+          highlight: true,
+        },
+      },
+      {
+        id: "output-final",
+        type: "output",
+        position: { x: 460, y: 120 },
+        data: { label: "Final Output", message: "$input.message" },
+      },
+    ],
+    [
+      {
+        id: "edge-highlight-output",
+        source: "set-highlight",
+        target: "output-final",
+        sourceHandle: "output",
+        targetHandle: "input",
+      },
+    ],
+  );
+
+  try {
+    await page.goto(`/workflows/${workflow.id}`);
+    await page.getByRole("button", { name: "Run Workflow" }).click();
+
+    const highlightsPanel = page.getByTestId("execution-highlights-panel");
+
+    await expect(highlightsPanel).toBeVisible();
+    const highlightedNodeRow = highlightsPanel.getByRole("button", { name: /Build Highlight/ });
+    const finalOutputRow = highlightsPanel.getByRole("button", { name: /Final Output/ });
+    await expect(highlightedNodeRow).toContainText("Canvas highlight smoke");
+    await expect(finalOutputRow).toContainText("Canvas highlight smoke");
+
+    await highlightsPanel.getByPlaceholder("Search highlights...").fill("smoke");
+    await expect(highlightsPanel.locator("mark").filter({ hasText: "smoke" }).first()).toBeVisible();
+
+    await highlightsPanel.getByPlaceholder("Search highlights...").fill("not-present");
+    await expect(highlightsPanel.getByText("No matching highlights.")).toBeVisible();
+
+    await highlightsPanel.getByLabel("Clear search").click();
+    await highlightsPanel.getByLabel("Close highlights").click();
+    await expect(page.getByTestId("execution-highlights-open")).toBeVisible();
+    await page.getByTestId("execution-highlights-open").click();
+    await expect(highlightsPanel).toBeVisible();
+  } finally {
+    await deleteWorkflow(page, workflow.id);
+  }
+});
+
+test("adds and configures a Linear node", async ({ page }) => {
+  const credentialResponse = await page.request.post("/api/credentials", {
+    data: {
+      name: `E2E Linear ${Date.now()}`,
+      type: "linear",
+      config: { api_key: "lin_api_e2e_test" },
+    },
+  });
+  await expectOk(credentialResponse);
+  const credential = (await credentialResponse.json()) as { id: string };
+  const workflow = await createWorkflow(page, `Linear Workflow ${Date.now()}`);
+
+  try {
+    await page.goto(`/workflows/${workflow.id}`);
+    await page.getByTestId("node-palette-linear").dblclick();
+    await expect(page.locator(".vue-flow__node")).toHaveCount(1);
+    await page.getByRole("button", { name: "Properties" }).click();
+    await page.locator(".vue-flow__node").click();
+
+    await page
+      .getByTestId("linear-credential-field")
+      .locator("select")
+      .selectOption(credential.id);
+    await selectSearchableOption(page, page.getByTestId("linear-operation-field"), "Get Issue");
+    await page
+      .getByTestId("linear-issue-id-field")
+      .locator("input")
+      .fill("ENG-123");
+
+    const saveButton = page.getByTestId("save-workflow-button");
+    await expect(saveButton).toBeEnabled();
+    await saveButton.click();
+    await page.reload();
+
+    await expect(page.locator(".vue-flow__node")).toHaveCount(1);
+    await page.getByRole("button", { name: "Properties" }).click();
+    await page.locator(".vue-flow__node").click();
+    await expect(
+      page.getByTestId("linear-operation-field").getByRole("combobox"),
+    ).toHaveValue("Get Issue");
+    await expect(
+      page.getByTestId("linear-issue-id-field").locator("input"),
+    ).toHaveValue("ENG-123");
+
+    await selectSearchableOption(
+      page,
+      page.getByTestId("linear-operation-field"),
+      "List Workflow States",
+    );
+    await expect(page.getByTestId("linear-team-id-field")).toBeVisible();
+
+    await selectSearchableOption(page, page.getByTestId("linear-operation-field"), "List Teams");
+    await expect(page.getByTestId("linear-after-field")).toBeVisible();
+    await page
+      .getByTestId("linear-after-field")
+      .locator("input")
+      .fill("$previousLinear.pageInfo.endCursor");
+  } finally {
+    await deleteWorkflow(page, workflow.id);
+    await deleteCredential(page, credential.id);
+  }
+});
+
+test("configures Linear listTeamMembers fields and persists after save", async ({ page }) => {
+  const credentialResponse = await page.request.post("/api/credentials", {
+    data: {
+      name: `E2E Linear Members ${Date.now()}`,
+      type: "linear",
+      config: { api_key: "lin_api_e2e_test" },
+    },
+  });
+  await expectOk(credentialResponse);
+  const credential = (await credentialResponse.json()) as { id: string };
+  const workflow = await createWorkflow(page, `Linear Members Workflow ${Date.now()}`);
+
+  try {
+    await page.goto(`/workflows/${workflow.id}`);
+    await page.getByTestId("node-palette-linear").dblclick();
+    await page.getByRole("button", { name: "Properties" }).click();
+    await page.locator(".vue-flow__node").click();
+
+    await page
+      .getByTestId("linear-credential-field")
+      .locator("select")
+      .selectOption(credential.id);
+    await selectSearchableOption(
+      page,
+      page.getByTestId("linear-operation-field"),
+      "List Team Members",
+    );
+    await expect(page.getByTestId("linear-team-id-field")).toBeVisible();
+    await expect(page.getByTestId("linear-limit-field")).toBeVisible();
+    await expect(page.getByTestId("linear-after-field")).toBeVisible();
+    await page
+      .getByTestId("linear-team-id-field")
+      .locator("input")
+      .fill("team-uuid-1");
+    await page.getByTestId("linear-limit-field").locator("input").fill("25");
+    await page
+      .getByTestId("linear-after-field")
+      .locator("input")
+      .fill("cursor-members-1");
+
+    await page.getByTestId("save-workflow-button").click();
+    await page.reload();
+    await page.getByRole("button", { name: "Properties" }).click();
+    await page.locator(".vue-flow__node").click();
+
+    await expect(
+      page.getByTestId("linear-operation-field").getByRole("combobox"),
+    ).toHaveValue("List Team Members");
+    await expect(page.getByTestId("linear-team-id-field").locator("input")).toHaveValue(
+      "team-uuid-1",
+    );
+    await expect(page.getByTestId("linear-limit-field").locator("input")).toHaveValue("25");
+    await expect(page.getByTestId("linear-after-field").locator("input")).toHaveValue(
+      "cursor-members-1",
+    );
+  } finally {
+    await deleteWorkflow(page, workflow.id);
+    await deleteCredential(page, credential.id);
+  }
+});
+
+test("configures Linear comment operations and persists update comment fields", async ({ page }) => {
+  const credentialResponse = await page.request.post("/api/credentials", {
+    data: {
+      name: `E2E Linear Comments ${Date.now()}`,
+      type: "linear",
+      config: { api_key: "lin_api_e2e_test" },
+    },
+  });
+  await expectOk(credentialResponse);
+  const credential = (await credentialResponse.json()) as { id: string };
+  const workflow = await createWorkflow(page, `Linear Comments Workflow ${Date.now()}`);
+
+  try {
+    await page.goto(`/workflows/${workflow.id}`);
+    await page.getByTestId("node-palette-linear").dblclick();
+    await page.getByRole("button", { name: "Properties" }).click();
+    await page.locator(".vue-flow__node").click();
+
+    await page
+      .getByTestId("linear-credential-field")
+      .locator("select")
+      .selectOption(credential.id);
+
+    await selectSearchableOption(
+      page,
+      page.getByTestId("linear-operation-field"),
+      "List Comments",
+    );
+    await expect(page.getByTestId("linear-issue-id-field")).toBeVisible();
+    await expect(page.getByTestId("linear-limit-field")).toBeVisible();
+    await expect(page.getByTestId("linear-after-field")).toBeVisible();
+    await page
+      .getByTestId("linear-issue-id-field")
+      .locator("input")
+      .fill("ENG-123");
+    await page.getByTestId("linear-limit-field").locator("input").fill("20");
+    await page
+      .getByTestId("linear-after-field")
+      .locator("input")
+      .fill("$listComments.pageInfo.endCursor");
+
+    await selectSearchableOption(
+      page,
+      page.getByTestId("linear-operation-field"),
+      "Delete Comment",
+    );
+    await expect(page.getByTestId("linear-comment-id-field")).toBeVisible();
+    await expect(page.getByTestId("linear-issue-id-field")).toBeHidden();
+
+    await selectSearchableOption(
+      page,
+      page.getByTestId("linear-operation-field"),
+      "Resolve Comment",
+    );
+    await expect(page.getByTestId("linear-comment-id-field")).toBeVisible();
+
+    await selectSearchableOption(
+      page,
+      page.getByTestId("linear-operation-field"),
+      "Unresolve Comment",
+    );
+    await expect(page.getByTestId("linear-comment-id-field")).toBeVisible();
+
+    await selectSearchableOption(
+      page,
+      page.getByTestId("linear-operation-field"),
+      "Update Comment",
+    );
+    await expect(page.getByTestId("linear-comment-id-field")).toBeVisible();
+    await expect(page.getByTestId("linear-comment-body-field")).toBeVisible();
+    await page
+      .getByTestId("linear-comment-id-field")
+      .locator("input")
+      .fill("comment-uuid-1");
+    await page
+      .getByTestId("linear-comment-body-field")
+      .locator("textarea")
+      .fill("Updated from $input.text");
+
+    await page.getByTestId("save-workflow-button").click();
+    await page.reload();
+    await page.getByRole("button", { name: "Properties" }).click();
+    await page.locator(".vue-flow__node").click();
+
+    await expect(
+      page.getByTestId("linear-operation-field").getByRole("combobox"),
+    ).toHaveValue("Update Comment");
+    await expect(page.getByTestId("linear-comment-id-field").locator("input")).toHaveValue(
+      "comment-uuid-1",
+    );
+    await expect(
+      page.getByTestId("linear-comment-body-field").locator("textarea"),
+    ).toHaveValue("Updated from $input.text");
+  } finally {
+    await deleteWorkflow(page, workflow.id);
+    await deleteCredential(page, credential.id);
+  }
 });

@@ -15,7 +15,7 @@ class AlembicMigrationGraphTest(unittest.TestCase):
         self.script = ScriptDirectory.from_config(config)
 
     def test_revision_graph_has_one_head(self) -> None:
-        self.assertEqual(self.script.get_heads(), ["084_add_clickhouse_cred_type"])
+        self.assertEqual(self.script.get_heads(), ["091_dashboard_chat_queue"])
 
     def test_github_and_supabase_revisions_are_merged(self) -> None:
         merge_revision = self.script.get_revision("080_merge_github_supabase_heads")
@@ -39,4 +39,19 @@ class AlembicMigrationGraphTest(unittest.TestCase):
         self.assertEqual(
             set(merge_revision.down_revision),
             {"081_add_notion_credential_type", "9cbd3c82d23b"},
+        )
+
+    def test_linear_revision_follows_pgvector_head(self) -> None:
+        linear_revision = self.script.get_revision("9d1f2a3b4c5d")
+
+        self.assertIsNotNone(linear_revision)
+        self.assertEqual(linear_revision.down_revision, "9cbd3c82d23b")
+
+    def test_linear_and_notion_revisions_are_merged(self) -> None:
+        merge_revision = self.script.get_revision("083_merge_linear_notion_heads")
+
+        self.assertIsNotNone(merge_revision)
+        self.assertEqual(
+            set(merge_revision.down_revision),
+            {"082_merge_notion_pgvector_heads", "9d1f2a3b4c5d"},
         )

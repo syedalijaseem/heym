@@ -1,7 +1,7 @@
 import logging
 import os
 import time
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 import sqlalchemy as sa
 from fastapi import FastAPI, HTTPException
@@ -31,6 +31,7 @@ from app.api import (
     global_variables,
     google_sheets_oauth,
     hitl,
+    linear_oauth,
     llm_pricing,
     logs,
     mcp,
@@ -38,6 +39,7 @@ from app.api import (
     notion_oauth,
     oauth,
     playwright,
+    plugins,
     portal,
     schedules,
     skill_builder,
@@ -61,7 +63,11 @@ from app.services.clickhouse_pool import close_all_clients as close_clickhouse_c
 from app.services.clickhouse_pool import warm_up_pools as warm_up_clickhouse_pools
 from app.services.cron_scheduler import cron_scheduler
 from app.services.distributed_lock import lock_service
-from app.services.execution_cancellation import active_execution_registry
+from app.services.execution_cancellation import (
+    active_execution_registry,
+    mark_own_executions_orphaned,
+)
+from app.services.execution_recovery import execution_recovery_service
 from app.services.grist_pool import close_all_clients as close_grist_clients
 from app.services.grist_pool import warm_up_pools as warm_up_grist_pools
 from app.services.hitl_service import build_public_base_url, build_review_url
@@ -107,6 +113,43 @@ def _ensure_playwright_browsers() -> None:
         logger.warning("Playwright install skipped: %s", e)
 
 
+async def _reinstall_plugin_dependencies() -> None:
+    """Reinstall declared pip dependencies for installed plugins on startup.
+
+    Container filesystems are ephemeral, so deps installed when a plugin was added
+    are lost on recreate; this restores them. No-op when plugins are disabled.
+    Failures never block startup.
+    """
+    if not settings.plugins_enabled:
+        return
+    try:
+        import asyncio
+
+        from sqlalchemy import select
+
+        from app.db.models import Plugin
+        from app.models.plugin_schemas import PluginManifest
+        from app.services import plugin_store
+
+        async with async_session_maker() as _plugin_db:
+            rows = (
+                (await _plugin_db.execute(select(Plugin).where(Plugin.enabled.is_(True))))
+                .scalars()
+                .all()
+            )
+        deps: set[str] = set()
+        for plugin in rows:
+            try:
+                deps.update(PluginManifest.model_validate(plugin.manifest).dependencies)
+            except Exception:
+                continue
+        if deps:
+            logger.info("Reinstalling %d plugin dependency spec(s) on startup", len(deps))
+            await asyncio.to_thread(plugin_store.ensure_dependencies_installed, sorted(deps))
+    except Exception as exc:
+        logger.warning("Plugin dependency reinstall skipped: %s", exc)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting Heym AI Workflow Platform v%s", settings.resolved_version)
@@ -117,6 +160,8 @@ async def lifespan(app: FastAPI):
             sa.text("UPDATE dashboard_conversations SET is_running = false WHERE is_running = true")
         )
         await _startup_db.commit()
+
+    await _reinstall_plugin_dependencies()
 
     _ensure_playwright_browsers()
 
@@ -137,6 +182,7 @@ async def lifespan(app: FastAPI):
         logger.info("ClickHouse pools warmed up: %d", clickhouse_count)
 
     await active_execution_registry.start()
+    await execution_recovery_service.start()
     await cron_scheduler.start()
     await imap_trigger_manager.start()
     await rabbitmq_consumer_manager.start()
@@ -148,7 +194,10 @@ async def lifespan(app: FastAPI):
     await imap_trigger_manager.stop()
     await RabbitMQPool.close_all()
     await cron_scheduler.stop()
+    await execution_recovery_service.stop()
     await active_execution_registry.stop()
+    with suppress(Exception):
+        await mark_own_executions_orphaned()
     await lock_service.stop()
     close_redis_pools()
     close_grist_clients()
@@ -247,6 +296,11 @@ app.include_router(
     tags=["Notion OAuth"],
 )
 app.include_router(
+    linear_oauth.router,
+    prefix="/api/credentials/linear/oauth",
+    tags=["Linear OAuth"],
+)
+app.include_router(
     global_variables.router, prefix="/api/global-variables", tags=["Global Variables"]
 )
 app.include_router(vector_stores.router, prefix="/api/vector-stores", tags=["Vector Stores"])
@@ -265,6 +319,7 @@ app.include_router(portal.router, prefix="/api/workflows", tags=["Portal Setting
 app.include_router(analytics.router, prefix="/api/analytics", tags=["Analytics"])
 app.include_router(dashboards.router, prefix="/api/dashboards", tags=["Dashboards"])
 app.include_router(logs.router, prefix="/api/logs", tags=["Logs"])
+app.include_router(plugins.router, prefix="/api/plugins", tags=["Plugins"])
 app.include_router(evals.router, prefix="/api/evals", tags=["Evals"])
 app.include_router(chats.router, prefix="/api/chats", tags=["Chats"])
 app.include_router(voice.router, prefix="/api/voice", tags=["Voice"])
