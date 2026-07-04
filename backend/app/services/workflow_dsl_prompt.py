@@ -3956,7 +3956,54 @@ Use ONLY: `str()`, `int()`, `float()`, `bool()`, `list()`, `dict(key=value)`, `l
 }
 ```
 
-### 34. github (GitHub REST Operations)
+### 34. sentry (Sentry REST Operations)
+- **Type**: `sentry`
+- **Purpose**: Manage Sentry organizations, projects, teams, issues, events, and releases
+- **Inputs**: 1 | **Outputs**: 1
+- **Required setup**: `credentialId` must point to an owned Sentry credential
+- **Operations**: `createProject`, `createRelease`, `createTeam`, `deleteIssue`,
+  `deleteProject`, `deleteRelease`, `deleteTeam`, `getEvent`, `getIssue`, `getProject`,
+  `getRelease`, `listEvents`, `listIssues`, `listOrganizations`, `listProjects`,
+  `listReleases`, `listTeams`, `updateIssue`, `updateOrganization`, `updateProject`,
+  `updateRelease`, `updateTeam`
+- **Fields**: `sentryOperation`, `sentryOrganizationSlug`, `sentryProjectSlug`,
+  `sentryTeamSlug`, `sentryIssueId`, `sentryEventId`, `sentryReleaseVersion`,
+  `sentryName`, `sentrySlug`, `sentryPlatform`, `sentryStatus`, `sentryAssignedTo`,
+  `sentryQuery`, `sentryStatsPeriod`, `sentryLimit`, `sentryReleaseProjects`,
+  `sentryReleaseRefs`, `sentryPayload`
+- Text and JSON-array fields support expressions.
+- JSON object payload fields support expressions and are used by update organization, project,
+  release, and team operations.
+- Issue status accepts common Sentry values such as `resolved`, `unresolved`, and `ignored`.
+- Issue fetch, update, and delete operations require `sentryOrganizationSlug` and `sentryIssueId`.
+- For `listIssues`, omit `sentryQuery` for unresolved issues or set it to an empty string to fetch
+  all issues.
+- `createIssue` and `createOrganization` are not exposed because Sentry does not document public
+  REST endpoints for them.
+- List outputs contain `{success, operation, count, organizations|projects|teams|issues|events|releases}`.
+- Single-resource outputs contain `{success, operation, organization|issue|event|release|project|team}`.
+- Delete outputs place `{deleted: true}` inside the relevant `issue`, `release`, `project`, or `team` key.
+
+**Example — list unresolved issues:**
+```json
+{
+  "id": "sentry-1",
+  "type": "sentry",
+  "position": {"x": 500, "y": 100},
+  "data": {
+    "label": "sentryIssues",
+    "credentialId": "YOUR_CREDENTIAL_ID",
+    "sentryOperation": "listIssues",
+    "sentryOrganizationSlug": "acme",
+    "sentryProjectSlug": "web-app",
+    "sentryQuery": "is:unresolved level:error",
+    "sentryStatsPeriod": "14d",
+    "sentryLimit": "25"
+  }
+}
+```
+
+### 35. github (GitHub REST Operations)
 - **Type**: `github`
 - **Purpose**: Manage repositories, users, issues, pull requests, reviews, releases, Actions
   workflows, traffic insights, and repository files

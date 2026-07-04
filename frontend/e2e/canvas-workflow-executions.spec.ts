@@ -2,6 +2,8 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { createWorkflow, deleteWorkflow, prepareAuthenticatedPage } from "./support";
 
+const e2eBackendUrl = `http://127.0.0.1:${process.env.E2E_BACKEND_PORT || "10106"}`;
+
 interface WorkflowNodeFixture {
   id: string;
   type: string;
@@ -432,31 +434,31 @@ test("accepts input, waits two seconds, and prints done", async ({ page }) => {
   }
 });
 
-test("shows an error workflow when an HTTP API call fails", async ({ page }) => {
+test("captures a failed HTTP response as node output", async ({ page }) => {
   const workflow = await createWorkflow(
     page,
     `Canvas HTTP Error ${Date.now()}`,
     [
       workflowNode("http_error", "http", 120, 160, {
         label: "fetchBrokenApi",
-        curl: "curl -X GET http://127.0.0.1:9/e2e-http-error",
+        curl: `curl -X GET ${e2eBackendUrl}/api/e2e-http-error`,
       }),
-      workflowNode("output_unreachable", "output", 380, 160, {
-        label: "unreachableOutput",
+      workflowNode("output_status", "output", 380, 160, {
+        label: "httpStatusOutput",
         message: "$fetchBrokenApi.status",
       }),
     ],
-    [workflowEdge("edge_http_output", "http_error", "output_unreachable")],
+    [workflowEdge("edge_http_output", "http_error", "output_status")],
   );
 
   try {
     const result = await runWorkflowFromCanvas(page, workflow.id, 2);
     const httpNode = result.node_results.find((row) => row.node_label === "fetchBrokenApi");
 
-    expect(result.status).toBe("error");
-    expect(typeof result.outputs.error).toBe("string");
-    expect(String(result.outputs.error).length).toBeGreaterThan(0);
-    expect(httpNode?.status).toBe("error");
+    expect(result.status).toBe("success");
+    expect(httpNode?.status).toBe("success");
+    expect(Number(httpNode?.output.status)).toBeGreaterThanOrEqual(400);
+    expect(outputResult(result, "httpStatusOutput")).toBe(httpNode?.output.status);
   } finally {
     await deleteWorkflow(page, workflow.id);
   }

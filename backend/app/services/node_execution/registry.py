@@ -46,6 +46,7 @@ _HANDLER_MODULES: dict[str, str] = {
     "redis": "redis_node",
     "s3": "s3_node",
     "sendEmail": "send_email_node",
+    "sentry": "sentry_node",
     "set": "set_node",
     "slack": "slack_node",
     "slackTrigger": "slack_trigger_node",

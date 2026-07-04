@@ -16,7 +16,7 @@ const {
       class="space-y-4 pt-4 border-t"
     >
       <Label class="text-muted-foreground">Error Handling</Label>
-  
+
       <div class="space-y-3">
         <div class="flex items-center gap-2">
           <input
@@ -33,7 +33,7 @@ const {
             Retry on failure
           </Label>
         </div>
-  
+
         <template v-if="selectedNode.data.retryEnabled">
           <div class="space-y-2 pl-6">
             <div class="flex items-center gap-3">
@@ -65,7 +65,7 @@ const {
           </p>
         </template>
       </div>
-  
+
       <div class="space-y-3 pt-2">
         <div class="flex items-center gap-2">
           <input
@@ -82,7 +82,7 @@ const {
             Continue on error
           </Label>
         </div>
-  
+
         <template v-if="selectedNode.data.onErrorEnabled">
           <p class="text-xs text-muted-foreground pl-6">
             When enabled, if this node fails, the workflow will continue via the <span

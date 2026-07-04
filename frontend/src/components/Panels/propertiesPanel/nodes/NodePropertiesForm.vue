@@ -38,6 +38,7 @@ import BigqueryNodeProperties from "./BigqueryNodeProperties.vue";
 import SupabaseNodeProperties from "./SupabaseNodeProperties.vue";
 import ClickhouseNodeProperties from "./ClickhouseNodeProperties.vue";
 import NotionNodeProperties from "./NotionNodeProperties.vue";
+import SentryNodeProperties from "./SentryNodeProperties.vue";
 import DataTableNodeProperties from "./DataTableNodeProperties.vue";
 import S3NodeProperties from "./S3NodeProperties.vue";
 import DriveNodeProperties from "./DriveNodeProperties.vue";
@@ -93,6 +94,7 @@ const { selectedNode } = usePropertiesPanelContext();
   <SupabaseNodeProperties v-else-if="selectedNode?.type === 'supabase'" />
   <ClickhouseNodeProperties v-else-if="selectedNode?.type === 'clickhouse'" />
   <NotionNodeProperties v-else-if="selectedNode?.type === 'notion'" />
+  <SentryNodeProperties v-else-if="selectedNode?.type === 'sentry'" />
   <DataTableNodeProperties v-else-if="selectedNode?.type === 'dataTable'" />
   <S3NodeProperties v-else-if="selectedNode?.type === 's3'" />
   <DriveNodeProperties v-else-if="selectedNode?.type === 'drive'" />

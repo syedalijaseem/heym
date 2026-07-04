@@ -3,6 +3,7 @@ import { defineStore } from "pinia";
 
 import { buildLegacyWebhookBody, getHistoryWebhookBody, parseWebhookJson, stringifyWebhookJson } from "@/lib/webhookBody";
 import { getLatestNodeResultForNode } from "@/lib/executionLog";
+import { getSentryOperationMetadata } from "@/lib/sentryExpressionFields";
 import { replaceNodeLabelRefs } from "@/lib/utils";
 import { normalizeWorkflowEdges } from "@/lib/workflowEdges";
 import { workflowApi } from "@/services/api";
@@ -2421,6 +2422,66 @@ export const useWorkflowStore = defineStore("workflow", () => {
             nodeType: "Linear",
             message: "Link URL is required",
           });
+        }
+      }
+
+      if (node.type === "sentry") {
+        const operation = node.data.sentryOperation;
+
+        if (!node.data.credentialId || !isValidUUID(node.data.credentialId)) {
+          errors.push({
+            nodeId: node.id,
+            nodeLabel: node.data.label,
+            nodeType: "Sentry",
+            message: "Credential is not selected",
+          });
+        }
+        if (!operation) {
+          errors.push({
+            nodeId: node.id,
+            nodeLabel: node.data.label,
+            nodeType: "Sentry",
+            message: "Operation is not selected",
+          });
+        }
+
+        if (operation) {
+          const metadata = getSentryOperationMetadata(operation);
+          metadata.requiredFields.forEach((fieldKey) => {
+            const value = node.data[fieldKey];
+            if (typeof value !== "string" || !value.trim()) {
+              const field = metadata.fields.find((item) => item.key === fieldKey);
+              errors.push({
+                nodeId: node.id,
+                nodeLabel: node.data.label,
+                nodeType: "Sentry",
+                message: `${field?.label ?? "Field"} is required`,
+              });
+            }
+          });
+          if (
+            metadata.requiredFields.includes("sentryPayload") &&
+            (!node.data.sentryPayload?.trim() || node.data.sentryPayload.trim() === "{}")
+          ) {
+            errors.push({
+              nodeId: node.id,
+              nodeLabel: node.data.label,
+              nodeType: "Sentry",
+              message: "Payload JSON must include at least one field",
+            });
+          }
+          if (
+            operation === "updateIssue" &&
+            !node.data.sentryStatus?.trim() &&
+            !node.data.sentryAssignedTo?.trim()
+          ) {
+            errors.push({
+              nodeId: node.id,
+              nodeLabel: node.data.label,
+              nodeType: "Sentry",
+              message: "Status or Assigned To is required",
+            });
+          }
         }
       }
     }

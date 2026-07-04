@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { Handle, Position, useVueFlow } from "@vue-flow/core";
-import { AlertTriangle, Ban, BarChart3, Bot, Brain, Braces, Bug, CalendarClock, Clock, Database, FileJson, FileText, GitBranch, GitMerge, Globe, Github, HardDrive, Inbox, ListTodo, Loader2, Mail, MessageSquare, MonitorPlay, Pin, Play, Plug, Puzzle, Rabbit, Radio, RefreshCw, Repeat, Search, Send, Server, Settings2, Sheet, Shuffle, Sparkles, StickyNote, Table2, Terminal, Type, Upload, Variable, XCircle } from "lucide-vue-next";
+import { AlertTriangle, Ban, BarChart3, Bot, Brain, Braces, Bug, CalendarClock, Clock, Database, FileJson, FileText, GitBranch, GitMerge, Globe, Github, HardDrive, Inbox, ListTodo, Loader2, Mail, MessageSquare, MonitorPlay, Pin, Play, Plug, Puzzle, Rabbit, Radio, RefreshCw, Repeat, Search, Send, Server, Settings2, Sheet, ShieldAlert, Shuffle, Sparkles, StickyNote, Table2, Terminal, Type, Upload, Variable, XCircle } from "lucide-vue-next";
 
 import type { NodeData, NodeType } from "@/types/workflow";
 
@@ -63,6 +63,7 @@ const icons = {
   supabase: Database,
   clickhouse: Database,
   notion: FileText,
+  sentry: ShieldAlert,
   throwError: XCircle,
   rabbitmq: Rabbit,
   crawler: Bug,
@@ -117,6 +118,7 @@ const nodeColorMap = {
   supabase: "node-datatable",
   clickhouse: "node-datatable",
   notion: "node-notion",
+  sentry: "node-sentry",
   dataTable: "node-datatable",
   throwError: "node-throw-error",
   rabbitmq: "node-rabbitmq",
@@ -625,6 +627,19 @@ const hasThrowErrorWarning = computed(() => {
           :title="`${data.githubOwner || ''}/${data.githubRepo}`"
         >
           {{ data.githubOwner || '' }}/{{ data.githubRepo }}
+        </div>
+        <div
+          v-if="type === 'sentry' && data.sentryOperation"
+          class="text-xs text-muted-foreground"
+        >
+          {{ data.sentryOperation }}
+        </div>
+        <div
+          v-if="type === 'sentry' && data.sentryOrganizationSlug"
+          class="text-xs text-muted-foreground truncate max-w-[120px]"
+          :title="data.sentryOrganizationSlug"
+        >
+          {{ data.sentryOrganizationSlug }}
         </div>
         <div
           v-if="type === 'drive' && data.driveOperation"

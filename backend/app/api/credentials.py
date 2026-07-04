@@ -89,6 +89,20 @@ def merge_credential_config_for_update(
             merged_config["auth_mode"] = incoming_auth_mode
         return merged_config
 
+    if credential_type == CredentialType.sentry:
+        merged_config = dict(existing_config)
+
+        incoming_api_token = str(incoming_config.get("api_token", "") or "").strip()
+        if incoming_api_token:
+            merged_config["api_token"] = incoming_api_token
+
+        if "base_url" in incoming_config:
+            incoming_base_url = str(incoming_config.get("base_url", "") or "").strip()
+            if incoming_base_url:
+                merged_config["base_url"] = incoming_base_url
+
+        return merged_config
+
     if credential_type != CredentialType.github:
         return incoming_config
 
@@ -182,6 +196,9 @@ def get_masked_value(credential_type: CredentialType, config: dict) -> str | Non
             return "connected"
         if auth_mode == "oauth":
             return "Not connected"
+        return mask_api_key(api_token)
+    elif credential_type == CredentialType.sentry:
+        api_token = str(config.get("api_token", "")).strip()
         return mask_api_key(api_token)
     elif credential_type == CredentialType.linear:
         auth_mode = str(config.get("auth_mode", "")).strip()
@@ -754,6 +771,7 @@ async def run_credential_connection_test(
         CredentialType.linear,
         CredentialType.notion,
         CredentialType.clickhouse,
+        CredentialType.sentry,
     }:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -780,6 +798,8 @@ async def run_credential_connection_test(
             config = _merge_linear_test_config(config, stored_config)
         elif test_data.type == CredentialType.clickhouse:
             config = _merge_clickhouse_test_config(config, stored_config)
+        elif test_data.type == CredentialType.sentry:
+            config = {**stored_config, **{k: v for k, v in config.items() if v}}
         else:
             config = _merge_notion_test_config(config, stored_config)
 
@@ -815,6 +835,25 @@ async def run_credential_connection_test(
 
             await run_in_threadpool(ClickHouseService(config).test_connection)
             return CredentialTestResponse(success=True, message="Connection successful")
+
+        if test_data.type == CredentialType.sentry:
+            from app.services.sentry_service import SentryService
+
+            service = SentryService(config)
+            try:
+                result = await run_in_threadpool(service.test_connection)
+            finally:
+                service.close()
+            count = int(result.get("count", 0))
+            message = (
+                "Connected. At least one organization is visible."
+                if count > 0
+                else "Connected. No organizations are visible."
+            )
+            return CredentialTestResponse(
+                success=True,
+                message=message,
+            )
 
         from app.services.notion_service import NotionService
 
@@ -1241,6 +1280,20 @@ def validate_credential_config(
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="GitHub credential base_url must be a valid http(s) URL",
+                )
+    elif credential_type == CredentialType.sentry:
+        if "api_token" not in config or not str(config["api_token"]).strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Sentry credential requires api_token",
+            )
+        sentry_base_url = str(config.get("base_url", "") or "").strip()
+        if sentry_base_url:
+            parsed = urlparse(sentry_base_url)
+            if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Sentry credential base_url must be a valid http(s) URL",
                 )
     elif credential_type == CredentialType.linear:
         has_token = bool(str(config.get("api_key") or config.get("access_token") or "").strip())
