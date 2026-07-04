@@ -79,6 +79,6 @@ vulnerabilities in Heym:
   condition evaluator, Slack/Telegram webhooks, OAuth redirect_uri validation,
   and token-at-rest storage (GHSA-pm6h-x3h5-j38h).
 - [@sajdakabir](https://github.com/sajdakabir) for reporting a horizontal IDOR
-  in the workflow and node template get-by-id and use endpoints, where the
-  single-item paths skipped the visibility check the list endpoint enforces
-  (GHSA-5748-x76g-v68m).
+  in template get-by-id (GHSA-5748-x76g-v68m) and a missing creator gate in team
+  member management that let any member alter the roster and reach team-shared
+  credentials (GHSA-vxpw-x7j7-8723).
