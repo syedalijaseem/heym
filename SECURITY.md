@@ -78,3 +78,7 @@ vulnerabilities in Heym:
   for reporting multiple authentication and RCE vulnerabilities in the workflow
   condition evaluator, Slack/Telegram webhooks, OAuth redirect_uri validation,
   and token-at-rest storage (GHSA-pm6h-x3h5-j38h).
+- [@sajdakabir](https://github.com/sajdakabir) for reporting a horizontal IDOR
+  in the workflow and node template get-by-id and use endpoints, where the
+  single-item paths skipped the visibility check the list endpoint enforces
+  (GHSA-5748-x76g-v68m).
