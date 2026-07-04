@@ -25,6 +25,7 @@ See [Triggers](./triggers.md) for all entry points.
 |------|-------------|--------|---------|
 | [LLM](../nodes/llm-node.md) | Process text with a language model | 1 | 1 |
 | [AI Agent](../nodes/agent-node.md) | LLM with tool calling, skills, MCP, optional [human review](./human-in-the-loop.md), and optional [persistent memory graph](./agent-persistent-memory.md). See [Agent Architecture](./agent-architecture.md). | 1 | 1, plus optional `review` output |
+| [MCP Call](../nodes/mcp-call-node.md) | Call a specific MCP tool directly without an LLM selecting it | 1 | 1 |
 | [RAG / Vector Store](../nodes/rag-node.md) | Insert or search in a Qdrant or Postgres (pgvector) [vector store](../tabs/vectorstores-tab.md) for RAG | 1 | 1 |
 
 ## Logic Nodes
@@ -82,6 +83,7 @@ See [Triggers](./triggers.md) for all entry points.
 | [Wait](../nodes/wait-node.md) | Delay execution | 1 | 1 |
 | [Output](../nodes/output-node.md) | Output endpoint | 1 | 1 |
 | [JSON output mapper](../nodes/json-output-mapper-node.md) | Map fields to a JSON object; sole terminal = top-level webhook/run body | 1 | 0 |
+| [Chart Output](../nodes/chart-output-node.md) | Terminal dashboard widget output that maps upstream rows into chart payloads | 1 | 0 |
 | [Sticky Note](../nodes/sticky-note-node.md) | Add markdown notes to the canvas (not executed) | 0 | 0 |
 | [Console Log](../nodes/console-log-node.md) | Log to backend console | 1 | 1 |
 | [Disable Node](../nodes/disable-node.md) | Disable another node in the workflow | 1 | 1 |
