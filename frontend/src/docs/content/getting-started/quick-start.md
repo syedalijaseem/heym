@@ -48,6 +48,7 @@ Already building automations in another tool? [Migrate to Heym](./migrate-to-hey
 - [Core Concepts](./core-concepts.md) – Workflows, nodes, and execution flow
 - [Migrate to Heym](./migrate-to-heym.md) – Convert n8n, Flowise, Dify, Langflow, sim.ai, or Activepieces workflows to Heym with AI
 - [Running & Deployment](./running-and-deployment.md) – Start locally with `run.sh` or deploy with `deploy.sh`
+- [Environment Variables](https://github.com/heymrun/heym/blob/main/ENVIRONMENT-VARIABLES.md) – Full configuration reference
 - [Settings](../reference/user-settings.md) – Configure name, User Rules, and password
 - [Canvas Features](../reference/canvas-features.md) – Data pin, execution logs, enable/disable, extract to sub-workflow
 - [Keyboard Shortcuts](../reference/keyboard-shortcuts.md) – Canvas and editor shortcuts
