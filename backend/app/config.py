@@ -70,6 +70,14 @@ class Settings(BaseSettings):
     request_body_max_size_mb: int = 100
     mcp_protocol_max_concurrency: int = 20
     mcp_sse_max_sessions: int = 100
+    # SSRF egress guard for MCP http(s)/SSE transports. By default the server
+    # refuses to open sse/streamable_http MCP connections whose host resolves to
+    # a loopback, private, link-local (incl. 169.254.169.254 cloud metadata), or
+    # otherwise non-public address. Self-hosted operators who intentionally run
+    # internal MCP servers can opt out with HEYM_MCP_ALLOW_PRIVATE_URLS=true.
+    mcp_allow_private_urls: bool = Field(
+        default=False, validation_alias="HEYM_MCP_ALLOW_PRIVATE_URLS"
+    )
     app_version: str = ""
 
     # OpenTelemetry tracing (disabled by default -> zero overhead).

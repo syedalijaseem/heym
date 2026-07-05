@@ -3,10 +3,12 @@ Execute MCP (Model Context Protocol) tool calls via stdio, SSE, or Streamable HT
 """
 
 import asyncio
+import ipaddress
 import json
 import logging
 import os
 import shutil
+import socket
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import timedelta
@@ -14,6 +16,7 @@ from typing import Any
 from urllib.parse import urljoin, urlparse
 
 import anyio
+import httpcore
 import httpx
 from anyio.abc import TaskStatus
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
@@ -23,10 +26,181 @@ from mcp import types
 from mcp.client.session import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 from mcp.client.streamable_http import streamable_http_client
-from mcp.shared._httpx_utils import create_mcp_http_client
 from mcp.shared.message import SessionMessage
 
+from app.config import settings
+
 logger = logging.getLogger(__name__)
+
+_MCP_ALLOWED_URL_SCHEMES = ("http", "https")
+
+
+def _resolve_mcp_host_addresses(
+    hostname: str,
+) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+    """Resolve an MCP URL host to every IP address it maps to.
+
+    An IP literal resolves to itself; a DNS name is resolved via ``getaddrinfo``
+    so all A/AAAA records are inspected (one safe-looking record is not enough).
+    """
+    host = hostname.strip("[]")
+    if "%" in host:
+        host = host.split("%", 1)[0]
+
+    try:
+        return [ipaddress.ip_address(host)]
+    except ValueError:
+        pass
+
+    try:
+        resolved = socket.getaddrinfo(hostname, None, type=socket.SOCK_STREAM)
+    except socket.gaierror as exc:
+        raise ValueError("MCP server URL host could not be resolved") from exc
+
+    addresses: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
+    seen: set[str] = set()
+    for family, _, _, _, sockaddr in resolved:
+        if family not in (socket.AF_INET, socket.AF_INET6):
+            continue
+        address = ipaddress.ip_address(sockaddr[0].split("%", 1)[0])
+        key = address.compressed
+        if key in seen:
+            continue
+        seen.add(key)
+        addresses.append(address)
+
+    if not addresses:
+        raise ValueError("MCP server URL host could not be resolved")
+    return addresses
+
+
+def _is_public_mcp_address(
+    address: ipaddress.IPv4Address | ipaddress.IPv6Address,
+) -> bool:
+    """Whether an address is globally routable (IPv4-mapped IPv6 unwrapped first).
+
+    ``is_global`` alone treats multicast (e.g. ``224.0.0.1``, ``239.255.255.250``)
+    as public, so multicast is rejected explicitly.
+    """
+    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
+        address = address.ipv4_mapped
+    return address.is_global and not address.is_multicast
+
+
+def _guard_mcp_http_url(url: str) -> None:
+    """Reject MCP http(s)/SSE URLs that could reach internal networks (SSRF guard).
+
+    Any authenticated user can supply the ``url`` for the ``sse`` and
+    ``streamable_http`` transports, so this validates the target before a request
+    is ever made: only ``http``/``https`` schemes are allowed, and the host must
+    resolve exclusively to globally routable addresses. This blocks loopback,
+    private, link-local (including the ``169.254.169.254`` cloud-metadata
+    endpoint), and other non-public destinations. Validating here (rather than in
+    a single API route) covers every caller of ``_open_transport`` — the
+    ``/api/mcp/fetch-tools`` preview, agent MCP connections, and ``mcpCall`` node
+    execution.
+
+    Self-hosted operators who intentionally point MCP at internal hosts can opt
+    out with ``HEYM_MCP_ALLOW_PRIVATE_URLS=true``.
+
+    This is the fast pre-connection check; ``_install_egress_pin`` additionally
+    validates and pins the resolved IP at dial time so a DNS-rebinding answer
+    cannot bounce the real connection onto an internal address.
+    """
+    if settings.mcp_allow_private_urls:
+        return
+
+    parsed = urlparse(url)
+    if parsed.scheme.lower() not in _MCP_ALLOWED_URL_SCHEMES:
+        raise ValueError("MCP server URL must use http or https")
+
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError("MCP server URL must include a host")
+
+    try:
+        _ = parsed.port
+    except ValueError as exc:
+        raise ValueError("MCP server URL includes an invalid port") from exc
+
+    addresses = _resolve_mcp_host_addresses(hostname)
+    if not all(_is_public_mcp_address(address) for address in addresses):
+        raise ValueError("MCP server URL is not allowed (resolves to a non-public address)")
+
+
+def _resolve_pinned_mcp_ip(host: str) -> str:
+    """Resolve ``host`` and return a public IP to connect to, or raise.
+
+    Every resolved address must be public; the returned literal is used as the
+    actual TCP target so the connection cannot be rebound to an internal IP after
+    validation (TLS SNI still uses the original hostname, so certs stay valid).
+    """
+    addresses = _resolve_mcp_host_addresses(host)
+    if not all(_is_public_mcp_address(address) for address in addresses):
+        raise ValueError("MCP server URL is not allowed (resolves to a non-public address)")
+    return addresses[0].compressed
+
+
+class _McpEgressPinBackend(httpcore.AsyncNetworkBackend):
+    """Network backend that validates and pins the target IP at dial time.
+
+    Wrapping the pool's backend means the anti-SSRF check runs against the IP the
+    socket actually connects to (closing DNS rebinding), and also re-runs for any
+    redirect hop or new origin the MCP client dials. Unix sockets are refused.
+    """
+
+    def __init__(self, inner: httpcore.AsyncNetworkBackend) -> None:
+        self._inner = inner
+
+    async def connect_tcp(
+        self,
+        host: str,
+        port: int,
+        timeout: float | None = None,
+        local_address: str | None = None,
+        socket_options: Any = None,
+    ) -> httpcore.AsyncNetworkStream:
+        try:
+            pinned = _resolve_pinned_mcp_ip(host)
+        except ValueError as exc:
+            raise httpcore.ConnectError(str(exc)) from exc
+        return await self._inner.connect_tcp(
+            pinned,
+            port,
+            timeout=timeout,
+            local_address=local_address,
+            socket_options=socket_options,
+        )
+
+    async def connect_unix_socket(
+        self,
+        path: str,
+        timeout: float | None = None,
+        socket_options: Any = None,
+    ) -> httpcore.AsyncNetworkStream:
+        raise httpcore.ConnectError("MCP server URL must use http or https")
+
+    async def sleep(self, seconds: float) -> None:
+        await self._inner.sleep(seconds)
+
+
+def _install_egress_pin(client: httpx.AsyncClient) -> None:
+    """Wrap an httpx client's connection pool with the pinning egress backend.
+
+    Best effort: if httpx/httpcore internals ever change shape, we skip silently
+    and still rely on the pre-connection ``_guard_mcp_http_url`` check.
+    """
+    if settings.mcp_allow_private_urls:
+        return
+    transport = getattr(client, "_transport", None)
+    pool = getattr(transport, "_pool", None)
+    backend = getattr(pool, "_network_backend", None)
+    if pool is None or backend is None:
+        logger.debug("MCP egress pin not installed; httpx internals unavailable")
+        return
+    if isinstance(backend, _McpEgressPinBackend):
+        return
+    pool._network_backend = _McpEgressPinBackend(backend)
 
 
 def _extract_root_exception(exc: BaseException) -> BaseException:
@@ -93,10 +267,18 @@ async def _sse_client_fail_fast(
     async with anyio.create_task_group() as tg:
         try:
             logger.debug("Connecting to SSE endpoint: %s", _remove_request_params(url))
-            async with create_mcp_http_client(
+            # Build the client directly instead of create_mcp_http_client so the
+            # SSRF guard is authoritative: follow_redirects=False stops a
+            # guard-approved public URL from being redirected onto an internal
+            # target, and trust_env=False keeps the connection direct so the
+            # pinned egress backend (not an env proxy) governs the real dial.
+            async with httpx.AsyncClient(
                 headers=headers,
                 timeout=httpx.Timeout(timeout, read=sse_read_timeout),
+                follow_redirects=False,
+                trust_env=False,
             ) as client:
+                _install_egress_pin(client)
                 async with aconnect_sse(client, "GET", url) as event_source:
                     event_source.response.raise_for_status()
                     logger.debug("SSE connection established")
@@ -328,6 +510,7 @@ async def _open_transport(
         headers = conn.get("headers") or {}
         if not url:
             raise ValueError("sse connection requires 'url'")
+        _guard_mcp_http_url(url)
         async with _sse_client_fail_fast(
             url,
             headers=headers,
@@ -341,7 +524,14 @@ async def _open_transport(
         headers = conn.get("headers") or {}
         if not url:
             raise ValueError("streamable_http connection requires 'url'")
-        async with httpx.AsyncClient(headers=headers, timeout=timeout) as http_client:
+        _guard_mcp_http_url(url)
+        # follow_redirects=False stops a redirect onto an internal target after
+        # the check; trust_env=False keeps the dial direct so the pinned egress
+        # backend (not an env proxy) governs the real connection.
+        async with httpx.AsyncClient(
+            headers=headers, timeout=timeout, follow_redirects=False, trust_env=False
+        ) as http_client:
+            _install_egress_pin(http_client)
             async with streamable_http_client(url, http_client=http_client) as (
                 read_stream,
                 write_stream,

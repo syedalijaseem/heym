@@ -313,6 +313,7 @@ docker run \
 ```
 
 Open the editor in your browser at port `4017` in either setup.
+See [ENVIRONMENT-VARIABLES.md](ENVIRONMENT-VARIABLES.md) for the full list of configuration variables and their defaults.
 For direct `docker run` setups, the `data/files` mount keeps Drive uploads and skill-generated files available across container restarts.
 The Docker socket mount supports Docker-based MCP stdio tools and grants broad host control. Docker log access remains disabled unless you also set `DOCKER_LOGS_ENABLED=true` and `DOCKER_LOGS_ALLOWED_EMAILS=admin@example.com` for trusted users. Create the trusted admin account before enabling Docker logs, or keep `ALLOW_REGISTER=false`, so an unverified self-registration cannot claim an allow-listed email.
 
@@ -616,6 +617,9 @@ heym/
 | `HEYM_OTEL_SERVICE_NAME` | `service.name` resource attribute | `heym` |
 | `HEYM_OTEL_TRACES_SAMPLER_RATIO` | Parent-based head sampling ratio (`0.0`–`1.0`) | `1.0` |
 | `HEYM_OTEL_CAPTURE_NODE_IO` | Attach truncated node input/output to node spans | `false` |
+| `HEYM_MCP_ALLOW_PRIVATE_URLS` | Allow MCP HTTP/SSE servers on private/loopback/metadata addresses (SSRF guard off). Keep `false` on hosted/multi-tenant | `false` |
+
+See [ENVIRONMENT-VARIABLES.md](ENVIRONMENT-VARIABLES.md) for the complete reference.
 
 ---
 
