@@ -31,4 +31,5 @@ The converter maps source concepts onto native Heym nodes — triggers, [LLM](..
 
 - New to the canvas? Start with the [Quick Start](./quick-start.md).
 - Learn how importing works in [Download & Import](../reference/download-import.md).
+- Self-hosting Heym? See [Environment Variables](https://github.com/heymrun/heym/blob/main/ENVIRONMENT-VARIABLES.md) for the full configuration reference.
 - Build from scratch with the in-app [AI Assistant](../reference/ai-assistant.md).

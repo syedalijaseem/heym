@@ -8,6 +8,8 @@ Tracing is **disabled by default**. When it is off there is no measurable overhe
 
 Set the following environment variables on the backend, then restart it:
 
+For the complete environment variable list, see [Environment Variables](https://github.com/heymrun/heym/blob/main/ENVIRONMENT-VARIABLES.md).
+
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `HEYM_OTEL_ENABLED` | `false` | Master switch. Set to `true` to turn tracing on. |
@@ -75,6 +77,7 @@ Triggers without an inbound context (such as Cron, IMAP, RabbitMQ, and WebSocket
 ## Related
 
 - [Settings](./user-settings.md) – The Observability tab that shows tracing status
+- [Environment Variables](https://github.com/heymrun/heym/blob/main/ENVIRONMENT-VARIABLES.md) – Full configuration reference
 - [Triggers](./triggers.md) – How workflows start, including webhooks
 - [Execution History](./execution-history.md) – Heym's built-in per-run history view
 - [HTTP](../nodes/http-node.md) – The node that propagates trace context to downstream calls

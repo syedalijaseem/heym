@@ -553,7 +553,7 @@ See also [Security](./security.md), [Chat Voice](./chat-voice.md), [OpenTelemetr
 
 ### [OpenTelemetry Tracing](./opentelemetry.md)
 
-Heym can emit OpenTelemetry traces for every workflow run and node execution: a root `heym.workflow.execute` span per run and a child `heym.node.execute` span per node, with model and token usage attached to LLM and agent nodes. Spans export over OTLP/HTTP to any compatible backend (Jaeger, Grafana Tempo, Honeycomb, Datadog), and W3C trace context propagates across inbound webhooks, outbound HTTP, and sub-workflows. Tracing is disabled by default and configured with `HEYM_OTEL_*` environment variables; the active status is shown in the [Settings](./user-settings.md) Observability tab.
+Heym can emit OpenTelemetry traces for every workflow run and node execution: a root `heym.workflow.execute` span per run and a child `heym.node.execute` span per node, with model and token usage attached to LLM and agent nodes. Spans export over OTLP/HTTP to any compatible backend (Jaeger, Grafana Tempo, Honeycomb, Datadog), and W3C trace context propagates across inbound webhooks, outbound HTTP, and sub-workflows. Tracing is disabled by default and configured with `HEYM_OTEL_*` [environment variables](https://github.com/heymrun/heym/blob/main/ENVIRONMENT-VARIABLES.md); the active status is shown in the [Settings](./user-settings.md) Observability tab.
 
 See also [Execution History](./execution-history.md), [Traces](../tabs/traces-tab.md), and [Webhooks](./webhooks.md).
 

@@ -68,7 +68,7 @@ The Voice tab configures spoken voice for the [Chat tab](../tabs/chat-tab.md): p
 
 ## Observability Tab
 
-The Observability tab shows the read-only status of [OpenTelemetry Tracing](./opentelemetry.md) for this instance: whether tracing is enabled, the OTLP endpoint, service name, sampler ratio, and which spans are emitted. Tracing is configured through `HEYM_OTEL_*` environment variables on the backend, so this tab does not edit anything. When tracing is disabled, the tab lists the environment variables needed to turn it on. Secrets such as OTLP auth headers are never shown here.
+The Observability tab shows the read-only status of [OpenTelemetry Tracing](./opentelemetry.md) for this instance: whether tracing is enabled, the OTLP endpoint, service name, sampler ratio, and which spans are emitted. Tracing is configured through `HEYM_OTEL_*` environment variables on the backend, so this tab does not edit anything. When tracing is disabled, the tab lists the environment variables needed to turn it on. Secrets such as OTLP auth headers are never shown here. See [Environment Variables](https://github.com/heymrun/heym/blob/main/ENVIRONMENT-VARIABLES.md) for the full configuration reference.
 
 ## What Is Not in This Dialog
 
