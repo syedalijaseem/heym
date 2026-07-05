@@ -107,6 +107,20 @@ check_command "bun"
 check_command "uv"
 echo -e "${GREEN}All prerequisites found.${NC}"
 
+# Codex CLI is only needed by the Codex node. Auto-install it (best-effort) when missing.
+if ! command -v codex &> /dev/null; then
+    if command -v npm &> /dev/null; then
+        echo -e "${YELLOW}Installing Codex CLI (@openai/codex) for the Codex node...${NC}"
+        if npm install -g @openai/codex >/dev/null 2>&1; then
+            echo -e "${GREEN}Codex CLI installed.${NC}"
+        else
+            echo -e "${YELLOW}Could not auto-install Codex CLI (npm global install failed — may need sudo). Install manually: npm install -g @openai/codex (or set HEYM_CODEX_CLI_COMMAND).${NC}"
+        fi
+    else
+        echo -e "${YELLOW}Note: 'codex' CLI and npm not found. The Codex node needs '@openai/codex' — install Node/npm, then 'npm install -g @openai/codex'.${NC}"
+    fi
+fi
+
 ENV_FILE="$PROJECT_ROOT/.env"
 ENCRYPTION_KEY_PLACEHOLDER="change_this_to_a_random_32_byte_hex_value"
 
@@ -233,9 +247,11 @@ fi
 echo -e "\n${YELLOW}Starting backend on port ${BACKEND_PORT:-10105}...${NC}"
 if [ "$DEBUG_MODE" = true ]; then
     echo -e "${BLUE}Debug mode enabled - showing DEBUG level logs${NC}"
-    LOG_LEVEL=DEBUG uv run python -m uvicorn app.main:app --host 0.0.0.0 --port ${BACKEND_PORT:-10105} --reload --log-level debug &
+    # Only watch app/ for reload — codex writes many files under data/codex-workspaces which
+    # would otherwise restart the server mid-execution and kill the Codex subprocess.
+    LOG_LEVEL=DEBUG uv run python -m uvicorn app.main:app --host 0.0.0.0 --port ${BACKEND_PORT:-10105} --reload --reload-dir app --log-level debug &
 else
-    uv run python -m uvicorn app.main:app --host 0.0.0.0 --port ${BACKEND_PORT:-10105} --reload &
+    uv run python -m uvicorn app.main:app --host 0.0.0.0 --port ${BACKEND_PORT:-10105} --reload --reload-dir app &
 fi
 BACKEND_PID=$!
 sleep 2

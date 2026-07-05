@@ -42,6 +42,8 @@ import type {
   AgentProgressEvent,
   AllExecutionHistoryEntry,
   AllExecutionHistoryEntryLight,
+  CodexFollowup,
+  CodexFollowupAnswerPayload,
   ExpressionEvaluateRequest,
   ExpressionEvaluateResponse,
   ExecutionResult,
@@ -1278,6 +1280,25 @@ export const credentialsApi = {
     );
     return response.data;
   },
+
+  codexOAuthStart: async (): Promise<{ authorize_url: string; state: string }> => {
+    const response = await api.post<{ authorize_url: string; state: string }>(
+      "/credentials/codex/oauth/start",
+      {},
+    );
+    return response.data;
+  },
+
+  codexOAuthComplete: async (
+    state: string,
+    redirectUrl: string,
+  ): Promise<{ config: Record<string, unknown>; account_id: string }> => {
+    const response = await api.post<{ config: Record<string, unknown>; account_id: string }>(
+      "/credentials/codex/oauth/complete",
+      { state, redirect_url: redirectUrl },
+    );
+    return response.data;
+  },
 };
 
 export interface VoiceInfo {
@@ -2384,6 +2405,24 @@ export const hitlApi = {
   ): Promise<{ request_id: string; status: string }> => {
     const response = await api.post<{ request_id: string; status: string }>(
       `/hitl/${token}/decision`,
+      payload,
+    );
+    return response.data;
+  },
+};
+
+export const codexFollowupApi = {
+  get: async (token: string): Promise<CodexFollowup> => {
+    const response = await api.get<CodexFollowup>(`/codex/followups/${token}`);
+    return response.data;
+  },
+
+  answer: async (
+    token: string,
+    payload: CodexFollowupAnswerPayload,
+  ): Promise<{ request_id: string; status: string }> => {
+    const response = await api.post<{ request_id: string; status: string }>(
+      `/codex/followups/${token}/answer`,
       payload,
     );
     return response.data;

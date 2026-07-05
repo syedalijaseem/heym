@@ -18,6 +18,8 @@ from app.api import (
     auth,
     bigquery_oauth,
     chats,
+    codex_followups,
+    codex_oauth,
     config,
     credentials,
     dashboards,
@@ -301,6 +303,11 @@ app.include_router(
     tags=["Linear OAuth"],
 )
 app.include_router(
+    codex_oauth.router,
+    prefix="/api/credentials/codex/oauth",
+    tags=["Codex OAuth"],
+)
+app.include_router(
     global_variables.router, prefix="/api/global-variables", tags=["Global Variables"]
 )
 app.include_router(vector_stores.router, prefix="/api/vector-stores", tags=["Vector Stores"])
@@ -313,6 +320,7 @@ app.include_router(traces.router, prefix="/api/traces", tags=["Traces"])
 app.include_router(llm_pricing.router, prefix="/api/llm-pricing", tags=["LLM Pricing"])
 app.include_router(portal.router, prefix="/api/portal", tags=["Portal"])
 app.include_router(hitl.router, prefix="/api/hitl", tags=["HITL"])
+app.include_router(codex_followups.router, prefix="/api/codex/followups", tags=["Codex"])
 app.include_router(files.router, prefix="/api/files", tags=["Files"])
 app.include_router(file_intake.router, prefix="/api", tags=["File Intake"])
 app.include_router(portal.router, prefix="/api/workflows", tags=["Portal Settings"])
